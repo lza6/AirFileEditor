@@ -299,6 +299,32 @@ class MainActivity : AppCompatActivity() {
             confirmCleanEnvironment()
         }
 
+        // 手动选择模式按钮
+        binding.btnManualMode.setOnClickListener {
+            AppLogger.buttonClick("手动选择模式")
+            com.example.tfgwj.ui.ModeSelectionDialog.show(
+                this,
+                permissionManager,
+                object : com.example.tfgwj.ui.ModeSelectionDialog.Callback {
+                    override fun onModeSelected(mode: PermissionChecker.AccessMode) {
+                        lifecycleScope.launch {
+                            val success = permissionManager.manuallySelectMode(mode)
+                            if (success) {
+                                AppLogger.action("手动选择模式成功", mode.name)
+                                checkEnvironment() // 验证成功后重新扫描环境
+                            } else {
+                                AppLogger.action("手动选择模式失败", mode.name)
+                            }
+                        }
+                    }
+
+                    override fun onRequestShizukuPermission() {
+                        permissionManager.requestShizukuPermission()
+                    }
+                }
+            )
+        }
+
         // 更新主包区域
         val updatePackCard = binding.includeUpdatePack.root
         
@@ -413,6 +439,13 @@ class MainActivity : AppCompatActivity() {
 
 
     private fun setupObservers() {
+        // 观察权限状态变更
+        lifecycleScope.launch {
+            permissionManager.permissionStatus.collectLatest { status ->
+                updatePermissionUI(status)
+            }
+        }
+
         // 替换进度 - 已移除主界面进度显示，现在只在对话框中显示
         // lifecycleScope.launch {
         //     fileReplaceManager.replaceResult.collectLatest { result ->
@@ -532,12 +565,12 @@ class MainActivity : AppCompatActivity() {
         }
         binding.tvPermissionStatus.text = android.text.Html.fromHtml(message, android.text.Html.FROM_HTML_MODE_LEGACY)
         
-        // 优先检查 Root 权限，然后检查其他权限状态
-        val icon = when {
-            status.hasRoot -> R.drawable.ic_status_success  // Root 设备显示成功图标
-            status.canAccessPrivateDir -> R.drawable.ic_status_success
-            status.hasManageStorage -> R.drawable.ic_status_unknown
-            else -> R.drawable.ic_status_error
+        // 优先检查可用模式
+        val icon = when (status.bestMode) {
+            PermissionChecker.AccessMode.ROOT -> R.drawable.ic_status_success
+            PermissionChecker.AccessMode.NATIVE -> R.drawable.ic_status_success
+            PermissionChecker.AccessMode.SHIZUKU -> R.drawable.ic_status_success
+            else -> if (status.hasManageStorage) R.drawable.ic_status_unknown else R.drawable.ic_status_error
         }
         binding.ivPermissionStatus.setImageResource(icon)
 
@@ -546,16 +579,27 @@ class MainActivity : AppCompatActivity() {
             status.hasRoot -> View.GONE  // Root 设备不显示授权按钮
             status.canAccessPrivateDir -> View.GONE  // 可以直接访问，不显示授权按钮
             !status.hasManageStorage -> View.VISIBLE
-            status.needsShizuku && !status.hasShizukuPermission -> View.VISIBLE
+            status.hasManageStorage && status.availableModes.contains(PermissionChecker.AccessMode.SHIZUKU) && !status.hasShizukuPermission -> View.VISIBLE
+            // 如果有了全量权限但拒绝了 Shizuku，也不必强求显示授权按钮，让用户尝试“开始替换”即可
+            status.hasManageStorage -> View.GONE 
             else -> View.GONE
         }
 
         binding.btnRequestPermission.text = when {
             !status.hasManageStorage -> "授权存储权限"
-            status.needsShizuku && !status.isShizukuAvailable -> "安装 Shizuku"
-            status.needsShizuku && !status.hasShizukuPermission -> "授权 Shizuku"
+            status.availableModes.contains(PermissionChecker.AccessMode.SHIZUKU) && !status.isShizukuAvailable -> "安装 Shizuku"
+            status.availableModes.contains(PermissionChecker.AccessMode.SHIZUKU) && !status.hasShizukuPermission -> "授权 Shizuku"
             else -> "授权"
         }
+
+        // 更新上次选择模式显示
+        val lastModeText = when (status.lastSelectedMode) {
+            PermissionChecker.AccessMode.ROOT -> "上次使用: Root 模式"
+            PermissionChecker.AccessMode.SHIZUKU -> "上次使用: Shizuku 模式"
+            PermissionChecker.AccessMode.NATIVE -> "上次使用: 普通模式"
+            else -> "推荐使用 Omni-Mode 智能检测"
+        }
+        binding.tvLastMode.text = lastModeText
     }
 
     private fun requestPermissions() {
@@ -567,17 +611,18 @@ class MainActivity : AppCompatActivity() {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                         permissionManager.requestManageStoragePermission(this@MainActivity, manageStorageLauncher)
                     } else {
+                        // Android < 11 直接请求存储权限
                         permissionManager.requestStoragePermission(storagePermissionLauncher)
                     }
                 }
-                status.needsShizuku && !status.isShizukuAvailable -> {
-                    // 跳转到应用商店或官网下载 Shizuku
-                    Toast.makeText(this@MainActivity, "请安装并启动 Shizuku", Toast.LENGTH_LONG).show()
-                }
-                status.needsShizuku && !status.hasShizukuPermission -> {
-                    permissionManager.requestShizukuPermission { granted ->
-                        if (granted) {
-                            checkAllPermissions()
+                status.bestMode == PermissionChecker.AccessMode.SHIZUKU || 
+                (status.availableModes.isEmpty() && Build.VERSION.SDK_INT >= 30) -> {
+                    // 如果最佳模式是 Shizuku，或者环境受限且没其他路，则请求 Shizuku
+                    if (!status.isShizukuAvailable) {
+                        Toast.makeText(this@MainActivity, "检测到环境受限，请先安装/启动 Shizuku", Toast.LENGTH_LONG).show()
+                    } else if (!status.hasShizukuPermission) {
+                        permissionManager.requestShizukuPermission { granted ->
+                            if (granted) checkAllPermissions()
                         }
                     }
                 }
@@ -1306,15 +1351,39 @@ class MainActivity : AppCompatActivity() {
                 return@launch
             }
             
-            if (!status.canAccessPrivateDir) {
-                Log.w(TAG, "无法访问私有目录，请检查权限设置")
-                Toast.makeText(this@MainActivity, "无法访问私有目录，请检查权限设置", Toast.LENGTH_SHORT).show()
+            if (status.bestMode != PermissionChecker.AccessMode.NONE) {
+                // 权限已通过物理验证，直接开始
+                isReplacing = true
+                performStartReplace(path)
                 return@launch
             }
 
-            // 权限检查通过，开始替换
-            isReplacing = true
-            AppLogger.action("开始替换", path)
+            // 如果没有物理验证通过的模式，但具备基础存储权限，提示用户尝试
+            if (status.hasManageStorage) {
+                MaterialAlertDialogBuilder(this@MainActivity)
+                    .setTitle("环境未验证")
+                    .setMessage("当前系统环境下无法自动验证读写权限，是否强制尝试执行替换？\n\n(提示：部分鸿蒙、澎湃或 Android 11 以下系统可能支持直接读写)")
+                    .setPositiveButton("强制执行") { _, _ ->
+                        isReplacing = true
+                        performStartReplace(path)
+                    }
+                    .setNegativeButton("去授权 (Shizuku)") { _, _ ->
+                        requestPermissions()
+                    }
+                    .show()
+            } else {
+                Toast.makeText(this@MainActivity, "请先授予所有文件访问权限", Toast.LENGTH_SHORT).show()
+                requestPermissions()
+            }
+        }
+    }
+
+    /**
+     * 执行真正的替换启动逻辑
+     */
+    private fun performStartReplace(path: String) {
+        lifecycleScope.launch {
+            AppLogger.action("正式开始替换任务", path)
 
             // 智能检测：处理 .pixuicache 文件夹优化
             val packageName = preferencesManager.appPackageName.first()
@@ -1473,60 +1542,62 @@ class MainActivity : AppCompatActivity() {
     ) {
         AppLogger.d("MainActivity", "🚀 准备启动替换任务")
         
-        // 使用 WorkManager 在后台执行
-        // 获取当前选择的应用包名（使用 runBlocking 在非协程上下文中获取，添加超时防止永久阻塞）
-        val packageName = try {
-            kotlinx.coroutines.runBlocking {
-                kotlinx.coroutines.withTimeout(5000) {
-                    AppLogger.d("MainActivity", "⏳ 等待获取包名...")
-                    preferencesManager.appPackageName.first()
-                }
+        // 开启协程获取包名并启动任务
+        lifecycleScope.launch {
+            try {
+                AppLogger.d("MainActivity", "⏳ 正在获取包名...")
+                val packageName = preferencesManager.appPackageName.first()
+                AppLogger.d("MainActivity", "✅ 获取包名成功: $packageName")
+                
+                // 默认不使用增量更新
+                val incrementalUpdate = false 
+                
+                val workRequest = com.example.tfgwj.worker.FileReplaceWorker.createWorkRequest(
+                    path, 
+                    packageName,
+                    incrementalUpdate
+                )
+                
+                AppLogger.d("MainActivity", "✅ 创建 WorkRequest 成功: ${workRequest.id}")
+                
+                val workManager = androidx.work.WorkManager.getInstance(this@MainActivity)
+                workManager.enqueue(workRequest)
+                
+                // 保存当前工作 ID
+                currentWorkId = workRequest.id.toString()
+                
+                // 监听进度
+                observeReplaceProgress(workRequest.id, incrementalUpdate, progressBar, tvPercent, tvFileCount, tvCurrentFile, tvErrors, tvSpeed, tvEta)
+                
+            } catch (e: Exception) {
+                AppLogger.e("MainActivity", "❌ 启动替换任务失败", e)
+                appendLog("❌ 启动失败: ${e.message}")
+                tvErrors.visibility = View.VISIBLE
+                tvErrors.text = "错误: ${e.message}"
+                progressBar.isIndeterminate = false
+                progressBar.progress = 0
+                tvCurrentFile.text = "操作失败"
             }
-        } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
-            AppLogger.e("MainActivity", "❌ 获取包名超时", e)
-            appendLog("❌ 获取包名超时，请重试")
-            tvErrors.visibility = View.VISIBLE
-            tvErrors.text = "错误: 获取包名超时"
-            progressBar.isIndeterminate = false
-            progressBar.progress = 0
-            tvCurrentFile.text = "操作失败"
-            return
-        } catch (e: Exception) {
-            AppLogger.e("MainActivity", "❌ 获取包名失败", e)
-            appendLog("❌ 获取包名失败: ${e.message}")
-            tvErrors.visibility = View.VISIBLE
-            tvErrors.text = "错误: ${e.message}"
-            progressBar.isIndeterminate = false
-            progressBar.progress = 0
-            tvCurrentFile.text = "操作失败"
-            return
         }
-        
-        AppLogger.d("MainActivity", "✅ 获取包名成功: $packageName")
-        
-        // 默认不使用增量更新，避免用户混淆
-        val incrementalUpdate = false 
-        AppLogger.d("MainActivity", "增量更新: $incrementalUpdate")
-        
-        val workRequest = com.example.tfgwj.worker.FileReplaceWorker.createWorkRequest(
-            path, 
-            packageName,
-            incrementalUpdate
-        )
-        
-        AppLogger.d("MainActivity", "✅ 创建 WorkRequest 成功: ${workRequest.id}")
-        
-        val workManager = androidx.work.WorkManager.getInstance(this)
-        workManager.enqueue(workRequest)
-        
-        // 保存当前工作 ID
-        currentWorkId = workRequest.id.toString()
+    }
+
+    private fun observeReplaceProgress(
+        workId: java.util.UUID,
+        incrementalUpdate: Boolean,
+        progressBar: LinearProgressIndicator,
+        tvPercent: TextView,
+        tvFileCount: TextView,
+        tvCurrentFile: TextView,
+        tvErrors: TextView,
+        tvSpeed: TextView,
+        tvEta: TextView
+    ) {
         
         // 设置悬浮球工作的 ID，但不在此处立即显示，
         // 只有当用户点击“隐藏到后台”时才显示悬浮球
-        floatingBallManager.setWorkId(workRequest.id.toString())
+        floatingBallManager.setWorkId(workId.toString())
         
-        AppLogger.d("MainActivity", "✅ Worker 已入队: ${workRequest.id}")
+        AppLogger.d("MainActivity", "✅ Worker 已入队: $workId")
         appendLog("🚀 Worker 已启动，正在处理...")
         if (incrementalUpdate) {
             appendLog("📦 增量更新模式：只复制变化的文件")
@@ -1657,7 +1728,8 @@ class MainActivity : AppCompatActivity() {
         }
         
         // 监听 WorkManager 状态 (主要用于检测任务完成/失败/取消)
-        workManager.getWorkInfoByIdLiveData(workRequest.id).observe(this) { workInfo ->
+        val workManager = androidx.work.WorkManager.getInstance(this)
+        workManager.getWorkInfoByIdLiveData(workId).observe(this) { workInfo ->
             if (workInfo != null) {
                 // AppLogger.d("MainActivity", "📊 Worker 状态: ${workInfo.state}")
                 when (workInfo.state) {
@@ -1710,9 +1782,6 @@ class MainActivity : AppCompatActivity() {
                         
                         // 验证文件是否真的复制成功
                         appendLog("🔍 验证替换结果...")
-                        val packageName = kotlinx.coroutines.runBlocking {
-                            preferencesManager.appPackageName.first()
-                        }
                         val targetPath = "/storage/emulated/0/Android/data/$packageName"
                         
                         val hasRoot = com.example.tfgwj.utils.RootChecker.isRooted()
@@ -2420,53 +2489,26 @@ class MainActivity : AppCompatActivity() {
             val allFiles = sourceDir.walkTopDown().filter { it.isFile }.toList()
             val total = allFiles.size
             
-            // 使用协程并发限制，避免 OOM
-            val semaphore = kotlinx.coroutines.sync.Semaphore(permits = 16) // 最多16个并发
-            
-            val successCount = java.util.concurrent.atomic.AtomicInteger(0)
-            val failedCount = java.util.concurrent.atomic.AtomicInteger(0)
-            val skippedCount = java.util.concurrent.atomic.AtomicInteger(0)
-            
-            coroutineScope {
-                val deferredList = allFiles.map { sourceFile ->
-                    async(Dispatchers.IO) {
-                        semaphore.withPermit {
-                            try {
-                                // 只取文件名，去掉所有子目录层级
-                                val fileName = sourceFile.name
-                                val targetFile = File(targetDir, fileName)
-                                
-                                // 增量检查：如果文件内容相同则跳过
-                                val needsUpdateResult = needsUpdate(sourceFile, targetFile)
-                                if (needsUpdateResult) {
-                                    // 使用 NIO 快速复制
-                                    java.nio.file.Files.copy(
-                                        sourceFile.toPath(),
-                                        targetFile.toPath(),
-                                        java.nio.file.StandardCopyOption.REPLACE_EXISTING
-                                    )
-                                    successCount.incrementAndGet()
-                                } else {
-                                    skippedCount.incrementAndGet()
-                                }
-                                
-                                val current = successCount.get() + skippedCount.get()
-                                progressCallback?.invoke(current, total, fileName)
-                                true
-                            } catch (e: Exception) {
-                                Log.e(TAG, "复制文件失败: ${sourceFile.name}", e)
-                                failedCount.incrementAndGet()
-                                false
-                            }
-                        }
+            val result = com.example.tfgwj.utils.IoOptimizer.parallelProcess(
+                items = allFiles,
+                action = { sourceFile ->
+                    // 只取文件名，去掉所有子目录层级
+                    val fileName = sourceFile.name
+                    val targetFile = File(targetDir, fileName)
+                    
+                    // 增量检查：如果文件内容相同则跳过
+                    if (com.example.tfgwj.utils.IoOptimizer.needsUpdate(sourceFile, targetFile)) {
+                        com.example.tfgwj.utils.IoOptimizer.fastCopy(sourceFile, targetFile)
+                    } else {
+                        true
                     }
-                }
-                deferredList.awaitAll()
-            }
+                },
+                progressCallback = progressCallback
+            )
             
-            val skipped = skippedCount.get()
-            val success = successCount.get()
-            val failed = failedCount.get()
+            val success = result.successCount
+            val failed = result.failedCount
+            val skipped = result.total - success - failed
             
             Log.d(TAG, "复制完成: 成功 $success 个, 跳过 $skipped 个, 失败 $failed 个")
             
@@ -2860,44 +2902,45 @@ class MainActivity : AppCompatActivity() {
                 // 更新 UI
                 detailText.text = status.statusMessage
                 
-                when {
-                    status.canAccessPrivateDir -> {
+                // 根据最佳模式更新 UI
+                when (status.bestMode) {
+                    PermissionChecker.AccessMode.ROOT -> {
+                        statusText.text = "✅ Root"
                         statusText.setTextColor(getColor(R.color.success_color))
-                        when {
-                            status.hasRoot && !status.needsShizuku -> statusText.text = "✅ Root"
-                            !status.needsShizuku -> statusText.text = "✅ 正常"
-                            else -> statusText.text = "✅ Shizuku"
-                        }
-                        AppLogger.action("环境验证成功", statusText.text.toString())
                     }
-                    status.needsShizuku -> {
-                        // 需要 Shizuku 但未就绪
-                        val isAuthorized = shizukuManager.isAuthorized.value
-                        val isConnected = shizukuManager.isServiceConnected.value
-                        
-                        if (isAuthorized && !isConnected) {
-                            statusText.text = "⏳ 连接中"
-                            shizukuManager.bindUserService() 
-                        } else {
+                    PermissionChecker.AccessMode.NATIVE -> {
+                        statusText.text = if (Build.VERSION.SDK_INT < 30) "✅ 正常" else "✅ 原生"
+                        statusText.setTextColor(getColor(R.color.success_color))
+                    }
+                    PermissionChecker.AccessMode.SHIZUKU -> {
+                        statusText.text = "✅ Shizuku"
+                        statusText.setTextColor(getColor(R.color.success_color))
+                    }
+                    PermissionChecker.AccessMode.NONE -> {
+                        // 如果没有识别到最佳模式，但支持 Shizuku，引导授权
+                        if (Build.VERSION.SDK_INT >= 30 && !status.hasShizukuPermission) {
                             statusText.text = "⏳ 等待权限"
-                            shizukuManager.requestPermission { granted ->
-                                lifecycleScope.launch {
-                                    if (granted) {
-                                        delay(1000)
-                                        checkEnvironment(forceRefresh = true) // 授权后强制刷新一次
-                                    } else {
-                                        statusText.text = "⚠️ 需要授权"
-                                        statusText.setTextColor(getColor(R.color.error_color))
-                                        AppLogger.action("环境验证失败", "用户拒绝 Shizuku")
+                            statusText.setTextColor(getColor(R.color.warning_color))
+                            
+                            if (status.isShizukuAvailable) {
+                                if (shizukuManager.isAuthorized.value && !shizukuManager.isServiceConnected.value) {
+                                    statusText.text = "⏳ 连接中"
+                                    shizukuManager.bindUserService() 
+                                } else {
+                                    shizukuManager.requestPermission { granted ->
+                                        if (granted) checkEnvironment(forceRefresh = true)
                                     }
                                 }
                             }
+                        } else {
+                             statusText.text = "⚠️ 需授权"
+                             statusText.setTextColor(getColor(R.color.error_color))
                         }
                     }
-                    else -> {
-                        statusText.text = "⚠️ 需授权"
-                        statusText.setTextColor(getColor(R.color.error_color))
-                    }
+                }
+                
+                if (status.bestMode != PermissionChecker.AccessMode.NONE) {
+                    AppLogger.action("环境验证成功", "最佳模式: ${status.bestMode}")
                 }
                 
             } catch (e: Exception) {
@@ -2933,7 +2976,8 @@ class MainActivity : AppCompatActivity() {
      */
     private suspend fun checkIfNeedShizuku(packageName: String): Boolean {
         // 直接复用 PermissionChecker 的逻辑，避免重复实现
-        return PermissionChecker.checkPermissionAccess(packageName, stopAppFirst = false).needsShizuku
+        val checkResult = PermissionChecker.checkPermissionAccess(packageName, stopAppFirst = false)
+        return checkResult.bestMode == PermissionChecker.AccessMode.SHIZUKU
     }
 
     /**

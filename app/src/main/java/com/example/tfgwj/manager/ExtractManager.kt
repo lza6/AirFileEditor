@@ -29,18 +29,7 @@ class ExtractManager private constructor() {
         
         // 智能计算的最佳缓冲区大小
         private val optimalBufferSize: Int
-            get() {
-                val runtime = Runtime.getRuntime()
-                val maxMemoryMB = runtime.maxMemory() / (1024 * 1024)
-                
-                return when {
-                    maxMemoryMB < 128 -> 512 * 1024      // < 128MB: 512KB
-                    maxMemoryMB < 256 -> 1024 * 1024     // 128-256MB: 1MB
-                    maxMemoryMB < 512 -> 2048 * 1024     // 256-512MB: 2MB
-                    maxMemoryMB < 1024 -> 3072 * 1024    // 512MB-1GB: 3MB
-                    else -> 4096 * 1024                   // >= 1GB: 4MB
-                }
-            }
+            get() = com.example.tfgwj.utils.IoOptimizer.getOptimalBufferSize()
         
         @Volatile
         private var instance: ExtractManager? = null
@@ -248,79 +237,83 @@ class ExtractManager private constructor() {
             var lastTimeUpdate = 0L
             var entry = sevenZFile.nextEntry
             
-            // 使用智能计算的缓冲区大小
+            // 使用 IoOptimizer 的缓冲区
             val bufferSize = optimalBufferSize
-            val buffer = ByteArray(bufferSize)
+            val buffer = com.example.tfgwj.utils.IoOptimizer.acquireBuffer()
             
-            Log.d(TAG, "开始解压 7z 文件，缓冲区: ${bufferSize / 1024}KB")
+            Log.d(TAG, "开始解压 7z 文件，缓冲区: ${buffer.size / 1024}KB")
             
-            while (entry != null) {
-                if (!entry.isDirectory) {
-                    val outFile = File(outputPath, entry.name)
-                    outFile.parentFile?.mkdirs()
-                    
-                    Log.d(TAG, "正在解压文件: ${entry.name}, 大小: ${entry.size} bytes")
-                    
-                    // 使用智能缓冲区提高写入性能
-                    BufferedOutputStream(FileOutputStream(outFile), bufferSize).use { bos ->
-                        var len: Int
-                        while (sevenZFile.read(buffer).also { len = it } != -1) {
-                            bos.write(buffer, 0, len)
-                            extractedSize += len
-                            
-                            val now = System.currentTimeMillis()
-                            
-                            // 进度更新条件：
-                            // 1. 每256KB更新一次进度（降低阈值）
-                            // 2. 或每2秒更新一次（缩短时间间隔）
-                            val shouldUpdateProgress = (extractedSize - lastProgressUpdate > 256 * 1024) || 
-                                                       (now - lastTimeUpdate > 2000)
-                            
-                            if (shouldUpdateProgress) {
-                                val progress = if (archiveSize > 0) {
-                                    ((extractedSize * 100) / archiveSize).toInt()
-                                } else {
-                                    100
-                                }
-                                _extractProgress.value = progress.coerceIn(0, 100)
-                                lastProgressUpdate = extractedSize
-                                lastTimeUpdate = now
+            try {
+                while (entry != null) {
+                    if (!entry.isDirectory) {
+                        val outFile = File(outputPath, entry.name)
+                        outFile.parentFile?.mkdirs()
+                        
+                        Log.d(TAG, "正在解压文件: ${entry.name}, 大小: ${entry.size} bytes")
+                        
+                        // 使用智能缓冲区提高写入性能
+                        BufferedOutputStream(FileOutputStream(outFile), buffer.size).use { bos ->
+                            var len: Int
+                            while (sevenZFile.read(buffer).also { len = it } != -1) {
+                                bos.write(buffer, 0, len)
+                                extractedSize += len
                                 
-                                // 计算速度
-                                val elapsed = now - startTime
-                                if (elapsed > 0) {
-                                    val elapsedSeconds = elapsed / 1000.0
-                                    val speedKb = (extractedSize / 1024) / elapsedSeconds
-                                    _extractStatus.value = "正在解压: ${entry.name} (${String.format("%.1f", speedKb)} KB/s)"
+                                val now = System.currentTimeMillis()
+                                
+                                // 进度更新条件：
+                                // 1. 每256KB更新一次进度（降低阈值）
+                                // 2. 或每2秒更新一次（缩短时间间隔）
+                                val shouldUpdateProgress = (extractedSize - lastProgressUpdate > 256 * 1024) || 
+                                                           (now - lastTimeUpdate > 2000)
+                                
+                                if (shouldUpdateProgress) {
+                                    val progress = if (archiveSize > 0) {
+                                        ((extractedSize * 100) / archiveSize).toInt()
+                                    } else {
+                                        100
+                                    }
+                                    _extractProgress.value = progress.coerceIn(0, 100)
+                                    lastProgressUpdate = extractedSize
+                                    lastTimeUpdate = now
+                                    
+                                    // 计算速度
+                                    val elapsed = now - startTime
+                                    if (elapsed > 0) {
+                                        val elapsedSeconds = elapsed / 1000.0
+                                        val speedKb = (extractedSize / 1024) / elapsedSeconds
+                                        _extractStatus.value = "正在解压: ${entry.name} (${String.format("%.1f", speedKb)} KB/s)"
+                                    }
                                 }
                             }
                         }
-                    }
-                    
-                    extractedCount++
-                    
-                    // 每个文件完成后也更新一次状态（确保至少显示一些更新）
-                    val now = System.currentTimeMillis()
-                    if (now - lastTimeUpdate > 1000) {
-                        val progress = if (archiveSize > 0) {
-                            ((extractedSize * 100) / archiveSize).toInt()
-                        } else {
-                            100
-                        }
-                        _extractProgress.value = progress.coerceIn(0, 100)
-                        lastTimeUpdate = now
                         
-                        val elapsed = now - startTime
-                        if (elapsed > 0) {
-                            val elapsedSeconds = elapsed / 1000.0
-                            val speedKb = (extractedSize / 1024) / elapsedSeconds
-                            _extractStatus.value = "已完成: $extractedCount 个文件 (${String.format("%.1f", speedKb)} KB/s)"
+                        extractedCount++
+                        
+                        // 每个文件完成后也更新一次状态（确保至少显示一些更新）
+                        val now = System.currentTimeMillis()
+                        if (now - lastTimeUpdate > 1000) {
+                            val progress = if (archiveSize > 0) {
+                                ((extractedSize * 100) / archiveSize).toInt()
+                            } else {
+                                100
+                            }
+                            _extractProgress.value = progress.coerceIn(0, 100)
+                            lastTimeUpdate = now
+                            
+                            val elapsed = now - startTime
+                            if (elapsed > 0) {
+                                val elapsedSeconds = elapsed / 1000.0
+                                val speedKb = (extractedSize / 1024) / elapsedSeconds
+                                _extractStatus.value = "已完成: $extractedCount 个文件 (${String.format("%.1f", speedKb)} KB/s)"
+                            }
                         }
+                        
+                        Log.d(TAG, "已完成: ${entry.name}, 总计: $extractedCount 个文件")
                     }
-                    
-                    Log.d(TAG, "已完成: ${entry.name}, 总计: $extractedCount 个文件")
+                    entry = sevenZFile.nextEntry
                 }
-                entry = sevenZFile.nextEntry
+            } finally {
+                com.example.tfgwj.utils.IoOptimizer.releaseBuffer(buffer)
             }
             
             sevenZFile.close()
@@ -396,18 +389,21 @@ class ExtractManager private constructor() {
                     val outputFile = File(outputPath, header.fileName)
                     outputFile.parentFile?.mkdirs()
                     
-                    // 使用智能计算的缓冲区大小
-                    val bufferSize = optimalBufferSize
-                    
-                    BufferedOutputStream(FileOutputStream(outputFile), bufferSize).use { bos ->
-                        val inputStream = zipFile.getInputStream(header)
-                        val buffer = ByteArray(bufferSize)
-                        var len: Int
-                        while (inputStream.read(buffer).also { len = it } != -1) {
-                            bos.write(buffer, 0, len)
-                            extractedSize += len
+                    // 使用 IoOptimizer 的缓冲区
+                    val buffer = com.example.tfgwj.utils.IoOptimizer.acquireBuffer()
+                    try {
+                        BufferedOutputStream(FileOutputStream(outputFile), buffer.size).use { bos ->
+                            val inputStream = zipFile.getInputStream(header)
+                            var len: Int
+                            while (inputStream.read(buffer).also { len = it } != -1) {
+                                bos.write(buffer, 0, len)
+                                extractedSize += len
+                            }
+                            inputStream.close()
+                            bos.flush()
                         }
-                        inputStream.close()
+                    } finally {
+                        com.example.tfgwj.utils.IoOptimizer.releaseBuffer(buffer)
                     }
                     
                     extractedCount++

@@ -13,6 +13,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.isActive
@@ -101,31 +102,70 @@ class FileReplaceWorker(
                 workDataOf(KEY_ERROR_MESSAGE to "源文件夹中没有 Android 目录")
             )
         }
-        // 检测权限模式
-        val hasRoot = RootChecker.isRooted()
-        val shizukuManager = ShizukuManager.getInstance(applicationContext)
-        val shizukuAvailable = shizukuManager.isAuthorized.value && shizukuManager.isServiceConnected.value
+        // 1. 获取当前环境支持的所有模式
+        val envStatus = com.example.tfgwj.utils.PermissionChecker.checkPermissionAccess(targetPackage, stopAppFirst = false)
         
-        val mode = when {
-            hasRoot -> "ROOT_BATCH"
-            shizukuAvailable -> "SHIZUKU_BATCH"
-            else -> "NORMAL"
+        // 【效率优化】将 bestMode 排在第一位，减少无效尝试
+        val modes = envStatus.availableModes.toMutableList()
+        if (envStatus.bestMode != com.example.tfgwj.utils.PermissionChecker.AccessMode.NONE) {
+            modes.remove(envStatus.bestMode)
+            modes.add(0, envStatus.bestMode)
         }
         
-        Log.d(TAG, "📦 选择模式: $mode")
-        Log.d(TAG, "   Root: $hasRoot (${RootChecker.getRootManagerType()})")
-        Log.d(TAG, "   Shizuku: $shizukuAvailable")
+        Log.d(TAG, "📦 全能模式启动！执行序列: $modes (推荐: ${envStatus.bestMode})")
         
-        // 执行替换
-        val result = when (mode) {
-            "ROOT_BATCH" -> executeRootBatchCopy(androidDir, targetPackage, incrementalUpdate, startTime)
-            "SHIZUKU_BATCH" -> executeShizukuBatchCopy(androidDir, targetPackage, incrementalUpdate)
-            "NORMAL" -> executeNormalCopy(androidDir, targetPackage, incrementalUpdate)
-            else -> Result.failure(workDataOf(KEY_ERROR_MESSAGE to "不支持的模式: $mode"))
+        var lastError: String? = null
+        var finalSuccessData: Data? = null
+        
+        // 2. 按优先级尝试模式
+        for (mode in modes) {
+            if (isStopped) break
+            
+            Log.i(TAG, "🚀 尝试使用模式: $mode")
+            
+            try {
+                val modeResult = when (mode) {
+                    com.example.tfgwj.utils.PermissionChecker.AccessMode.ROOT -> 
+                        executeRootBatchCopy(androidDir, targetPackage, incrementalUpdate, startTime)
+                    com.example.tfgwj.utils.PermissionChecker.AccessMode.SHIZUKU -> 
+                        executeShizukuBatchCopy(androidDir, targetPackage, incrementalUpdate)
+                    com.example.tfgwj.utils.PermissionChecker.AccessMode.NATIVE -> 
+                        executeNormalCopy(androidDir, targetPackage, incrementalUpdate)
+                    else -> null
+                }
+                
+                when (modeResult) {
+                    is InternalResult.Success -> {
+                        Log.i(TAG, "✅ 模式 $mode 执行成功！")
+                        finalSuccessData = modeResult.data
+                        break
+                    }
+                    is InternalResult.Failure -> {
+                        lastError = modeResult.message
+                        Log.w(TAG, "⚠️ 模式 $mode 失败: $lastError，尝试下一个...")
+                    }
+                    null -> {}
+                }
+            } catch (e: Exception) {
+                lastError = e.message
+                Log.e(TAG, "❌ 模式 $mode 异常: $lastError", e)
+            }
         }
         
-        Log.d(TAG, "========== 文件替换完成 ==========")
-        result
+        Log.d(TAG, "========== 文件替换流程结束 ==========")
+        return@withContext if (finalSuccessData != null) {
+            Result.success(finalSuccessData)
+        } else {
+            Result.failure(workDataOf(KEY_ERROR_MESSAGE to (lastError ?: "所有可用模式均尝试失败")))
+        }
+    }
+    
+    /**
+     * 内部执行结果
+     */
+    private sealed class InternalResult {
+        data class Success(val data: Data) : InternalResult()
+        data class Failure(val message: String) : InternalResult()
     }
     
     /**
@@ -136,7 +176,7 @@ class FileReplaceWorker(
         targetPackage: String,
         incrementalUpdate: Boolean,
         startTime: Long
-    ): Result {
+    ): InternalResult {
         return coroutineScope {
         val targetBase = "/storage/emulated/0/Android/data/$targetPackage"
         Log.d(TAG, "========== Root 模式批量复制 (极速模式) ==========")
@@ -153,7 +193,7 @@ class FileReplaceWorker(
         Log.d(TAG, "📊 扫描耗时: ${System.currentTimeMillis() - scanStart}ms, 扫描到 $totalFiles 个文件")
         
         if (totalFiles == 0) {
-            return@coroutineScope Result.failure(workDataOf(KEY_ERROR_MESSAGE to "源目录为空"))
+            return@coroutineScope InternalResult.Failure("源目录为空")
         }
 
         // 3. 准备目标环境
@@ -171,7 +211,7 @@ class FileReplaceWorker(
         com.example.tfgwj.manager.ReplaceProgressManager.finish()
         Log.d(TAG, "✅ 所有任务完成，耗时: ${System.currentTimeMillis() - startTime}ms")
         
-        return@coroutineScope Result.success(
+        return@coroutineScope InternalResult.Success(
             workDataOf(
                 KEY_PROCESSED to verifiedCount,
                 KEY_TOTAL to totalFiles,
@@ -503,7 +543,7 @@ class FileReplaceWorker(
         androidDir: File,
         targetPackage: String,
         incrementalUpdate: Boolean
-    ): Result {
+    ): InternalResult {
         return coroutineScope {
         val targetBase = "/storage/emulated/0/Android/data/$targetPackage"
         val shizukuManager = ShizukuManager.getInstance(applicationContext)
@@ -511,13 +551,17 @@ class FileReplaceWorker(
         Log.d(TAG, "========== Shizuku 模式批量复制 (极速模式) ==========")
         Log.d(TAG, "源路径: ${androidDir.absolutePath}")
         
-        // 等待 Shizuku 服务连接
-        if (!shizukuManager.isServiceConnected.value) {
-            Log.d(TAG, "等待 Shizuku 服务连接...")
-            kotlinx.coroutines.withTimeout(3000) {
-                while (!shizukuManager.isServiceConnected.value) {
-                    kotlinx.coroutines.delay(100)
+        // 等待 Shizuku 服务连接（仅在真正需要且可用时）
+        if (shizukuManager.isAvailable.value && shizukuManager.isAuthorized.value && !shizukuManager.isServiceConnected.value) {
+            Log.d(TAG, "检测到 Shizuku 已授权但未连接，尝试短时间等待...")
+            try {
+                kotlinx.coroutines.withTimeout(2000) {
+                    while (!shizukuManager.isServiceConnected.value && isActive) {
+                        kotlinx.coroutines.delay(100)
+                    }
                 }
+            } catch (e: Exception) {
+                Log.w(TAG, "等待 Shizuku 连接超时，将尝试继续执行或降级")
             }
         }
         
@@ -529,7 +573,7 @@ class FileReplaceWorker(
         val totalFiles = countFilesRoot(androidDir)
         
         if (totalFiles == 0) {
-            return@coroutineScope Result.failure(workDataOf(KEY_ERROR_MESSAGE to "源目录为空"))
+            return@coroutineScope InternalResult.Failure("源目录为空")
         }
 
         // 2. 准备目标环境
@@ -542,7 +586,7 @@ class FileReplaceWorker(
         com.example.tfgwj.manager.ReplaceProgressManager.finish()
         Log.d(TAG, "✅ Shizuku 任务完成")
         
-        return@coroutineScope Result.success(
+        return@coroutineScope InternalResult.Success(
             workDataOf(
                 KEY_PROCESSED to totalFiles,
                 KEY_TOTAL to totalFiles,
@@ -686,7 +730,7 @@ class FileReplaceWorker(
         androidDir: File,
         targetPackage: String,
         incrementalUpdate: Boolean
-    ): Result = withContext(Dispatchers.IO) {
+    ): InternalResult = withContext(Dispatchers.IO) {
         val targetBase = "/storage/emulated/0/Android/data/$targetPackage"
         var processedCount = java.util.concurrent.atomic.AtomicInteger(0)
         val failedFiles = java.util.Collections.synchronizedList(mutableListOf<String>())
@@ -704,7 +748,7 @@ class FileReplaceWorker(
         val filesToCopy = androidDir.walkTopDown().filter { it.isFile }
         
         if (totalFiles == 0) {
-             return@withContext Result.success(workDataOf(KEY_PROCESSED to 0, KEY_MODE to "NORMAL"))
+             return@withContext InternalResult.Success(workDataOf(KEY_PROCESSED to 0, KEY_MODE to "NORMAL"))
         }
 
         // 4. 高并发 IO
@@ -717,68 +761,70 @@ class FileReplaceWorker(
         val totalBytesProcessed = java.util.concurrent.atomic.AtomicLong(0)
         
         coroutineScope {
-            filesToCopy.forEach { file ->
-                launch {
-                    try {
-                        PauseControl.waitIfPaused()
-                        semaphore.acquire()
-                        if (isStopped) { semaphore.release(); return@launch }
-                        
-                        // 路径映射
-                        val fullPath = file.absolutePath
-                        val androidType = when {
-                            fullPath.contains("/data/") -> "data"
-                            fullPath.contains("/obb/") -> "obb"
-                            else -> "data"
-                        }
-                        
-                        val subPath = fullPath.substringAfter("/$androidType/").substringAfter("/", "")
-                        if (subPath.isNotEmpty()) {
-                             val realTargetBase = "/storage/emulated/0/Android/$androidType/$targetPackage"
-                             val targetFile = File(realTargetBase, subPath)
-                             
-                             // 确保父目录
-                             if (targetFile.parentFile?.exists() == false) {
-                                 synchronized(this@FileReplaceWorker) {
-                                     targetFile.parentFile?.mkdirs()
+            filesToCopy.chunked(32).forEach { batch -> // 分批处理，防止协程过多
+                batch.map { file ->
+                    launch {
+                        try {
+                            PauseControl.waitIfPaused()
+                            semaphore.acquire()
+                            if (isStopped) { semaphore.release(); return@launch }
+                            
+                            // 路径映射
+                            val fullPath = file.absolutePath
+                            val androidType = when {
+                                fullPath.contains("/data/") -> "data"
+                                fullPath.contains("/obb/") -> "obb"
+                                else -> "data"
+                            }
+                            
+                            val subPath = fullPath.substringAfter("/$androidType/").substringAfter("/", "")
+                            if (subPath.isNotEmpty()) {
+                                 val realTargetBase = "/storage/emulated/0/Android/$androidType/$targetPackage"
+                                 val targetFile = File(realTargetBase, subPath)
+                                 
+                                 // 确保父目录
+                                 if (targetFile.parentFile?.exists() == false) {
+                                     synchronized(this@FileReplaceWorker) {
+                                         targetFile.parentFile?.mkdirs()
+                                     }
                                  }
-                             }
-                             
-                             // 执行 Zero-Copy
-                             val bytes = copyFileZeroCopy(file, targetFile)
-                             targetFile.setLastModified(file.lastModified())
-                             
-                             val currentBytes = totalBytesProcessed.addAndGet(bytes)
-                             val currentProcessed = processedCount.incrementAndGet()
-                             
-                             // 速率与进度
-                             val speed = ioRateCalculator.update(currentBytes)
-                             
-                             if (currentProcessed % 10 == 0 || currentProcessed == totalFiles) {
-                                   val p = ((currentProcessed.toFloat() / totalFiles) * 100).toInt()
-                                  updateProgressState(
-                                      progress = p,
-                                      processed = currentProcessed,
-                                      total = totalFiles,
-                                      message = file.name,
-                                      mode = "NORMAL",
-                                      speed = speed
-                                  )
-                             }
+                                 
+                                 // 执行 Zero-Copy
+                                 val bytes = copyFileZeroCopy(file, targetFile)
+                                 targetFile.setLastModified(file.lastModified())
+                                 
+                                 val currentBytes = totalBytesProcessed.addAndGet(bytes)
+                                 val currentProcessed = processedCount.incrementAndGet()
+                                 
+                                 // 速率与进度
+                                 val speed = ioRateCalculator.update(currentBytes)
+                                 
+                                 if (currentProcessed % 10 == 0 || currentProcessed == totalFiles) {
+                                       val p = ((currentProcessed.toFloat() / totalFiles) * 100).toInt().coerceIn(0, 100)
+                                      updateProgressState(
+                                          progress = p,
+                                          processed = currentProcessed,
+                                          total = totalFiles,
+                                          message = file.name,
+                                          mode = "NORMAL",
+                                          speed = speed
+                                      )
+                                 }
+                            }
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Copy Error: ${file.name}", e)
+                            failedFiles.add(file.name)
+                        } finally {
+                            semaphore.release()
                         }
-                        semaphore.release()
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Copy Error: ${file.name}", e)
-                        failedFiles.add(file.name)
-                        semaphore.release()
                     }
-                }
+                }.joinAll()
             }
         }
         
         Log.d(TAG, "✅ 普通模式完成")
         com.example.tfgwj.manager.ReplaceProgressManager.finish()
-        Result.success(workDataOf(KEY_PROCESSED to processedCount.get(), KEY_MODE to "NORMAL"))
+        InternalResult.Success(workDataOf(KEY_PROCESSED to processedCount.get(), KEY_MODE to "NORMAL"))
     }
     
     /**

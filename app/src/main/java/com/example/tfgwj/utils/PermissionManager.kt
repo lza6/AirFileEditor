@@ -46,12 +46,15 @@ class PermissionManager(private val context: Context) {
         val hasStoragePermission: Boolean = false,      // 基本存储权限
         val hasManageStorage: Boolean = false,          // 所有文件访问权限
         val hasRoot: Boolean = false,                    // 是否有 Root 权限
-        val rootManagerType: String = "",               // Root 管理器类型（Magisk, SuperSU 等）
-        val needsShizuku: Boolean = false,              // 是否需要 Shizuku
+        val rootManagerType: String = "",               // Root 管理器类型
+        val availableModes: List<PermissionChecker.AccessMode> = emptyList(), // 所有可用模式
+        val bestMode: PermissionChecker.AccessMode = PermissionChecker.AccessMode.NONE, // 最佳模式
+
         val hasShizukuPermission: Boolean = false,      // Shizuku 已授权
         val isShizukuAvailable: Boolean = false,        // Shizuku 可用
         val isShizukuServiceConnected: Boolean = false, // Shizuku UserService 已连接
         val canAccessPrivateDir: Boolean = false,       // 可访问私有目录
+        val lastSelectedMode: PermissionChecker.AccessMode = PermissionChecker.AccessMode.NONE, // 上次手动选择的模式
         val statusMessage: String = ""                  // 状态描述
     )
     
@@ -95,10 +98,16 @@ class PermissionManager(private val context: Context) {
             val hasShizukuPerm = shizukuManager.isAuthorized.value
             val isServiceConnected = shizukuManager.isServiceConnected.value
             
-            // 检测是否需要 Shizuku（通过实际创建文件测试）
-            val checkResult = PermissionChecker.checkPermissionAccess(stopAppFirst = false)
-            val needsShizuku = checkResult.needsShizuku
-            val canAccessPrivate = checkResult.canAccessDirectly || (hasShizukuPerm && isServiceConnected)
+            // 检测是否需要 Shizuku（通过多维验证）
+            val checkResult = PermissionChecker.checkPermissionAccess(stopAppFirst = false, context = context)
+            val availableModes = checkResult.availableModes.toMutableList()
+            
+            // 如果 Shizuku 已经授权并连接，确保它在可用列表中
+            if (hasShizukuPerm && isServiceConnected && !availableModes.contains(PermissionChecker.AccessMode.SHIZUKU)) {
+                availableModes.add(PermissionChecker.AccessMode.SHIZUKU)
+            }
+            
+            val canAccessPrivate = checkResult.bestMode != PermissionChecker.AccessMode.NONE || (hasShizukuPerm && isServiceConnected)
             
             // 检测 Root 权限
             val hasRoot = RootChecker.isRooted()
@@ -107,20 +116,31 @@ class PermissionManager(private val context: Context) {
             // 生成状态消息
             val message = buildStatusMessage(
                 hasStorage, hasManageStorage, hasRoot, rootManagerType,
-                needsShizuku, 
+                checkResult.bestMode, availableModes,
                 hasShizukuPerm, isShizukuAvailable, isServiceConnected, canAccessPrivate
             )
             
+            // 2.5 确定最佳模式
+            val lastModeName = loadEnvConfig()?.lastSelectedMode ?: PermissionChecker.AccessMode.NONE
+            val finalBestMode = if (lastModeName != PermissionChecker.AccessMode.NONE && availableModes.contains(lastModeName)) {
+                Log.i(TAG, "🎯 优先使用用户历史手动选择的模式: $lastModeName")
+                lastModeName
+            } else {
+                checkResult.bestMode
+            }
+
             val status = PermissionStatus(
                 hasStoragePermission = hasStorage,
                 hasManageStorage = hasManageStorage,
                 hasRoot = hasRoot,
                 rootManagerType = rootManagerType,
-                needsShizuku = needsShizuku,
+                availableModes = availableModes,
+                bestMode = finalBestMode,
                 hasShizukuPermission = hasShizukuPerm,
                 isShizukuAvailable = isShizukuAvailable,
                 isShizukuServiceConnected = isServiceConnected,
                 canAccessPrivateDir = canAccessPrivate,
+                lastSelectedMode = lastModeName,
                 statusMessage = message
             )
             
@@ -147,16 +167,17 @@ class PermissionManager(private val context: Context) {
             val json = JSONObject().apply {
                 put("hasRoot", status.hasRoot)
                 put("rootManagerType", status.rootManagerType)
-                put("needsShizuku", status.needsShizuku)
+                put("bestMode", status.bestMode.name)
                 put("canAccessPrivateDir", status.canAccessPrivateDir)
                 put("androidVersion", Build.VERSION.SDK_INT)
                 put("brand", Build.BRAND)
                 put("model", Build.MODEL)
+                put("lastSelectedMode", status.lastSelectedMode.name)
                 put("timestamp", System.currentTimeMillis())
             }
             
             FileWriter(CONFIG_FILE_PATH).use { it.write(json.toString()) }
-            Log.d(TAG, "环境配置已保存到: $CONFIG_FILE_PATH")
+            Log.d(TAG, "环境配置已保存到: $CONFIG_FILE_PATH, 上次选择: ${status.lastSelectedMode}")
         } catch (e: Exception) {
             Log.w(TAG, "保存环境配置失败: ${e.message}")
         }
@@ -165,7 +186,7 @@ class PermissionManager(private val context: Context) {
     /**
      * 从持久化存储加载环境配置
      */
-    private fun loadEnvConfig(): PermissionStatus? {
+    private suspend fun loadEnvConfig(): PermissionStatus? {
         return try {
             val file = File(CONFIG_FILE_PATH)
             if (!file.exists()) return null
@@ -186,7 +207,8 @@ class PermissionManager(private val context: Context) {
             // 重新获取动态状态（Shizuku 是否运行中等）
             val hasRoot = json.getBoolean("hasRoot")
             val canAccessPrivate = json.getBoolean("canAccessPrivateDir")
-            val needsShizuku = json.getBoolean("needsShizuku")
+            val bestModeName = json.optString("bestMode", "NONE")
+            val bestMode = PermissionChecker.AccessMode.valueOf(bestModeName)
             
             // 下面这些属性需要根据当前应用运行情况动态获取
             val hasStorage = checkStoragePermission()
@@ -195,13 +217,15 @@ class PermissionManager(private val context: Context) {
             val hasShizukuPerm = shizukuManager.isAuthorized.value
             val isServiceConnected = shizukuManager.isServiceConnected.value
             
-            // 只有当环境确实满足要求时才返回缓存
-            if (!hasManageStorage) return null
-            if (needsShizuku && (!hasShizukuPerm || !isServiceConnected)) return null
+            val lastModeName = json.optString("lastSelectedMode", "NONE")
+            val lastSelectedMode = PermissionChecker.AccessMode.valueOf(lastModeName)
 
+            // 由于是从持久化加载，我们需要重新获取当前环境下的可用模式和消息
+            val checkResult = PermissionChecker.checkPermissionAccess(stopAppFirst = false, context = context)
             val message = buildStatusMessage(
                 hasStorage, hasManageStorage, hasRoot, json.getString("rootManagerType"),
-                needsShizuku, hasShizukuPerm, isShizukuAvailable, isServiceConnected, canAccessPrivate
+                checkResult.bestMode, checkResult.availableModes,
+                hasShizukuPerm, isShizukuAvailable, isServiceConnected, canAccessPrivate
             )
 
             PermissionStatus(
@@ -209,11 +233,13 @@ class PermissionManager(private val context: Context) {
                 hasManageStorage = hasManageStorage,
                 hasRoot = hasRoot,
                 rootManagerType = json.getString("rootManagerType"),
-                needsShizuku = needsShizuku,
+                availableModes = checkResult.availableModes,
+                bestMode = checkResult.bestMode,
                 hasShizukuPermission = hasShizukuPerm,
                 isShizukuAvailable = isShizukuAvailable,
                 isShizukuServiceConnected = isServiceConnected,
                 canAccessPrivateDir = canAccessPrivate,
+                lastSelectedMode = lastSelectedMode,
                 statusMessage = message
             )
         } catch (e: Exception) {
@@ -278,14 +304,20 @@ class PermissionManager(private val context: Context) {
     /**
      * 请求 Shizuku 权限
      */
-    fun requestShizukuPermission(callback: (Boolean) -> Unit) {
+    fun requestShizukuPermission(callback: ((Boolean) -> Unit)? = null) {
+        if (!shizukuManager.isAvailable.value) {
+            Log.e(TAG, "无法请求 Shizuku 权限：Shizuku 未运行")
+            callback?.invoke(false)
+            return
+        }
+
         shizukuManager.requestPermission { granted ->
             // 更新状态
             _permissionStatus.value = _permissionStatus.value.copy(
                 hasShizukuPermission = granted,
                 isShizukuServiceConnected = shizukuManager.isServiceConnected.value
             )
-            callback(granted)
+            callback?.invoke(granted)
         }
     }
     
@@ -324,43 +356,82 @@ class PermissionManager(private val context: Context) {
         hasManageStorage: Boolean,
         hasRoot: Boolean,
         rootManagerType: String,
-        needsShizuku: Boolean,
+        bestMode: PermissionChecker.AccessMode,
+        availableModes: List<PermissionChecker.AccessMode>,
         hasShizukuPerm: Boolean,
         isShizukuAvailable: Boolean,
         isServiceConnected: Boolean,
         canAccessPrivate: Boolean
     ): String {
         return when {
-            // 优先检查是否真正具备访问能力
-            canAccessPrivate -> {
-                if (hasRoot && !needsShizuku) "✓ 已就绪 (Root 访问已验证)"
-                else if (!needsShizuku) "✓ 已就绪 (普通模式访问已验证)"
-                else "✓ 已就绪 (Shizuku 授权已生效)"
-            }
-            
-            // 如果具备 Root 但检测到无法写入（对应用户的限制性 Root 情况）
-            hasRoot && needsShizuku -> "Root 访问受限，正在回退到 Shizuku..."
-            
-            // 非 Root 设备或 Root 受限时的传统逻辑
-            !hasStorage -> "需要存储权限"
+            // 所有文件访问权限依然是基础
             !hasManageStorage -> "需要所有文件访问权限"
             
-            // Shizuku 相关状态
-            needsShizuku -> {
+            // 如果具备可用模式
+            bestMode != PermissionChecker.AccessMode.NONE -> {
+                val modeStr = when (bestMode) {
+                    PermissionChecker.AccessMode.ROOT -> "Root 模式"
+                    PermissionChecker.AccessMode.NATIVE -> if (Build.VERSION.SDK_INT < 30) "系统原生支持" else "原生访问模式"
+                    PermissionChecker.AccessMode.SHIZUKU -> "Shizuku 模式"
+                    else -> "未知模式"
+                }
+                "✓ $modeStr (已物理验证)"
+            }
+            
+            // 模式不可用时的具体排查
+            hasRoot -> "已检出 Root ($rootManagerType)，但读写测试受限"
+            
+            isShizukuAvailable -> {
                 when {
-                    !isShizukuAvailable -> "检测到数据读写受限，需安装并启动 Shizuku"
-                    !hasShizukuPerm -> "需要 Shizuku 授权方可访问数据"
+                    !hasShizukuPerm -> "正在等待 Shizuku 授权..."
                     !isServiceConnected -> "Shizuku 服务正在启动中..."
-                    else -> "检测数据目录访问权限中..."
+                    else -> "Shizuku 已开启，正在验证读写权限..."
                 }
             }
             
-            // 最后才是检测到的基础权限
-            hasRoot -> "已检出 Root ($rootManagerType)，验证中..."
-            else -> "权限检查完成"
+            Build.VERSION.SDK_INT >= 30 -> {
+                if (PermissionChecker.isHarmonyOS()) "检测到系统读写受限，建议尝试不同模式"
+                else "Android 系统限制，请尝试连接 Shizuku 或 Root"
+            }
+            else -> "正在检查存储读写权限..."
         }
     }
     
+    /**
+     * 手动选择并验证模式
+     */
+    suspend fun manuallySelectMode(mode: PermissionChecker.AccessMode): Boolean = withContext(Dispatchers.IO) {
+        Log.i(TAG, "用户手动选择模式: $mode")
+        
+        // 1. 更新状态为验证中
+        _permissionStatus.value = _permissionStatus.value.copy(
+            statusMessage = "正在验证 ${mode.name} 模式..."
+        )
+        
+        // 2. 验证该模式
+        val success = PermissionChecker.checkSinglePermissionAccess(mode, context = context)
+        
+        if (success) {
+            Log.d(TAG, "✅ 手动验证成功: $mode")
+            val current = _permissionStatus.value
+            val newStatus = current.copy(
+                bestMode = mode,
+                lastSelectedMode = mode,
+                canAccessPrivateDir = true,
+                statusMessage = "✓ 已手动切换至 ${mode.name} 模式"
+            )
+            _permissionStatus.value = newStatus
+            saveEnvConfig(newStatus)
+            true
+        } else {
+            Log.w(TAG, "❌ 手动验证失败: $mode")
+            _permissionStatus.value = _permissionStatus.value.copy(
+                statusMessage = "⚠️ ${mode.name} 模式验证失败，请确认权限已开启"
+            )
+            false
+        }
+    }
+
     /**
      * 确保所有必要权限
      * @return true 如果所有权限都已满足
@@ -372,10 +443,15 @@ class PermissionManager(private val context: Context) {
             return false
         }
         
-        if (status.needsShizuku) {
-            return status.hasShizukuPermission && status.isShizukuServiceConnected
+        // 如果已经有验证过的最佳模式，直接通过
+        if (status.bestMode != PermissionChecker.AccessMode.NONE && status.canAccessPrivateDir) {
+            // 特殊处理 Shizuku，确保服务还连着
+            if (status.bestMode == PermissionChecker.AccessMode.SHIZUKU) {
+                return status.hasShizukuPermission && status.isShizukuServiceConnected
+            }
+            return true
         }
         
-        return true
+        return false
     }
 }

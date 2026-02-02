@@ -12,56 +12,7 @@ import java.io.File
 object SmartCacheManager {
     private const val TAG = "SmartCacheManager"
 
-    /**
-         * 检测并执行优化
-         * @param context 上下文
-         * @param packageName 目标应用包名
-         * @param shizukuManager Shizuku 管理器
-         * @return 状态消息
-         */
-        suspend fun checkAndOptimize(context: Context, packageName: String, shizukuManager: ShizukuManager? = null): String? = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-            val start = System.currentTimeMillis()
-            var result: String? = null
-    
-            try {
-                // 计算目标应用的 Saved 路径
-                val savedPath = "/storage/emulated/0/Android/data/$packageName/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved"
-    
-                // 1. 检测是否有 Root 权限
-                val hasRoot = RootChecker.isRooted()
-    
-                if (hasRoot) {
-                    Log.d(TAG, "✅ 检测到 Root 权限，使用原生 API 优化")
-                    val savedDir = File(savedPath)
-                    if (savedDir.exists()) {
-                        result = performDirectOptimize(savedDir)
-                    }
-                } else {
-                    // 没有 Root，检查是否可以直接访问
-                    val checkResult = PermissionChecker.checkPermissionAccess(packageName, stopAppFirst = false)
-    
-                    if (checkResult.canAccessDirectly) {
-                        Log.d(TAG, "可以直接访问，使用原生 API 优化")
-                        val savedDir = File(savedPath)
-                        if (savedDir.exists()) {
-                            result = performDirectOptimize(savedDir)
-                        }
-                    }
-                }
-    
-                // 2. 如果原生方式没能处理且 Shizuku 可用，则通过 Shizuku 处理
-                if (result == null && shizukuManager?.isServiceConnected?.value == true) {
-                    Log.d(TAG, "使用 Shizuku 优化")
-                    result = performShizukuOptimize(shizukuManager, savedPath)
-                }
-            } catch (e: Exception) {
-                AppLogger.func("checkAndOptimize", "智能检测失败", false, e.message ?: "未知错误")
-            }
-    
-            val duration = System.currentTimeMillis() - start
-            AppLogger.func("checkAndOptimize", "智能检测完成", true, "耗时: ${duration}ms | 结果: $result")
-            result
-        }
+
     /**
      * 清理环境：删除 Saved 目录下除白名单外的所有内容
      * 白名单：Paks, PandoraV2, ImageDownloadV3
@@ -81,52 +32,91 @@ object SmartCacheManager {
         val whiteList = listOf("Paks", "PandoraV2", "ImageDownloadV3")
         val savedPath = "/storage/emulated/0/Android/data/$packageName/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved"
 
-        // 1. 检测 Root 权限 → Root 模式
-        val hasRoot = RootChecker.isRooted()
-        if (hasRoot) {
-            AppLogger.func("cleanEnvironment", "Root 模式清理", true, "使用 Root 命令清理")
+        // 1. 获取全能模式下的可用序列
+        val envStatus = PermissionChecker.checkPermissionAccess(packageName, stopAppFirst = false)
+        val modes = envStatus.availableModes
+        
+        Log.d(TAG, "📦 [环境清理] 开始流程，模式序列: $modes")
+        
+        var lastError: Exception? = null
+        
+        // 2. 按优先级尝试清理
+        for (mode in modes) {
+            Log.i(TAG, "正在尝试清理模式: $mode")
             try {
-                val deletedCount = cleanViaRoot(savedPath, whiteList, progressCallback)
-                Result.success(deletedCount)
-            } catch (e: Exception) {
-                AppLogger.func("cleanEnvironment", "Root 清理失败", false, e.message ?: "未知错误")
-                Result.failure(e)
-            }
-        } else {
-            // 2. 没有 Root，检测是否需要 Shizuku
-            val checkResult = PermissionChecker.checkPermissionAccess(packageName, stopAppFirst = true)
-            AppLogger.func("cleanEnvironment", "权限检测", true,
-                "needsShizuku=${checkResult.needsShizuku}, canAccessDirectly=${checkResult.canAccessDirectly}")
-
-            try {
-                if (checkResult.canAccessDirectly) {
-                    // 2a. 无需 Shizuku 且无 Root 模式 → 使用原生 API 删除
-                    AppLogger.func("cleanEnvironment", "无需 Shizuku 且无 Root 模式清理", true, "使用原生 API 清理: $savedPath")
-                    Log.d(TAG, "📁 目标目录: $savedPath")
-                    val deletedCount = cleanViaNative(savedPath, whiteList, progressCallback)
-                    Result.success(deletedCount)
-
-                } else {
-                    // 2b. Shizuku 模式 → 检查 Shizuku 是否可用
-                    if (shizukuManager?.isServiceConnected?.value != true) {
-                        return@withContext Result.failure(Exception("需要 Shizuku 授权才能清理环境"))
+                when (mode) {
+                    PermissionChecker.AccessMode.ROOT -> {
+                        val count = cleanViaRoot(savedPath, whiteList, progressCallback)
+                        if (count >= 0) {
+                            AppLogger.func("cleanEnvironment", "Root 模式成功", true)
+                            return@withContext Result.success(count)
+                        }
                     }
-
-                    AppLogger.func("cleanEnvironment", "Shizuku 模式清理", true, "使用 Shizuku shell 清理")
-                    val deletedCount = cleanViaShizuku(shizukuManager, savedPath, whiteList.toTypedArray(), progressCallback)
-                    if (deletedCount >= 0) {
-                        Result.success(deletedCount)
-                    } else {
-                        Result.failure(Exception("清理失败"))
+                    PermissionChecker.AccessMode.NATIVE -> {
+                        val count = cleanViaNative(savedPath, whiteList, progressCallback)
+                        if (count >= 0) {
+                            AppLogger.func("cleanEnvironment", "Native 模式成功", true)
+                            return@withContext Result.success(count)
+                        }
                     }
+                    PermissionChecker.AccessMode.SHIZUKU -> {
+                        if (shizukuManager?.isServiceConnected?.value == true) {
+                            val count = cleanViaShizuku(shizukuManager, savedPath, whiteList.toTypedArray(), progressCallback)
+                            if (count >= 0) {
+                                AppLogger.func("cleanEnvironment", "Shizuku 模式成功", true)
+                                return@withContext Result.success(count)
+                            }
+                        }
+                    }
+                    else -> {}
                 }
             } catch (e: Exception) {
-                AppLogger.func("cleanEnvironment", "清理异常", false, e.message ?: "未知错误")
-                Result.failure(e)
+                lastError = e
+                Log.w(TAG, "清理模式 $mode 失败: ${e.message}")
             }
         }
+        
+        return@withContext Result.failure(lastError ?: Exception("所有权限模式均无法完成清理"))
     }
+    
+    suspend fun checkAndOptimize(context: Context, packageName: String, shizukuManager: ShizukuManager? = null): String? = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        val start = System.currentTimeMillis()
+        var result: String? = null
 
+        try {
+            val savedPath = "/storage/emulated/0/Android/data/$packageName/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved"
+            val envStatus = PermissionChecker.checkPermissionAccess(packageName, stopAppFirst = false)
+            val modes = envStatus.availableModes
+
+            for (mode in modes) {
+                try {
+                    result = when (mode) {
+                        PermissionChecker.AccessMode.ROOT, 
+                        PermissionChecker.AccessMode.NATIVE -> {
+                            val savedDir = File(savedPath)
+                            if (savedDir.exists()) performDirectOptimize(savedDir) else null
+                        }
+                        PermissionChecker.AccessMode.SHIZUKU -> {
+                            if (shizukuManager?.isServiceConnected?.value == true) {
+                                performShizukuOptimize(shizukuManager, savedPath)
+                            } else null
+                        }
+                        else -> null
+                    }
+                    if (result != null) break
+                } catch (e: Exception) {
+                    Log.w(TAG, "优化模式 $mode 失败: ${e.message}")
+                }
+            }
+        } catch (e: Exception) {
+            AppLogger.e(TAG, "智能优化流程异常", e)
+        }
+
+        val duration = System.currentTimeMillis() - start
+        AppLogger.func("checkAndOptimize", "智能检测完成", true, "耗时: ${duration}ms | 结果: $result")
+        result
+    }
+    
     /**
      * 使用 Root 命令清理（适用于 Root 设备）
      */

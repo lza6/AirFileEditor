@@ -82,9 +82,36 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="12dp"
-                        android:text="授权"
+                        android:text="基本授权"
                         android:visibility="gone"
                         app:cornerRadius="8dp" />
+
+                    <LinearLayout
+                        android:id="@+id/layout_manual_select"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:orientation="vertical">
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btn_manual_mode"
+                            style="@style/Widget.Material3.Button.TonalButton"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="⚙️ 手动选择模式"
+                            app:cornerRadius="8dp" />
+
+                        <TextView
+                            android:id="@+id/tv_last_mode"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="4dp"
+                            android:gravity="center"
+                            android:text="上次使用: 无"
+                            android:textColor="@color/text_hint"
+                            android:textSize="12sp" />
+
+                    </LinearLayout>
 
                 </LinearLayout>
 

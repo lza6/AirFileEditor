@@ -29,7 +29,8 @@ class UniversalExtractor private constructor() {
     
     companion object {
         private const val TAG = "UniversalExtractor"
-        private const val BUFFER_SIZE = 8192
+        private val BUFFER_SIZE: Int
+            get() = com.example.tfgwj.utils.IoOptimizer.getOptimalBufferSize()
         
         // 支持的格式
         val SUPPORTED_EXTENSIONS = setOf(
@@ -153,50 +154,56 @@ class UniversalExtractor private constructor() {
                 BufferedInputStream(fis).use { bis ->
                     ZipInputStream(bis).use { zis ->
                         var entry = zis.nextEntry
-                        val buffer = ByteArray(BUFFER_SIZE)
+                        val buffer = com.example.tfgwj.utils.IoOptimizer.acquireBuffer()
                         
-                        while (entry != null) {
-                             // 1. 检查暂停
-                            kotlinx.coroutines.runBlocking { PauseControl.waitIfPaused() }
-                            
-                            val fileName = entry.name
-                            val outFile = File(outputDir, fileName)
-                            
-                            // 2. Zip Slip 安全检查
-                            val canonicalDest = File(outputDir).canonicalPath
-                            val canonicalEntry = outFile.canonicalPath
-                            if (!canonicalEntry.startsWith(canonicalDest + File.separator)) {
-                                throw SecurityException("Zip Slip 检测: $fileName")
-                            }
-                            
-                            _currentFile.value = fileName
-                            
-                            if (entry.isDirectory) {
-                                outFile.mkdirs()
-                            } else {
-                                outFile.parentFile?.mkdirs()
-                                FileOutputStream(outFile).use { fos ->
-                                    var len: Int
-                                    while (zis.read(buffer).also { len = it } > 0) {
-                                        fos.write(buffer, 0, len)
-                                        totalProcessedBytes += len
-                                        
-                                        // 更新速度和进度
-                                        val speed = ioRateCalculator.update(totalProcessedBytes)
-                                        if (speed > 0) _currentSpeed.value = speed
-                                        
-                                        // 估算进度 (字节级)
-                                        if (totalSize > 0) {
-                                            val progress = (totalProcessedBytes * 100 / totalSize).toInt()
-                                            if (progress != _progress.value) _progress.value = progress
-                                        }
-                                    }
+                        try {
+                            while (entry != null) {
+                                 // 1. 检查暂停
+                                kotlinx.coroutines.runBlocking { PauseControl.waitIfPaused() }
+                                
+                                val fileName = entry.name
+                                val outFile = File(outputDir, fileName)
+                                
+                                // 2. Zip Slip 安全检查
+                                val canonicalDest = File(outputDir).canonicalPath
+                                val canonicalEntry = outFile.canonicalPath
+                                if (!canonicalEntry.startsWith(canonicalDest + File.separator)) {
+                                    throw SecurityException("Zip Slip 检测: $fileName")
                                 }
-                                extractedCount++
+                                
+                                _currentFile.value = fileName
+                                
+                                if (entry.isDirectory) {
+                                    outFile.mkdirs()
+                                } else {
+                                    outFile.parentFile?.mkdirs()
+                                    // 增加 FileOutputStream 的缓冲区
+                                    BufferedOutputStream(FileOutputStream(outFile)).use { bos ->
+                                        var len: Int
+                                        while (zis.read(buffer).also { len = it } > 0) {
+                                            bos.write(buffer, 0, len)
+                                            totalProcessedBytes += len
+                                            
+                                            // 更新速度和进度
+                                            val speed = ioRateCalculator.update(totalProcessedBytes)
+                                            if (speed > 0) _currentSpeed.value = speed
+                                            
+                                            // 估算进度 (字节级)
+                                            if (totalSize > 0) {
+                                                val progress = (totalProcessedBytes * 100 / totalSize).toInt()
+                                                if (progress != _progress.value) _progress.value = progress
+                                            }
+                                        }
+                                        bos.flush()
+                                    }
+                                    extractedCount++
+                                }
+                                
+                                zis.closeEntry()
+                                entry = zis.nextEntry
                             }
-                            
-                            zis.closeEntry()
-                            entry = zis.nextEntry
+                        } finally {
+                            com.example.tfgwj.utils.IoOptimizer.releaseBuffer(buffer)
                         }
                     }
                 }
@@ -444,12 +451,17 @@ class UniversalExtractor private constructor() {
                     outFile.mkdirs()
                 } else {
                     outFile.parentFile?.mkdirs()
-                    FileOutputStream(outFile).use { fos ->
-                        val buffer = ByteArray(BUFFER_SIZE)
-                        var len: Int
-                        while (archiveIn.read(buffer).also { len = it } > 0) {
-                            fos.write(buffer, 0, len)
+                    val buffer = com.example.tfgwj.utils.IoOptimizer.acquireBuffer()
+                    try {
+                        BufferedOutputStream(FileOutputStream(outFile)).use { bos ->
+                            var len: Int
+                            while (archiveIn.read(buffer).also { len = it } > 0) {
+                                bos.write(buffer, 0, len)
+                            }
+                            bos.flush()
                         }
+                    } finally {
+                        com.example.tfgwj.utils.IoOptimizer.releaseBuffer(buffer)
                     }
                     count++
                 }

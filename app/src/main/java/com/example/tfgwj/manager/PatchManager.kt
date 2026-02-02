@@ -195,78 +195,47 @@ class PatchManager private constructor() {
             
             val total = allItems.size
             
-            // 使用 ForkJoinPool 并行删除，适度并发避免锁死
-            val parallelism = Runtime.getRuntime().availableProcessors() * 8  // CPU核心数 * 8
-            val executor = java.util.concurrent.ForkJoinPool(parallelism)
-            
-            val results = java.util.concurrent.ConcurrentLinkedQueue<Pair<File, Boolean>>()
-            var deletedCount = 0
-            
-            // 使用并行流批量删除
-            allItems.parallelStream().forEach { item ->
-                var deleted = false
-                var retryCount = 0
-                val maxRetries = 3
-                
-                // 重试机制
-                while (!deleted && retryCount < maxRetries) {
-                    try {
-                        deleted = item.delete()
-                        if (!deleted) {
+            val result = com.example.tfgwj.utils.IoOptimizer.parallelProcess(
+                items = allItems,
+                action = { item ->
+                    var deleted = false
+                    var retryCount = 0
+                    val maxRetries = 2
+                    
+                    while (!deleted && retryCount < maxRetries) {
+                        try {
+                            deleted = item.delete()
+                            if (!deleted) {
+                                retryCount++
+                                if (retryCount < maxRetries) kotlinx.coroutines.delay(10)
+                            }
+                        } catch (e: Exception) {
                             retryCount++
-                            Thread.sleep(20)  // 等待 20ms 后重试
+                            if (retryCount < maxRetries) kotlinx.coroutines.delay(10)
                         }
-                    } catch (e: Exception) {
-                        retryCount++
-                        Thread.sleep(20)
                     }
-                }
-                
-                results.add(item to deleted)
-                if (deleted) {
-                    deletedCount++
-                    // 更新进度
-                    progressCallback?.invoke(deletedCount, total, item.name)
-                }
-            }
+                    deleted
+                },
+                progressCallback = progressCallback
+            )
             
-            // 等待所有删除任务完成
-            executor.shutdown()
-            executor.awaitTermination(300, java.util.concurrent.TimeUnit.SECONDS)
-            
-            // 短暂延迟确保所有 I/O 完成
-            kotlinx.coroutines.delay(500)
-            
-            // 检查失败的项目，尝试再次删除
-            val failedItems = results.filter { !it.second }.map { it.first }
-            var retryDeletedCount = 0
-            
-            if (failedItems.isNotEmpty()) {
-                // 对失败的项目再次尝试（可能是因为并发导致的临时问题）
-                failedItems.forEach { item ->
-                    if (item.delete()) {
-                        retryDeletedCount++
-                    }
-                }
-            }
-            
-            deletedCount += retryDeletedCount
-            
-            // 如果所有项目都删除成功，则认为删除成功
-            val success = (deletedCount >= total * 0.99)  // 允许 1% 的失败率（可能是系统临时文件）
+            // 如果删除了绝大多数项目，则认为成功（有些文件夹可能因为非空暂时删不掉）
+            val success = result.successCount >= total * 0.95
             
             if (success) {
+                // 再次尝试删除根目录以确保彻底
+                dir.deleteRecursively()
+                
                 // 更新列表
                 _patchVersions.value = _patchVersions.value.filter { it.path != version.path }
-                AppLogger.func("deletePatchVersion", "已删除小包", true, "Name: ${version.name}")
+                com.example.tfgwj.utils.AppLogger.func("deletePatchVersion", "已删除小包", true, "Name: ${version.name}")
             } else {
-                val successCount = results.count { it.second }
-                AppLogger.func("deletePatchVersion", "删除小包失败", false, "Name: ${version.name} | 成功: $successCount/$total")
+                com.example.tfgwj.utils.AppLogger.func("deletePatchVersion", "删除小包部分失败", false, "Name: ${version.name} | 成功: ${result.successCount}/$total")
             }
             
             success
         } catch (e: Exception) {
-            AppLogger.func("deletePatchVersion", "删除小包失败", false, "Name: ${version.name} | Error: ${e.message}")
+            com.example.tfgwj.utils.AppLogger.func("deletePatchVersion", "删除小包引发异常", false, "Name: ${version.name} | Error: ${e.message}")
             false
         }
     }
@@ -310,7 +279,7 @@ class PatchManager private constructor() {
     ): Boolean = withContext(Dispatchers.IO) {
         try {
             // 目标 Config 目录
-            val configPath = "$mainPackPath/Android/data/${PermissionChecker.PUBG_PACKAGE_NAME}/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/Config/Android"
+            val configPath = "$mainPackPath/Android/data/${com.example.tfgwj.utils.PermissionChecker.PUBG_PACKAGE_NAME}/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/Config/Android"
             val configDir = File(configPath)
             
             if (!configDir.exists()) {
@@ -320,24 +289,28 @@ class PatchManager private constructor() {
             // 获取小包中的 ini 文件
             val iniFiles = getIniFiles(version)
             val total = iniFiles.size
-            var success = 0
             
-            iniFiles.forEachIndexed { index, iniFile ->
-                try {
+            val result = com.example.tfgwj.utils.IoOptimizer.parallelProcess(
+                items = iniFiles,
+                action = { iniFile ->
                     val targetFile = File(configDir, iniFile.name)
-                    iniFile.copyTo(targetFile, overwrite = true)
-                    success++
-                } catch (e: Exception) {
-                    AppLogger.file("COPY_INI", iniFile.name, false, e.message)
+                    // 增量更新检测
+                    if (com.example.tfgwj.utils.IoOptimizer.needsUpdate(iniFile, targetFile)) {
+                        com.example.tfgwj.utils.IoOptimizer.fastCopy(iniFile, targetFile)
+                    } else {
+                        true // 不需要更新也视为成功
+                    }
+                },
+                progressCallback = { current, total, _ ->
+                    progressCallback?.invoke(current, total)
                 }
-                progressCallback?.invoke(index + 1, total)
-            }
+            )
             
-            AppLogger.func("applyPatchToMainPack", "应用小包完成", success == total, "成功: $success/$total")
-            success == total
+            com.example.tfgwj.utils.AppLogger.func("applyPatchToMainPack", "应用小包完成", result.success, "成功: ${result.successCount}/$total")
+            result.success
             
         } catch (e: Exception) {
-            AppLogger.func("applyPatchToMainPack", "应用小包失败", false, e.message ?: "未知错误")
+            com.example.tfgwj.utils.AppLogger.func("applyPatchToMainPack", "应用小包引发异常", false, e.message ?: "未知错误")
             false
         }
     }

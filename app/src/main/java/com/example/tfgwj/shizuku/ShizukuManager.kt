@@ -35,9 +35,13 @@ class ShizukuManager private constructor(private val context: Context) {
         @Volatile
         private var instance: ShizukuManager? = null
 
-        fun getInstance(context: Context): ShizukuManager {
+        fun getInstance(context: Context?): ShizukuManager {
             return instance ?: synchronized(this) {
-                instance ?: ShizukuManager(context.applicationContext).also { instance = it }
+                instance ?: if (context != null) {
+                    ShizukuManager(context.applicationContext).also { instance = it }
+                } else {
+                    throw IllegalStateException("ShizukuManager must be initialized with a context first")
+                }
             }
         }
     }
