@@ -56,8 +56,10 @@ class MainPackManager private constructor() {
     /**
      * 扫描听风改文件目录下的主包
      * 判断依据：包含 Android/data/.../files 目录
+     * 
+     * @param packageName 应用包名（默认为和平精英）
      */
-    suspend fun scanMainPacks(): List<MainPackInfo> = withContext(Dispatchers.IO) {
+    suspend fun scanMainPacks(packageName: String = PermissionChecker.PUBG_PACKAGE_NAME): List<MainPackInfo> = withContext(Dispatchers.IO) {
         if (_isScanning.value) return@withContext _mainPacks.value
         
         _isScanning.value = true
@@ -70,7 +72,7 @@ class MainPackManager private constructor() {
             }
             
             cacheDir.listFiles { file -> file.isDirectory }?.forEach { dir ->
-                val info = analyzeMainPack(dir)
+                val info = analyzeMainPack(dir, packageName)
                 if (info?.hasAndroidDir == true) {
                     packs.add(info)
                 }
@@ -92,22 +94,41 @@ class MainPackManager private constructor() {
     
     /**
      * 分析主包目录
+     * 
+     * @param dir 主包目录
+     * @param packageName 应用包名（默认为和平精英）
      */
-    private fun analyzeMainPack(dir: File): MainPackInfo? {
+    private fun analyzeMainPack(dir: File, packageName: String = PermissionChecker.PUBG_PACKAGE_NAME): MainPackInfo? {
         return try {
-            val androidDir = File(dir, "Android")
-            val hasAndroid = androidDir.exists() && androidDir.isDirectory
+            // 查找 Android 目录（支持嵌套路径，如 /主包名字/主包名字/Android）
+            val androidDir = findAndroidDirectory(dir)
+            val hasAndroid = androidDir != null && androidDir.exists() && androidDir.isDirectory
             
-            if (!hasAndroid) return null
+            if (!hasAndroid) {
+                Log.d(TAG, "目录 ${dir.name} 未找到 Android 目录")
+                return null
+            }
             
-            val configPath = "${dir.absolutePath}/Android/data/${PermissionChecker.PUBG_PACKAGE_NAME}/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/Config/Android"
-            val configDir = File(configPath)
+            // 根据 Android 目录的实际路径和包名来判断 Config 目录
+            val configPath = PermissionChecker.getAppConfigPath(packageName)
+            // 将 configPath 中的绝对路径替换为相对于 androidDir 的路径
+            val relativeConfigPath = if (configPath.startsWith("/storage/emulated/0/Android/data/")) {
+                configPath.substringAfter("/storage/emulated/0/Android/data/")
+            } else {
+                "$packageName/files/"
+            }
+            
+            val actualConfigPath = "${androidDir.absolutePath}/data/$relativeConfigPath"
+            val configDir = File(actualConfigPath)
             val hasConfig = configDir.exists()
             
+            // 统计目录大小（只统计主包根目录及其子目录）
             var totalSize = 0L
-            dir.walkTopDown().forEach { file ->
+            dir.walkTopDown().maxDepth(5).forEach { file ->
                 if (file.isFile) totalSize += file.length()
             }
+            
+            Log.d(TAG, "发现主包: ${dir.name}, Android 路径: ${androidDir.absolutePath}, 包名: $packageName")
             
             MainPackInfo(
                 name = dir.name,
@@ -125,6 +146,68 @@ class MainPackManager private constructor() {
     }
     
     /**
+     * 查找 Android 目录
+     * 支持嵌套路径，如：
+     * - /path/to/pack/Android
+     * - /path/to/pack/pack/Android
+     * - /path/to/pack/pack/pack/Android
+     * 
+     * @param baseDir 基础目录
+     * @return Android 目录 File 对象，如果找不到返回 null
+     */
+    private fun findAndroidDirectory(baseDir: File): File? {
+        // 1. 首先检查当前目录下是否有 Android 子目录
+        val directAndroid = File(baseDir, "Android")
+        if (directAndroid.exists() && directAndroid.isDirectory) {
+            return directAndroid
+        }
+        
+        // 2. 递归检查子目录（最多检查 3 层，防止无限递归）
+        val maxDepth = 3
+        val androidDir = findAndroidDirectoryRecursive(baseDir, 0, maxDepth)
+        if (androidDir != null) {
+            return androidDir
+        }
+        
+        return null
+    }
+    
+    /**
+     * 递归查找 Android 目录
+     */
+    private fun findAndroidDirectoryRecursive(dir: File, currentDepth: Int, maxDepth: Int): File? {
+        if (currentDepth >= maxDepth) {
+            return null
+        }
+        
+        if (!dir.exists() || !dir.isDirectory) {
+            return null
+        }
+        
+        // 检查当前目录是否是 Android 目录
+        if (dir.name == "Android") {
+            return dir
+        }
+        
+        // 递归检查子目录
+        dir.listFiles()?.forEach { child ->
+            if (child.isDirectory) {
+                // 如果子目录就是 Android 目录，直接返回
+                if (child.name == "Android") {
+                    return child
+                }
+                // 否则继续递归
+                val found = findAndroidDirectoryRecursive(child, currentDepth + 1, maxDepth)
+                if (found != null) {
+                    return found
+                }
+            }
+        }
+        
+        return null
+    }
+    
+    /**
      * 选择主包
      */
     fun selectMainPack(pack: MainPackInfo) {
@@ -134,9 +217,24 @@ class MainPackManager private constructor() {
     
     /**
      * 获取主包的 Config 目录路径
+     * 
+     * @param pack 主包信息
+     * @param packageName 应用包名（默认为和平精英）
      */
-    fun getConfigPath(pack: MainPackInfo): String {
-        return "${pack.path}/Android/data/${PermissionChecker.PUBG_PACKAGE_NAME}/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/Config/Android"
+    fun getConfigPath(pack: MainPackInfo, packageName: String = PermissionChecker.PUBG_PACKAGE_NAME): String {
+        val androidDir = findAndroidDirectory(File(pack.path))
+        if (androidDir != null) {
+            val configPath = PermissionChecker.getAppConfigPath(packageName)
+            // 将 configPath 中的绝对路径替换为相对于 androidDir 的路径
+            val relativeConfigPath = if (configPath.startsWith("/storage/emulated/0/Android/data/")) {
+                configPath.substringAfter("/storage/emulated/0/Android/data/")
+            } else {
+                "$packageName/files/"
+            }
+            return "${androidDir.absolutePath}/data/$relativeConfigPath"
+        }
+        // 降级方案：直接使用 pack.path
+        return "${pack.path}/Android/data/$packageName/files/"
     }
     
     /**

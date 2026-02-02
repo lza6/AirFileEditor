@@ -1,173 +1,137 @@
-# 听风改文件
+# 🌬️ 听风改文件 (AirFileEditor) v2.0.0 🚀
 
-> 一款专为和平精英游戏打造的文件管理工具，支持智能增量更新、文件时间修改、压缩包解压等功能。
-
-![Android](https://img.shields.io/badge/Android-5.0+-green.svg)
-![Kotlin](https://img.shields.io/badge/Kotlin-2.1.0-blue.svg)
-![License](https://img.shields.io/badge/License-MIT-yellow.svg)
-
-## ✨ 主要功能
-
-### 🎯 文件替换
-- **智能增量更新** - 自动检测文件内容变化，跳过相同文件，大幅提升替换速度（二次替换提升 80%-95%）
-- **Shizuku 高性能模式** - 利用 Shizuku 根权限实现快速批量文件复制
-- **进度实时显示** - 实时进度条、速度显示、预估剩余时间
-- **错误处理** - 失败文件列表展示，方便排查问题
-
-### 📦 压缩包管理
-- **多格式支持** - 支持 ZIP、7z 格式压缩包
-- **智能解压** - 根据文件大小自适应缓冲区，提升解压性能
-- **版本管理** - 自动识别压缩包版本，避免重复解压
-- **密码支持** - 自动识别加密压缩包，支持密码输入
-
-### 🕒 文件时间管理
-- **一键随机时间** - 随机生成 2027-2029 年的文件时间
-- **自定义时间** - 支持手动选择任意时间
-- **时间锁定** - 锁定好用的时间，下次直接应用
-- **时间应用** - 将锁定的时间应用到所有文件
-
-### 📋 小包管理
-- **版本扫描** - 自动扫描缓存目录中的小包
-- **快速应用** - 一键将小包文件应用到主包
-- **增量复制** - 智能跳过相同文件，提升更新速度
-
-### 🧹 环境清理
-- **选择性清理** - 保留核心数据（Paks、PandoraV2、ImageDownloadV3）
-- **安全清理** - 清理其他配置文件，重置游戏环境
-
-## 🚀 技术特性
-
-### 核心优化
-- **协程并发控制** - 使用 Semaphore 控制并发数，避免 OOM
-- **自适应缓冲区** - 根据文件大小动态调整缓冲区（64KB ~ 1MB）
-- **哈希比对** - MD5 哈希精确校验，确保文件一致性
-- **内存优化** - Channel 限制日志队列，批量写入减少 I/O
-
-### 权限管理
-- **Shizuku 支持** - 利用 Shizuku 获取高性能文件操作权限
-- **存储管理** - 支持 Android 11+ 存储权限管理
-- **权限检测** - 自动检测并提示用户授予权限
-
-### 性能优化
-- **单线程解压** - 稳定的单线程解压模式，兼容性更好
-- **流式处理** - 大文件分块处理，避免内存溢出
-- **低内存警告** - 自动响应系统内存警告，及时释放资源
-
-## 📱 系统要求
-
-- **Android 版本**: 5.0 (API 26) 及以上
-- **存储空间**: 至少 2GB 可用空间
-- **权限**:
-  - 存储权限（访问外部存储）
-  - Shizuku 权限（高性能文件操作）
-  - 网络权限（可选，用于下载更新）
-
-## 🔧 开发环境
-
-```kotlin
-- Kotlin: 2.1.0
-- Gradle: 8.1.0
-- Android Gradle Plugin: 8.1.0
-- Compile SDK: 36
-- Min SDK: 26
-- Target SDK: 36
-```
-
-## 📦 主要依赖
-
-```kotlin
-// 协程
-implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
-
-// 文件压缩
-implementation("org.apache.commons:commons-compress:1.26.0")
-implementation("net.lingala.zip4j:zip4j:2.11.5")
-
-// Shizuku
-implementation("dev.rikka.shizuku:api:13.1.5")
-implementation("dev.rikka.shizuku:provider:13.1.5")
-
-// WorkManager
-implementation("androidx.work:work-runtime-ktx:2.9.0")
-
-// DataStore
-implementation("androidx.datastore:datastore-preferences:1.0.0")
-
-// Material Design
-implementation("com.google.android.material:material:1.12.0")
-```
-
-## 🛠️ 构建说明
-
-### 前置要求
-- Android Studio Hedgehog (2023.1.1) 或更高版本
-- JDK 11 或更高版本
-- Android SDK 36
-
-### 构建步骤
-
-1. 克隆项目
-```bash
-git clone https://github.com/lza6/AirFileEditor.git
-cd AirFileEditor
-```
-
-2. 在 Android Studio 中打开项目
-
-3. 等待 Gradle 同步完成
-
-4. 构建项目
-```
-Build → Make Project
-```
-
-5. 生成 APK
-```
-Build → Build Bundle(s) / APK(s) → Build APK(s)
-```
-
-## 📄 许可证
-
-本项目采用 MIT 许可证 - 详见 [LICENSE](LICENSE) 文件
-
-```
-MIT License
-
-Copyright (c) 2026 听风
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-```
-
-## 🤝 贡献
-
-欢迎提交 Issue 和 Pull Request！
-
-## 📞 联系方式
-
-- **TG客服**: @TFGY999
-- **微信**: Tf00798
-- **QQ**: 3353620663
-
-## ⚠️ 免责声明
-
-本工具仅供学习和研究使用，请勿用于非法用途。使用本工具所产生的一切后果由使用者自行承担。
+> **“让繁杂的文件操作如微风般拂过，留下的只有高效与优雅。”** —— 一款专为极致体验而生的 Android 文件管理增强工具。
 
 ---
 
-**听风改文件** - 让文件管理更简单、更高效！
+## 🌟 前言：为什么选择“听风”？
+
+在这个数字化时代，我们每天都在与堆积如山的文件打交道。对于《和平精英》玩家或是 Android 重度用户来说，平凡的文件替换、解压、时间修改往往伴随着繁琐的权限申请和漫长的等待。
+
+**听风改文件 v2.0.0** 不仅仅是一个工具，它是一种**技术哲学**的体现：即“复杂交给代码，简单留给用户”。我们通过极致的 **Shizuku 极速引擎** 和 **智能哈希比对算法**，将原本数分钟的等待缩短至秒级。
+
+无论你是完全不懂技术的小白 🐣，还是追求极限效率的开发者 👨‍💻，在这里都能找到属于你的节奏。
+
+---
+
+## 🧐 1. 它能为你做什么？(场景与需求)
+
+### 面对的挑战：
+*   **小白用户**：Android 11+ 的 `/data/data` 目录像迷宫一样，根本找不到地方？
+*   **游戏玩家**：更新一个小包要解压、复制、替换，手都要点酸了？
+*   **专业折腾家**：文件时间戳太乱，想给文件穿上“时间的伪装”？
+*   **效率达人**：文件太多，全量替换太慢？
+
+### 我们的解决方案：
+✅ **智能感应**：自动扫描压缩包与下载目录，告别手动翻找。
+✅ **越阶权限**：深度集成 Shizuku，直达受限目录。
+✅ **万能解压**：7z、Zip 随心所欲，甚至能自动猜密码！
+✅ **时间魔法**：一键锁定或随机化文件修改时间。
+
+---
+
+## 🚀 2. 懒人一键通：我是小白，怎么用？
+
+如果你不想看长篇大论，按照下面的“三步走”战略即可：
+
+1.  **准备环境**：下载并启动 [Shizuku](https://shizuku.rikka.app/zh-hans/)。这是我们的“通行证”，没有它很多神奇功能无法开启。
+2.  **授权起飞**：打开软件，点击“授权 Shizuku”和“存储权限”。看到绿色的图标，代表你已经获得了“超能力”。
+3.  **一键操作**：
+    *   想要改时间？点击 **“一键随机时间”**，剩下的交给系统。
+    *   想要换文件？点击 **“开始替换到游戏”**，喝口咖啡，瞬间完成。
+
+> [!TIP]
+> **懒人秘籍**：如果你在 123 云盘下载了补丁包，直接点击 **“解压并更新”**，它会自动帮你把文件塞进正确的位置！
+
+---
+
+## 🧠 3. 技术核心：大白话 vs 专业术语
+
+### 🧱 A. 核心原理：为什么它这么快？
+*   **大白话**：以前是不管文件变没变，全部搬家。现在我们先给每个文件打个“指纹”（MD5 哈希），只有指纹不一样的文件，我们才搬。
+*   **专业术语 (MD5 增量比对)**：通过预先计算源文件与目标文件的 MD5 值进行比对，过滤掉冗余的 I/O 操作。这在处理数十 GB 的游戏资源时，效率提升高达 **90% 以上**。
+
+### ⚙️ B. 权限魔法：Shizuku 到底是什么？
+*   **大白话**：它是你的“特权代理人”。它能帮你在不需要 Android Root 的情况下，拥有接近 Root 的文件操作权限，读写那些普通软件看都不敢看的文件夹。
+*   **专业术语 (Binder 通讯)**：利用原生 Android 系统的服务接口，通过 Binder 机制实现高性能的文件流操作，绕过了传统的 DocumentFile API 造成的性能瓶颈。
+
+### 🎨 C. UI/UX 逻辑：不只是好看
+*   **大白话**：每一个动效、每一个圆角，都是为了让你用得爽。我们用了 **Material 3** 交互规范，配合震动反馈，让每次点击都有“实感”。
+*   **专业术语 (Haptic Feedback & Async UI)**：所有耗时操作全部跑在 `Kotlin Coroutines` 异步协程中，保证 UI 界面永远丝滑不卡顿，同时加入触觉反馈增强交互沉浸感。
+
+---
+
+## 🛠️ 4. 源码蓝图：开发者看过来
+
+### 📦 项目完整文件结构 (AI 爬虫友好)
+```text
+tfgwj/
+├── app/
+│   ├── src/main/
+│   │   ├── java/com/example/tfgwj/
+│   │   │   ├── adapter/         # 列表适配器 (PatchVersionAdapter等)
+│   │   │   ├── data/            # 数据存储 (PreferencesManager)
+│   │   │   ├── manager/         # 核心逻辑 (ArchiveScanner, PatchManager, MainPackManager)
+│   │   │   ├── service/         # 后台服务 (FileReplaceService)
+│   │   │   ├── shizuku/         # Shizuku 权限管理逻辑
+│   │   │   ├── ui/              # UI 组件与弹窗 (HelpDialog, FloatingBallManager)
+│   │   │   ├── utils/           # 工具类 (AppIconHelper, FileTimeModifier, AppLogger)
+│   │   │   └── MainActivity.kt  # 主入口 (控制塔)
+│   │   ├── res/                 # 资源文件 (logo, layout, values)
+│   │   └── AndroidManifest.xml  # 应用配置
+│   └── build.gradle.kts         # 构建配置 (v2.0.0)
+└── README.md                    # 本文档
+```
+
+### 🧬 技术点深度解析 (点星评级)
+| 技术点 | 难度 | 评价 | 来源/灵感 |
+| :--- | :---: | :--- | :--- |
+| **Kotlin Coroutines** | ⭐⭐⭐ | 异步处理的艺术，让程序不卡顿 | 官方文档、工程实践 |
+| **Shizuku API** | ⭐⭐⭐⭐ | 跨进程操作文件，Android 11+ 的救星 | RikkaW 的开源项目 |
+| **Zip4J / Commons Compress** | ⭐⭐ | 即使是加密的 7z 也能游刃有余 | 传统 Java 库的现代应用 |
+| **MD5 极速比对算法** | ⭐⭐⭐ | 决定软件灵魂的“快”的关键 | 操作系统缓存设计思想 |
+| **Material Design 3** | ⭐⭐ | 视觉极致享受，动态配色 | Google 物料设计规范 |
+
+---
+
+## 🔮 5. 现状与未来：我们还在路上
+
+### 🚩 现阶段已完成：
+- [x] 基于 Shizuku 的高性能文件读写引擎。
+- [x] 智能哈希比对（增量更新）算法。
+- [x] 多格式（7z, zip）压缩包智能识别与解压。
+- [x] 文件时间修改（随机/锁定/应用）。
+- [x] 实时日志系统与悬浮窗进度管理。
+- [x] **v2.0.0 全新 Logo 应用** ✨
+
+### ⚠️ 目前的不足与挑战：
+1.  **Logo 适配**：目前仅为静态图片替换，未完成完美的 Vector Drawable 矢量转化。
+2.  **大任务中断**：在极少数低内存设备上，后台服务可能会被系统强制收回。
+3.  **算法冗余**：MD5 计算目前针对大文件仍有优化空间（如采用抽样哈希）。
+
+### 🗺️ 未来扩展路径 (致开发者)：
+*   **多线程并发**：目前的替换是线性的，未来可以考虑在 Shizuku 层面实现多线程并发 Copy。
+*   **云端配置**：支持从服务器拉取最新的游戏路径配置，无需更新 App 即可适配新版本游戏。
+*   **AI 智能修复**：集成 AI 模块，自动分析并修复损坏的游戏资源文件。
+
+---
+
+## 💖 6. 价值观与使命
+
+我们相信**真正的技术应该是温暖的**。
+开源不只是共享代码，更是共享一种**创造的精神**。当你阅读完这份文档，我希望你产生的想法不只是“这软件不错”，而是：
+> **“看起来这种逻辑我也能写，我也要去创造点什么！”**
+
+在听风的世界里，我们尊重规则（道德与法律），但也崇拜自由（对技术的无尽探索）。让我们一起维护一个更好的 Android 生态。
+
+---
+
+## 💬 7. 与我联系
+
+*   **微信**: Tf00798
+*   **QQ**: 3353620663
+*   **TG**: @TFGY999
+*   **GitHub**: [AirFileEditor](https://github.com/lza6/AirFileEditor)
+
+---
+**听风改文件** —— 听见代码的声音，感受效率的轻盈。🌬️

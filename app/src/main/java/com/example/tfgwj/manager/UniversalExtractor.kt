@@ -9,6 +9,9 @@ import kotlinx.coroutines.withContext
 import net.lingala.zip4j.ZipFile
 import net.lingala.zip4j.exception.ZipException
 import net.lingala.zip4j.progress.ProgressMonitor
+import com.example.tfgwj.utils.IoRateCalculator
+import com.example.tfgwj.utils.PauseControl
+import java.util.zip.ZipInputStream
 import org.apache.commons.compress.archivers.ArchiveEntry
 import org.apache.commons.compress.archivers.ArchiveInputStream
 import org.apache.commons.compress.archivers.sevenz.SevenZArchiveEntry
@@ -62,6 +65,9 @@ class UniversalExtractor private constructor() {
     
     private val _status = MutableStateFlow("")
     val status: StateFlow<String> = _status.asStateFlow()
+    
+    private val _currentSpeed = MutableStateFlow(0f)
+    val currentSpeed: StateFlow<Float> = _currentSpeed.asStateFlow()
     
     private val _currentFile = MutableStateFlow("")
     val currentFile: StateFlow<String> = _currentFile.asStateFlow()
@@ -125,39 +131,136 @@ class UniversalExtractor private constructor() {
     }
     
     /**
-     * ZIP 解压
+     * ZIP 解压 (流式架构 - 内存占用极低)
      */
     private fun extractZip(path: String, outputDir: String, password: String?): ExtractResult {
         return try {
-            val zipFile = ZipFile(path)
+            // Zip4j 不完全支持纯流式 IO (需要 RandomAccessFile 读取 Central Directory)
+            // 为了极致内存优化，标准 Zip 我们使用 Java 原生 ZipInputStream (它就是纯流式的)
+            // 但原生 ZipInputStream 不支持密码。如果有密码，回退到 Zip4j (通过 FileAPI)
             
             if (!password.isNullOrEmpty()) {
+                return extractZipWithPassword(path, outputDir, password)
+            }
+            
+            val ioRateCalculator = IoRateCalculator()
+            var extractedCount = 0
+            var totalProcessedBytes: Long = 0
+            val file = File(path)
+            val totalSize = file.length()
+            
+            FileInputStream(path).use { fis ->
+                BufferedInputStream(fis).use { bis ->
+                    ZipInputStream(bis).use { zis ->
+                        var entry = zis.nextEntry
+                        val buffer = ByteArray(BUFFER_SIZE)
+                        
+                        while (entry != null) {
+                             // 1. 检查暂停
+                            kotlinx.coroutines.runBlocking { PauseControl.waitIfPaused() }
+                            
+                            val fileName = entry.name
+                            val outFile = File(outputDir, fileName)
+                            
+                            // 2. Zip Slip 安全检查
+                            val canonicalDest = File(outputDir).canonicalPath
+                            val canonicalEntry = outFile.canonicalPath
+                            if (!canonicalEntry.startsWith(canonicalDest + File.separator)) {
+                                throw SecurityException("Zip Slip 检测: $fileName")
+                            }
+                            
+                            _currentFile.value = fileName
+                            
+                            if (entry.isDirectory) {
+                                outFile.mkdirs()
+                            } else {
+                                outFile.parentFile?.mkdirs()
+                                FileOutputStream(outFile).use { fos ->
+                                    var len: Int
+                                    while (zis.read(buffer).also { len = it } > 0) {
+                                        fos.write(buffer, 0, len)
+                                        totalProcessedBytes += len
+                                        
+                                        // 更新速度和进度
+                                        val speed = ioRateCalculator.update(totalProcessedBytes)
+                                        if (speed > 0) _currentSpeed.value = speed
+                                        
+                                        // 估算进度 (字节级)
+                                        if (totalSize > 0) {
+                                            val progress = (totalProcessedBytes * 100 / totalSize).toInt()
+                                            if (progress != _progress.value) _progress.value = progress
+                                        }
+                                    }
+                                }
+                                extractedCount++
+                            }
+                            
+                            zis.closeEntry()
+                            entry = zis.nextEntry
+                        }
+                    }
+                }
+            }
+            
+            ExtractResult(true, outputDir, extractedCount)
+        } catch (e: Exception) {
+            Log.e(TAG, "Zip 流式解压失败", e)
+            ExtractResult(false, errorMessage = e.message)
+        }
+    }
+    
+    /**
+     * 带密码的 Zip 解压 (使用 Zip4j)
+     */
+    private fun extractZipWithPassword(path: String, outputDir: String, password: String): ExtractResult {
+        return try {
+            val zipFile = ZipFile(path)
+            if (zipFile.isEncrypted) {
                 zipFile.setPassword(password.toCharArray())
             }
             
-            if (zipFile.isEncrypted && password.isNullOrEmpty()) {
-                return ExtractResult(false, errorMessage = "需要密码")
+            zipFile.isRunInThread = true // 实际上我们会阻塞等待，但需要它来支持 ProgressMonitor
+            val monitor = zipFile.progressMonitor
+            val ioRateCalculator = IoRateCalculator()
+            
+            // 安全检查
+            zipFile.fileHeaders.forEach { header ->
+                val outFile = File(outputDir, header.fileName)
+                val canonicalDest = File(outputDir).canonicalPath
+                val canonicalEntry = outFile.canonicalPath
+                if (!canonicalEntry.startsWith(canonicalDest + File.separator)) {
+                     throw SecurityException("Zip Slip: ${header.fileName}")
+                }
             }
             
-            zipFile.isRunInThread = true
-            val monitor = zipFile.progressMonitor
-            
-            zipFile.extractAll(outputDir)
+            // 异步解压但阻塞等待进度
+            Thread { 
+                try { zipFile.extractAll(outputDir) } catch(e:Exception){} 
+            }.start()
             
             while (monitor.state == ProgressMonitor.State.BUSY) {
+                kotlinx.coroutines.runBlocking { PauseControl.waitIfPaused() }
+                
                 _progress.value = monitor.percentDone
                 _currentFile.value = monitor.fileName ?: ""
+                
+                // Zip4j 不直接提供字节处理量，很难计算精确速度，这里暂时用已处理大小估算
+                val processed = monitor.workCompleted
+                val speed = ioRateCalculator.update(processed)
+                _currentSpeed.value = speed
+                
                 Thread.sleep(100)
             }
             
-            val count = File(outputDir).walkTopDown().count { it.isFile }
-            ExtractResult(true, outputDir, count)
-            
-        } catch (e: ZipException) {
-            when {
-                e.message?.contains("Wrong Password") == true -> ExtractResult(false, errorMessage = "密码错误")
-                else -> ExtractResult(false, errorMessage = e.message)
+            if (monitor.result == ProgressMonitor.Result.SUCCESS) {
+                val count = File(outputDir).walkTopDown().count { it.isFile }
+                ExtractResult(true, outputDir, count)
+            } else {
+                ExtractResult(false, errorMessage = monitor.exception?.message ?: "解压失败")
             }
+            
+        } catch (e: Exception) {
+            ExtractResult(false, errorMessage = e.message)
         }
     }
     
@@ -327,7 +430,14 @@ class UniversalExtractor private constructor() {
             var entry: ArchiveEntry? = archiveIn.nextEntry
             
             while (entry != null) {
+                // Zip Slip 检查
                 val outFile = File(outputDir, entry.name)
+                val canonicalDest = File(outputDir).canonicalPath
+                val canonicalEntry = outFile.canonicalPath
+                if (!canonicalEntry.startsWith(canonicalDest)) {
+                    throw SecurityException("检测到 Zip Slip 攻击尝试: ${entry.name}")
+                }
+                
                 _currentFile.value = entry.name
                 
                 if (entry.isDirectory) {

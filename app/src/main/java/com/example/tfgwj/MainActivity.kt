@@ -15,6 +15,7 @@ import android.view.View
 import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.LinearLayout
+import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
@@ -38,6 +39,8 @@ import com.google.android.material.progressindicator.LinearProgressIndicator
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -63,12 +66,15 @@ class MainActivity : AppCompatActivity() {
     private lateinit var mainPackManager: MainPackManager
     private lateinit var archiveScanner: ArchiveScanner
     private lateinit var permissionManager: PermissionManager
+    private lateinit var floatingBallManager: com.example.tfgwj.ui.FloatingBallManager
     
     private lateinit var patchAdapter: PatchVersionAdapter
     
     private var selectedMainPackPath: String? = null
     private var isReplacing = false  // 防止重复替换任务
     private var lockedTime: Long? = null  // 锁定的时间
+    private var lastLogContent = ""  // 缓存上次的日志内容
+    private var currentWorkId: String? = null  // 当前工作任务的 ID
 
     // 权限请求
     private val storagePermissionLauncher = registerForActivityResult(
@@ -89,10 +95,16 @@ class MainActivity : AppCompatActivity() {
     private val folderPickerLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
+        Log.d(TAG, "folderPickerLauncher 回调，resultCode: ${result.resultCode}")
         if (result.resultCode == RESULT_OK) {
             result.data?.data?.let { uri ->
+                Log.d(TAG, "选择的 URI: $uri")
                 handleSelectedFolder(uri)
+            } ?: run {
+                Log.e(TAG, "URI 为空")
             }
+        } else {
+            Log.d(TAG, "用户取消了选择")
         }
     }
 
@@ -113,21 +125,39 @@ class MainActivity : AppCompatActivity() {
         AppLogger.init(this)
         AppLogger.action("应用启动")
 
+        // 创建通知渠道（用于 WorkManager 前台服务）
+        createNotificationChannel()
+
         initManagers()
         initViews()
         setupObservers()
         checkAllPermissions()
+        
+        // 初始化悬浮球管理器
+        floatingBallManager = com.example.tfgwj.ui.FloatingBallManager(applicationContext)
         
         // 取消之前未完成的替换任务，防止冷启动时自动恢复执行
         androidx.work.WorkManager.getInstance(this).cancelAllWorkByTag("file_replace")
         
         // 初始加载
         lifecycleScope.launch {
-            loadPubgIcon()
+            loadAppIcon()
             loadWechatIcon() // 动态加载微信图标
-            loadMainPacks()
+            
+            // 优先加载上次选择的主包路径
+            loadLastMainPackPath() 
+            
+            // 延迟一点确保 preferences 加载完成，如果没恢复成功再执行自动扫描
+            delay(300)
+            if (selectedMainPackPath == null) {
+                loadMainPacks()
+            }
+            
             loadPatchVersions()
-            loadLastMainPackPath()  // 加载上次选择的主包路径
+            
+            // 延迟 1 秒后自动验证环境
+            kotlinx.coroutines.delay(1000)
+            checkEnvironment()
         }
     }
 
@@ -154,19 +184,41 @@ class MainActivity : AppCompatActivity() {
         permissionManager = PermissionManager(applicationContext)
     }
 
+    /**
+     * 创建通知渠道
+     */
+    private fun createNotificationChannel() {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            val channel = android.app.NotificationChannel(
+                "file_replace_channel",
+                "文件替换通知",
+                android.app.NotificationManager.IMPORTANCE_LOW
+            ).apply {
+                description = "显示文件替换进度"
+            }
+            
+            val notificationManager = getSystemService(android.app.NotificationManager::class.java)
+            notificationManager.createNotificationChannel(channel)
+        }
+    }
+
     private fun initViews() {
         // 菜单按钮
         binding.toolbar.setOnMenuItemClickListener { menuItem ->
             when (menuItem.itemId) {
                 R.id.action_wechat -> {
+                    findViewById<View>(R.id.action_wechat)?.performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK)
+                    AppLogger.buttonClick("微信")
                     openWechat()
                     true
                 }
                 R.id.action_github -> {
+                    AppLogger.buttonClick("GitHub")
                     openGithub()
                     true
                 }
                 R.id.action_help -> {
+                    AppLogger.buttonClick("帮助")
                     HelpDialog.show(this)
                     true
                 }
@@ -176,6 +228,8 @@ class MainActivity : AppCompatActivity() {
 
         // 结果卡片重试按钮
         binding.btnRetry.setOnClickListener {
+            it.performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK)
+            AppLogger.buttonClick("重试")
             lastFailedPath?.let { path ->
                 AppLogger.action("点击重试", path)
                 startReplaceToGame()
@@ -184,39 +238,64 @@ class MainActivity : AppCompatActivity() {
 
         // 权限卡片
         binding.btnRequestPermission.setOnClickListener {
+            it.performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK)
+            AppLogger.buttonClick("授权权限")
             requestPermissions()
         }
 
         // 主包区域
         val mainPackCard = binding.includeMainPack.root
+        
+        // 应用信息点击 - 切换应用
+        mainPackCard.findViewById<LinearLayout>(R.id.layout_app_info).setOnClickListener {
+            AppLogger.buttonClick("切换应用")
+            showAppSelectorDialog()
+        }
+        
+        // 环境验证按钮
+        mainPackCard.findViewById<MaterialButton>(R.id.btn_check_env).setOnClickListener {
+            AppLogger.buttonClick("验证环境")
+            checkEnvironment(forceRefresh = true)
+        }
+        
         mainPackCard.findViewById<MaterialButton>(R.id.btn_select_main_pack).setOnClickListener {
+            AppLogger.buttonClick("选择源文件夹")
             selectMainPackFolder()
         }
         mainPackCard.findViewById<MaterialButton>(R.id.btn_random_time).setOnClickListener {
+            it.performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK)
+            AppLogger.buttonClick("一键随机时间")
             randomizeFileTime()
         }
         // 时间框点击 - 显示时间选择器
         mainPackCard.findViewById<LinearLayout>(R.id.layout_file_time).setOnClickListener {
+            AppLogger.buttonClick("选择时间")
             showTimePickerDialog()
         }
         // 锁定时间按钮
         mainPackCard.findViewById<ImageButton>(R.id.btn_lock_time).setOnClickListener {
+            AppLogger.buttonClick("锁定时间")
             lockCurrentTime()
         }
         // 应用锁定时间按钮
         mainPackCard.findViewById<ImageButton>(R.id.btn_apply_locked_time).setOnClickListener {
+            AppLogger.buttonClick("应用锁定时间")
             applyLockedTime()
         }
         mainPackCard.findViewById<MaterialButton>(R.id.btn_start_replace_main).setOnClickListener {
+            it.performHapticFeedback(android.view.HapticFeedbackConstants.CONFIRM)
+            AppLogger.buttonClick("开始替换到游戏")
             startReplaceToGame()
         }
         
         // 【新增】一键启动游戏
         mainPackCard.findViewById<MaterialButton>(R.id.btn_launch_game).setOnClickListener {
+            AppLogger.buttonClick("一键启动游戏")
             launchGame()
         }
 
         mainPackCard.findViewById<MaterialButton>(R.id.btn_clean_env).setOnClickListener {
+            AppLogger.buttonClick("清理环境")
             confirmCleanEnvironment()
         }
 
@@ -234,20 +313,101 @@ class MainActivity : AppCompatActivity() {
         }
 
         updatePackCard.findViewById<MaterialButton>(R.id.btn_scan_archives).setOnClickListener {
+            it.performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK)
+            AppLogger.buttonClick("扫描压缩包")
             scanArchives()
         }
         updatePackCard.findViewById<MaterialButton>(R.id.btn_refresh_patches).setOnClickListener {
+            AppLogger.buttonClick("刷新小包列表")
             loadPatchVersions()
         }
         
         // 解压并更新到主包
         updatePackCard.findViewById<MaterialButton>(R.id.btn_extract_and_update).setOnClickListener {
+            it.performHapticFeedback(android.view.HapticFeedbackConstants.CONFIRM)
+            AppLogger.buttonClick("解压并更新")
             scanAndExtractArchive()
         }
 
         // 进度卡片
         binding.btnCancelReplace.setOnClickListener {
+            AppLogger.buttonClick("取消替换")
             androidx.work.WorkManager.getInstance(this).cancelAllWorkByTag("file_replace")
+        }
+
+        // 日志卡片 - 一键复制按钮
+        binding.btnCopyLogs.setOnClickListener {
+            AppLogger.buttonClick("复制日志")
+            copyLogsToClipboard()
+        }
+
+        // 启动日志实时更新
+        startLogUpdates()
+    }
+
+    /**
+     * 启动日志实时更新
+     */
+    private fun startLogUpdates() {
+        lifecycleScope.launch {
+            while (isActive) {
+                delay(1000) // 每秒更新一次
+                updateLogDisplay()
+            }
+        }
+    }
+
+    /**
+     * 更新日志显示
+     */
+    private fun updateLogDisplay() {
+        try {
+            val logs = AppLogger.getRecentLogs(50) // 显示最近 50 条日志
+            val newContent = if (logs.isEmpty()) {
+                "等待日志输出..."
+            } else {
+                logs.joinToString("\n")
+            }
+            
+            // 只有当日志内容变化时才更新，避免频繁布局
+            if (newContent != lastLogContent) {
+                lastLogContent = newContent
+                binding.tvLogContent.text = newContent
+                
+                // 更新日志大小显示
+                binding.tvLogSize.text = AppLogger.getLogSize()
+                
+                // 只在用户已经在底部时才自动滚动
+                binding.tvLogContent.post {
+                    val scrollView = binding.tvLogContent.parent as? android.widget.ScrollView
+                    if (scrollView != null) {
+                        val isAtBottom = scrollView.getChildAt(0).bottom - (scrollView.height + scrollView.scrollY) <= 10
+                        if (isAtBottom) {
+                            scrollView.fullScroll(android.widget.ScrollView.FOCUS_DOWN)
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            // 忽略错误
+        }
+    }
+
+    /**
+     * 复制日志到剪贴板
+     */
+    private fun copyLogsToClipboard() {
+        try {
+            val fullLogs = AppLogger.getLogContent()
+            val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+            val clip = android.content.ClipData.newPlainText("听风改文件日志", fullLogs)
+            clipboard.setPrimaryClip(clip)
+            
+            Toast.makeText(this, "✅ 日志已复制到剪贴板", Toast.LENGTH_SHORT).show()
+            AppLogger.action("日志复制成功", "共 ${fullLogs.lines().size} 行")
+        } catch (e: Exception) {
+            Toast.makeText(this, "❌ 复制失败: ${e.message}", Toast.LENGTH_SHORT).show()
+            AppLogger.e("MainActivity", "复制日志失败", e)
         }
     }
 
@@ -315,6 +475,10 @@ class MainActivity : AppCompatActivity() {
                 if (authorized != status.hasShizukuPermission) {
                     checkAllPermissions()
                 }
+                // 授权成功后自动验证环境
+                if (authorized && shizukuManager.isServiceConnected.value) {
+                    checkEnvironment()
+                }
             }
         }
         lifecycleScope.launch {
@@ -323,6 +487,10 @@ class MainActivity : AppCompatActivity() {
                 val status = permissionManager.permissionStatus.value
                 if (connected != status.isShizukuServiceConnected) {
                     checkAllPermissions()
+                }
+                // 服务连接成功后自动验证环境
+                if (connected && shizukuManager.isAuthorized.value) {
+                    checkEnvironment()
                 }
             }
         }
@@ -364,14 +532,19 @@ class MainActivity : AppCompatActivity() {
         }
         binding.tvPermissionStatus.text = android.text.Html.fromHtml(message, android.text.Html.FROM_HTML_MODE_LEGACY)
         
+        // 优先检查 Root 权限，然后检查其他权限状态
         val icon = when {
+            status.hasRoot -> R.drawable.ic_status_success  // Root 设备显示成功图标
             status.canAccessPrivateDir -> R.drawable.ic_status_success
             status.hasManageStorage -> R.drawable.ic_status_unknown
             else -> R.drawable.ic_status_error
         }
         binding.ivPermissionStatus.setImageResource(icon)
 
+        // Root 设备或有权限访问的设备不需要显示授权按钮
         binding.btnRequestPermission.visibility = when {
+            status.hasRoot -> View.GONE  // Root 设备不显示授权按钮
+            status.canAccessPrivateDir -> View.GONE  // 可以直接访问，不显示授权按钮
             !status.hasManageStorage -> View.VISIBLE
             status.needsShizuku && !status.hasShizukuPermission -> View.VISIBLE
             else -> View.GONE
@@ -412,21 +585,106 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun loadPubgIcon() {
+    private fun loadAppIcon() {
         lifecycleScope.launch {
-            val icon = AppIconHelper.getPubgIcon(this@MainActivity)
-            val name = AppIconHelper.getPubgAppName(this@MainActivity)
+            // 获取当前选择的应用包名
+            val packageName = preferencesManager.appPackageName.first()
+            updateAppInfoDisplay(packageName)
+        }
+    }
+    
+    /**
+     * 更新应用信息显示
+     */
+    private fun updateAppInfoDisplay(packageName: String) {
+        lifecycleScope.launch {
+            val icon = AppIconHelper.getAppIcon(this@MainActivity, packageName)
+            val name = AppIconHelper.getAppName(this@MainActivity, packageName)
             
             val mainPackCard = binding.includeMainPack.root
             val iconView = mainPackCard.findViewById<ImageView>(R.id.iv_pubg_icon)
             val nameView = mainPackCard.findViewById<TextView>(R.id.tv_pubg_name)
+            val packageView = mainPackCard.findViewById<TextView>(R.id.tv_pubg_package)
             
             if (icon != null) {
                 iconView.setImageDrawable(icon)
             }
             nameView.text = name
+            packageView.text = packageName
         }
     }
+    
+    /**
+     * 显示应用选择对话框
+     */
+    private fun showAppSelectorDialog() {
+        lifecycleScope.launch {
+            // 获取当前选择的应用包名
+            val currentPackageName = preferencesManager.appPackageName.first()
+            
+            // 动态获取所有已安装的应用
+            val allApps = try {
+                packageManager.getInstalledApplications(PackageManager.GET_META_DATA)
+                    .filter { it.flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM == 0 } // 过滤系统应用
+                    .sortedBy { it.loadLabel(packageManager).toString() }
+                    .map { appInfo ->
+                        val packageName = appInfo.packageName
+                        val appName = try {
+                            appInfo.loadLabel(packageManager).toString()
+                        } catch (e: Exception) {
+                            packageName
+                        }
+                        AppInfo(packageName, appName)
+                    }
+            } catch (e: Exception) {
+                Log.e(TAG, "获取应用列表失败", e)
+                // 如果失败，使用预定义的应用列表
+                PermissionChecker.getSupportedAppsList().map { AppInfo(it.packageName, it.displayName) }
+            }
+            
+            // 添加预定义的应用（如果不在列表中）
+            val predefinedApps = PermissionChecker.getSupportedAppsList().map { it.packageName }
+            val mergedApps = allApps + PermissionChecker.getSupportedAppsList()
+                .filter { predefined -> allApps.none { it.packageName == predefined.packageName } }
+                .map { AppInfo(it.packageName, it.displayName) }
+            
+            val appNames = mergedApps.map { "${it.name} (${it.packageName})" }.toTypedArray()
+            
+            var selectedIndex = mergedApps.indexOfFirst { it.packageName == currentPackageName }
+            if (selectedIndex < 0) selectedIndex = 0
+            
+            MaterialAlertDialogBuilder(this@MainActivity)
+                .setTitle("选择应用")
+                .setSingleChoiceItems(appNames, selectedIndex) { dialog, which ->
+                    val selectedApp = mergedApps[which]
+                    
+                    // 保存选择的应用包名（协程上下文）
+                    lifecycleScope.launch {
+                        preferencesManager.setAppPackageName(selectedApp.packageName)
+                        updateAppInfoDisplay(selectedApp.packageName)
+                        
+                        // 重新扫描主包
+                        loadMainPacks()
+                        
+                        // 延迟 500ms 后自动验证环境
+                        kotlinx.coroutines.delay(500)
+                        checkEnvironment()
+                        
+                        AppLogger.action("切换应用", selectedApp.packageName)
+                        Toast.makeText(this@MainActivity, "已切换到 ${selectedApp.name}", Toast.LENGTH_SHORT).show()
+                    }
+                    
+                    dialog.dismiss()
+                }
+                .setNegativeButton("取消", null)
+                .show()
+        }
+    }
+    
+    /**
+     * 应用信息数据类
+     */
+    data class AppInfo(val packageName: String, val name: String)
 
     /**
      * 动态加载微信图标 (基于 QUERY_ALL_PACKAGES 权限)
@@ -443,11 +701,14 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun loadMainPacks() {
+        // 如果已经选择了主包（通过恢复或手动选择），不再重复扫描覆盖
+        if (selectedMainPackPath != null) return
+        
         lifecycleScope.launch {
             mainPackManager.scanMainPacks()
             
             val packs = mainPackManager.mainPacks.value
-            if (packs.isNotEmpty()) {
+            if (packs.isNotEmpty() && selectedMainPackPath == null) {
                 // 选择第一个主包
                 val pack = packs.first()
                 updateMainPackUI(pack)
@@ -555,35 +816,211 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun handleSelectedFolder(uri: Uri) {
+        Log.d(TAG, "handleSelectedFolder 被调用，URI: $uri")
         val path = getPathFromUri(uri)
+        Log.d(TAG, "解析出的路径: $path")
+        
         if (path != null) {
             selectedMainPackPath = path
+            Log.d(TAG, "设置 selectedMainPackPath: $path")
             
             val mainPackCard = binding.includeMainPack.root
-            mainPackCard.findViewById<TextView>(R.id.tv_selected_main_pack).text = path
+            val selectedText = mainPackCard.findViewById<TextView>(R.id.tv_selected_main_pack)
+            val infoLayout = mainPackCard.findViewById<View>(R.id.layout_main_pack_info)
+            val sizeText = mainPackCard.findViewById<TextView>(R.id.tv_main_pack_size)
+            val timeText = mainPackCard.findViewById<TextView>(R.id.tv_main_pack_time)
             
-            // 立即显示当前文件夹时间
+            // 显示文件夹名称
+            val file = File(path)
+            selectedText.text = file.name
+            Log.d(TAG, "设置文件夹名称: ${file.name}")
+            
+            // 显示大小和时间信息
+            val size = getDirectorySize(file)
+            sizeText.text = formatSize(size)
+            infoLayout.visibility = View.VISIBLE
+            Log.d(TAG, "文件夹大小: $size, 显示: ${formatSize(size)}")
+            
+            // 显示文件夹时间
             val fileTime = FileTimeModifier.getFileTime(path)
             if (fileTime != null) {
                 val timeStr = FileTimeModifier.formatTime(fileTime)
+                timeText.text = timeStr
                 mainPackCard.findViewById<TextView>(R.id.tv_current_file_time).text = "当前时间: $timeStr"
-                mainPackCard.findViewById<TextView>(R.id.tv_main_pack_time).text = timeStr
+                Log.d(TAG, "文件夹时间: $timeStr")
             }
             
             // 保存路径（主包路径和文件夹路径都保存）
             lifecycleScope.launch {
                 preferencesManager.saveLastSelectedFolderPath(path)
                 preferencesManager.saveLastMainPackPath(path)
+                Log.d(TAG, "已保存路径到 preferences")
+                
+                // 立即刷新 UI 和状态
+                loadLastMainPackPath()
+                loadPatchVersions()
             }
+            
+            AppLogger.action("选择源文件夹", path)
+            Log.d(TAG, "已记录选择源文件夹日志")
+        } else {
+            Log.e(TAG, "路径为 null，无法处理")
+            Toast.makeText(this, "无法获取文件夹路径，请重试", Toast.LENGTH_SHORT).show()
         }
     }
 
     private fun getPathFromUri(uri: Uri): String? {
         val docId = android.provider.DocumentsContract.getTreeDocumentId(uri)
+        Log.d(TAG, "docId: $docId")
+        
         val split = docId.split(":")
-        return if (split.size >= 2 && split[0] == "primary") {
-            "/storage/emulated/0/${split[1]}"
+        Log.d(TAG, "docId split: $split, size: ${split.size}")
+        
+        val result = if (split.size >= 2) {
+            when (split[0]) {
+                "primary" -> "/storage/emulated/0/${split[1]}"
+                "home" -> "/storage/emulated/0/${split[1]}"
+                "msd" -> {
+                    // SD 卡或外部存储
+                    val path = getExternalStoragePath(split[1])
+                    if (path != null) {
+                        if (split[1] == "24" || split[1] == "0") {
+                            path
+                        } else {
+                            "$path/${split[1]}"
+                        }
+                    } else {
+                        val fallbackPaths = listOf(
+                            "/storage/sdcard",
+                            "/storage/emulated/0",
+                            "/mnt/sdcard"
+                        )
+                        for (fallbackPath in fallbackPaths) {
+                            val dir = java.io.File(fallbackPath)
+                            if (dir.exists() && dir.isDirectory) {
+                                Log.d(TAG, "使用备用路径: $fallbackPath")
+                                return fallbackPath
+                            }
+                        }
+                        null
+                    }
+                }
+                else -> {
+                    // 处理 UUID 类型（如 0000-0000）
+                    val volumeId = split[0]
+                    val subPath = if (split.size > 1) split[1] else ""
+                    
+                    // 尝试使用 StorageManager 获取真实路径
+                    val storagePath = getStoragePathByUuid(volumeId)
+                    if (storagePath != null) {
+                        if (subPath.isNotEmpty()) {
+                            "$storagePath/$subPath"
+                        } else {
+                            storagePath
+                        }
+                    } else {
+                        // 备用方案：尝试直接构造路径
+                        val candidatePath = "/storage/$volumeId${if (subPath.isNotEmpty()) "/$subPath" else ""}"
+                        val dir = java.io.File(candidatePath)
+                        if (dir.exists()) {
+                            Log.d(TAG, "找到 UUID 路径: $candidatePath")
+                            candidatePath
+                        } else {
+                            Log.w(TAG, "未知的存储类型: $volumeId")
+                            null
+                        }
+                    }
+                }
+            }
         } else {
+            // 如果没有冒号，直接使用 docId
+            "/storage/emulated/0/$docId"
+        }
+        
+        Log.d(TAG, "getPathFromUri 结果: $result")
+        return result
+    }
+    
+    /**
+     * 通过 UUID 获取存储路径
+     */
+    private fun getStoragePathByUuid(uuid: String): String? {
+        return try {
+            val storageManager = getSystemService(android.os.storage.StorageManager::class.java)
+            val volumes = storageManager.storageVolumes
+            
+            for (volume in volumes) {
+                // 检查 UUID
+                val volumeUuid = try {
+                    volume.uuid
+                } catch (e: Exception) {
+                    null
+                }
+                
+                if (volumeUuid == uuid || volumeUuid?.lowercase() == uuid.lowercase()) {
+                    // 获取路径
+                    val volumePath = try {
+                        volume.directory?.absolutePath
+                    } catch (e: Exception) {
+                        null
+                    }
+                    
+                    if (volumePath != null) {
+                        Log.d(TAG, "通过 UUID 找到路径: $volumePath")
+                        return volumePath
+                    }
+                }
+            }
+            
+            Log.w(TAG, "未找到 UUID 为 $uuid 的存储卷")
+            null
+        } catch (e: Exception) {
+            Log.e(TAG, "通过 UUID 获取存储路径失败", e)
+            null
+        }
+    }
+    
+    /**
+     * 获取外部存储路径（SD 卡）
+     */
+    private fun getExternalStoragePath(volumeId: String): String? {
+        return try {
+            val volumes = android.os.storage.StorageManager::class.java.getMethod("getVolumeList")
+                .invoke(getSystemService(android.os.storage.StorageManager::class.java)) as Array<*>
+            
+            for (volume in volumes) {
+                val uuid = volume?.javaClass?.getMethod("getUuid")?.invoke(volume) as? String
+                if (uuid == volumeId || uuid == volumeId.lowercase()) {
+                    val path = volume.javaClass.getMethod("getPath").invoke(volume) as? String
+                    if (path != null) {
+                        Log.d(TAG, "找到 SD 卡路径: $path")
+                        return path
+                    }
+                }
+            }
+            
+            // 如果通过 StorageManager 找不到，尝试常见路径
+            val commonPaths = listOf(
+                "/storage/sdcard",
+                "/storage/sdcard1",
+                "/storage/external_sd",
+                "/mnt/sdcard",
+                "/mnt/extSdCard",
+                "/sdcard"
+            )
+            
+            for (path in commonPaths) {
+                val dir = java.io.File(path)
+                if (dir.exists() && dir.isDirectory) {
+                    Log.d(TAG, "找到常见 SD 卡路径: $path")
+                    return path
+                }
+            }
+            
+            Log.w(TAG, "无法找到 SD 卡路径")
+            null
+        } catch (e: Exception) {
+            Log.e(TAG, "获取 SD 卡路径失败", e)
             null
         }
     }
@@ -858,17 +1295,37 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        isReplacing = true  // 标记为正在替换
-        AppLogger.action("开始替换", path)
-        
-        // 智能检测：处理 .pixuicache 文件夹优化
-        val cacheResult = SmartCacheManager.checkAndOptimize(this, shizukuManager)
-        if (cacheResult != null) {
-            AppLogger.action("智能优化", cacheResult)
+        // 检查并请求必要权限
+        lifecycleScope.launch {
+            val status = permissionManager.checkAllPermissions()
+            
+            if (!status.hasManageStorage) {
+                Log.w(TAG, "缺少 MANAGE_EXTERNAL_STORAGE 权限，请求授权")
+                Toast.makeText(this@MainActivity, "请先授予存储权限", Toast.LENGTH_SHORT).show()
+                requestPermissions()
+                return@launch
+            }
+            
+            if (!status.canAccessPrivateDir) {
+                Log.w(TAG, "无法访问私有目录，请检查权限设置")
+                Toast.makeText(this@MainActivity, "无法访问私有目录，请检查权限设置", Toast.LENGTH_SHORT).show()
+                return@launch
+            }
+
+            // 权限检查通过，开始替换
+            isReplacing = true
+            AppLogger.action("开始替换", path)
+
+            // 智能检测：处理 .pixuicache 文件夹优化
+            val packageName = preferencesManager.appPackageName.first()
+            val cacheResult = SmartCacheManager.checkAndOptimize(this@MainActivity, packageName, shizukuManager)
+            if (cacheResult != null) {
+                AppLogger.action("智能优化", cacheResult)
+            }
+
+            // 显示替换进度对话框
+            showReplaceProgressDialog(path)
         }
-        
-        // 显示替换进度对话框
-        showReplaceProgressDialog(path)
     }
     
     // 替换进度对话框相关变量
@@ -914,9 +1371,48 @@ class MainActivity : AppCompatActivity() {
             .setTitle("📦 替换到游戏")
             .setView(dialogView)
             .setCancelable(false)
+            .setPositiveButton("隐藏到后台") { dialog, _ ->
+                // 检查悬浮窗权限
+                if (android.provider.Settings.canDrawOverlays(this@MainActivity)) {
+                    // 隐藏对话框，但保持任务运行
+                    dialog.dismiss()
+                    // 确保悬浮球已显示
+                    if (!floatingBallManager.isShowing()) {
+                        currentWorkId?.let { floatingBallManager.setWorkId(it) }
+                        floatingBallManager.show()
+                    }
+                    AppLogger.action("隐藏到后台", "任务继续在后台运行")
+                } else {
+                    // 没有权限，提示用户
+                    androidx.appcompat.app.AlertDialog.Builder(this@MainActivity)
+                        .setTitle("需要悬浮窗权限")
+                        .setMessage("为了在后台显示进度，需要授予悬浮窗权限。是否前往设置页面授权？")
+                        .setPositiveButton("去设置") { _, _ ->
+                            val intent = android.content.Intent(
+                                android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                android.net.Uri.parse("package:$packageName")
+                            )
+                            startActivity(intent)
+                        }
+                        .setNegativeButton("取消", null)
+                        .show()
+                }
+            }
             .setNegativeButton("取消") { dialog, _ ->
-                // 取消 WorkManager 任务
-                androidx.work.WorkManager.getInstance(this).cancelAllWorkByTag("file_replace")
+                // 强制停止当前工作任务
+                currentWorkId?.let { id ->
+                    try {
+                        val uuid = java.util.UUID.fromString(id)
+                        androidx.work.WorkManager.getInstance(this).cancelWorkById(uuid)
+                        AppLogger.action("用户取消替换", "Work ID: $id")
+                    } catch (e: Exception) {
+                        AppLogger.e("MainActivity", "取消任务失败", e)
+                    }
+                }
+                
+                // 隐藏悬浮球
+                floatingBallManager.hide()
+                
                 dialog.dismiss()
                 appendLog("❌ 用户取消操作")
                 resetReplacingState()
@@ -975,91 +1471,203 @@ class MainActivity : AppCompatActivity() {
         tvSpeed: TextView,
         tvEta: TextView
     ) {
+        AppLogger.d("MainActivity", "🚀 准备启动替换任务")
+        
         // 使用 WorkManager 在后台执行
+        // 获取当前选择的应用包名（使用 runBlocking 在非协程上下文中获取，添加超时防止永久阻塞）
+        val packageName = try {
+            kotlinx.coroutines.runBlocking {
+                kotlinx.coroutines.withTimeout(5000) {
+                    AppLogger.d("MainActivity", "⏳ 等待获取包名...")
+                    preferencesManager.appPackageName.first()
+                }
+            }
+        } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
+            AppLogger.e("MainActivity", "❌ 获取包名超时", e)
+            appendLog("❌ 获取包名超时，请重试")
+            tvErrors.visibility = View.VISIBLE
+            tvErrors.text = "错误: 获取包名超时"
+            progressBar.isIndeterminate = false
+            progressBar.progress = 0
+            tvCurrentFile.text = "操作失败"
+            return
+        } catch (e: Exception) {
+            AppLogger.e("MainActivity", "❌ 获取包名失败", e)
+            appendLog("❌ 获取包名失败: ${e.message}")
+            tvErrors.visibility = View.VISIBLE
+            tvErrors.text = "错误: ${e.message}"
+            progressBar.isIndeterminate = false
+            progressBar.progress = 0
+            tvCurrentFile.text = "操作失败"
+            return
+        }
+        
+        AppLogger.d("MainActivity", "✅ 获取包名成功: $packageName")
+        
+        // 默认不使用增量更新，避免用户混淆
+        val incrementalUpdate = false 
+        AppLogger.d("MainActivity", "增量更新: $incrementalUpdate")
+        
         val workRequest = com.example.tfgwj.worker.FileReplaceWorker.createWorkRequest(
             path, 
-            PermissionChecker.PUBG_PACKAGE_NAME
+            packageName,
+            incrementalUpdate
         )
+        
+        AppLogger.d("MainActivity", "✅ 创建 WorkRequest 成功: ${workRequest.id}")
         
         val workManager = androidx.work.WorkManager.getInstance(this)
         workManager.enqueue(workRequest)
+        
+        // 保存当前工作 ID
+        currentWorkId = workRequest.id.toString()
+        
+        // 设置悬浮球工作的 ID，但不在此处立即显示，
+        // 只有当用户点击“隐藏到后台”时才显示悬浮球
+        floatingBallManager.setWorkId(workRequest.id.toString())
+        
+        AppLogger.d("MainActivity", "✅ Worker 已入队: ${workRequest.id}")
+        appendLog("🚀 Worker 已启动，正在处理...")
+        if (incrementalUpdate) {
+            appendLog("📦 增量更新模式：只复制变化的文件")
+        }
         
         var errorCount = 0
         var lastLoggedFile = ""
         var startTime: Long = 0
         var lastProcessed = 0
         var lastUpdateTime: Long = 0
+        var lastLogTime: Long = 0 // 上次记录日志的时间
         
-        // 监听进度
-        workManager.getWorkInfoByIdLiveData(workRequest.id).observe(this) { workInfo ->
-            if (workInfo != null) {
-                when (workInfo.state) {
-                    androidx.work.WorkInfo.State.RUNNING -> {
-                        val progress = workInfo.progress.getInt(
-                            com.example.tfgwj.worker.FileReplaceWorker.KEY_PROGRESS, 0
-                        )
-                        val processed = workInfo.progress.getInt(
-                            com.example.tfgwj.worker.FileReplaceWorker.KEY_PROCESSED, 0
-                        )
-                        val total = workInfo.progress.getInt(
-                            com.example.tfgwj.worker.FileReplaceWorker.KEY_TOTAL, 0
-                        )
-                        val currentFile = workInfo.progress.getString(
-                            com.example.tfgwj.worker.FileReplaceWorker.KEY_CURRENT_FILE
-                        ) ?: ""
-                        
-                        // 记录开始时间
-                        if (startTime == 0L) {
-                            startTime = System.currentTimeMillis()
-                            lastUpdateTime = startTime
+        // 监听实时进度 (High Frequency)
+        lifecycleScope.launch {
+            com.example.tfgwj.manager.ReplaceProgressManager.progressState.collectLatest { state ->
+                if (state.total > 0 && state.isReplacing) {
+                    val progress = state.progress
+                    val processed = state.processed
+                    val total = state.total
+                    val currentFile = state.currentFile
+                    val speed = state.speed
+                    val phase = state.phase
+
+                    // 1. 记录/初始化开始时间
+                    if (startTime == 0L) {
+                        startTime = System.currentTimeMillis()
+                        lastUpdateTime = startTime
+                    }
+
+                    // 2. 进度条平滑动画
+                    val oldProgress = progressBar.progress
+                    if (progress > oldProgress) {
+                        val animator = android.animation.ValueAnimator.ofInt(oldProgress, progress)
+                        animator.duration = 300
+                        animator.interpolator = android.view.animation.DecelerateInterpolator()
+                        animator.addUpdateListener { animation ->
+                            val animatedValue = animation.animatedValue as Int
+                            progressBar.progress = animatedValue
+                            tvPercent.text = "$animatedValue%"
                         }
-                        
+                        animator.start()
+                    } else if (progress < oldProgress) {
                         progressBar.progress = progress
                         tvPercent.text = "$progress%"
-                        tvFileCount.text = "$processed / $total"
-                        tvCurrentFile.text = currentFile
-                        
-                        // 计算速度和预估时间（每秒更新一次）
-                        val currentTime = System.currentTimeMillis()
-                        if (currentTime - lastUpdateTime >= 1000 && processed > lastProcessed) {
-                            val elapsedTime = (currentTime - startTime) / 1000.0 // 秒
-                            val processedDiff = processed - lastProcessed
-                            val timeDiff = (currentTime - lastUpdateTime) / 1000.0
-                            
-                            // 计算速度（文件/秒）
-                            val speed = if (timeDiff > 0) processedDiff / timeDiff else 0.0
-                            tvSpeed.text = "速度: ${String.format("%.1f", speed)} 文件/秒"
-                            
-                            // 计算预估剩余时间
-                            val remaining = total - processed
-                            val etaSeconds = if (speed > 0) remaining / speed else 0.0
-                            tvEta.text = if (etaSeconds > 60) {
-                                val minutes = (etaSeconds / 60).toInt()
-                                val seconds = (etaSeconds % 60).toInt()
-                                "预计剩余: ${minutes}分${seconds}秒"
-                            } else {
-                                "预计剩余: ${etaSeconds.toInt()}秒"
-                            }
-                            
-                            lastProcessed = processed
-                            lastUpdateTime = currentTime
+                    }
+
+                    // 3. 文件计数平滑动画
+                    // 在校验阶段提示已完成的总数，而不是校验的子计数
+                    if (phase == "VERIFYING") {
+                        tvFileCount.text = "$total / $total"
+                    } else if (lastProcessed < processed) {
+                        val countAnimator = android.animation.ValueAnimator.ofInt(lastProcessed, processed)
+                        countAnimator.duration = 200
+                        countAnimator.interpolator = android.view.animation.LinearInterpolator() 
+                        countAnimator.addUpdateListener { animation ->
+                            val currentCount = animation.animatedValue as Int
+                            tvFileCount.text = "$currentCount / $total"
                         }
-                        
-                        // 记录日志（检查是否是错误或新文件）
-                        if (currentFile.isNotEmpty() && currentFile != lastLoggedFile) {
-                            if (currentFile.startsWith("[失败]")) {
-                                errorCount++
-                                appendLog("❌ $currentFile")
-                                tvErrors.visibility = View.VISIBLE
-                                tvErrors.text = "错误: $errorCount 个文件复制失败"
+                        countAnimator.start()
+                    } else {
+                        tvFileCount.text = "$processed / $total"
+                    }
+
+                    // 4. 当前文件显示 (增加阶段前缀)
+                    if (currentFile.isNotEmpty()) {
+                        val prefix = when(phase) {
+                            "REPLACING" -> "📄 正在复制: "
+                            "VERIFYING" -> "🔍 正在校验: "
+                            else -> "📦 "
+                        }
+                        tvCurrentFile.text = "$prefix$currentFile"
+                    }
+
+                    // 5. 计算速率与 ETA (每 0.5 秒更新一次)
+                    val currentTime = System.currentTimeMillis()
+                    if (currentTime - lastUpdateTime >= 500) {
+                        if (processed > lastProcessed || phase == "VERIFYING") {
+                            val processedDiff = (processed - lastProcessed).coerceAtLeast(1)
+                            val timeDiff = (currentTime - lastUpdateTime).coerceAtLeast(1) / 1000.0
+                            val currentSpeed = processedDiff / timeDiff
+                             
+                            if (phase == "VERIFYING") {
+                                tvSpeed.text = "速度: 正在校验..."
+                                tvEta.text = "即将完成"
                             } else {
-                                // 每 50 个文件记录一次日志，避免日志过多
-                                if (processed % 50 == 0 || processed <= 5) {
-                                    appendLog("📄 $currentFile")
+                                tvSpeed.text = "速度: ${String.format("%.0f", currentSpeed)} 文件/秒"
+                                val remaining = total - processed
+                                val etaSeconds = if (currentSpeed > 0) remaining / currentSpeed else 0.0
+                                tvEta.text = if (etaSeconds > 60) {
+                                    val minutes = (etaSeconds / 60).toInt()
+                                    val seconds = (etaSeconds % 60).toInt()
+                                    "预计剩余: ${minutes}分${seconds}秒"
+                                } else {
+                                    "预计剩余: ${etaSeconds.toInt()}秒"
                                 }
                             }
-                            lastLoggedFile = currentFile
                         }
+                        lastUpdateTime = currentTime
+                    }
+
+                    // 6. 定期记录进度日志 (每 0.5 秒)
+                    if (currentTime - lastLogTime > 500) {
+                        AppLogger.d(TAG, "📊 进度($phase): $progress% ($processed/$total) - ${tvSpeed.text}")
+                        lastLogTime = currentTime
+                    }
+
+                    // 7. 详细文件日志 (流式显示)
+                    if (currentFile.isNotEmpty() && currentFile != lastLoggedFile) {
+                        if (currentFile.startsWith("[失败]")) {
+                            errorCount++
+                            appendLog("❌ $currentFile")
+                            tvErrors.visibility = View.VISIBLE
+                            tvErrors.text = "错误: $errorCount 个文件复制失败"
+                        } else {
+                            // 使用时间节流优化
+                            val now = System.currentTimeMillis()
+                            if (now - lastLogTime >= 100 || processed <= 5 || processed >= total || phase == "VERIFYING") {
+                                val prefix = if (phase == "VERIFYING") "🔍 " else "📄 "
+                                appendLog("$prefix$currentFile")
+                            }
+                        }
+                        lastLoggedFile = currentFile
+                    }
+
+                    lastProcessed = processed 
+                }
+            }
+        }
+        
+        // 监听 WorkManager 状态 (主要用于检测任务完成/失败/取消)
+        workManager.getWorkInfoByIdLiveData(workRequest.id).observe(this) { workInfo ->
+            if (workInfo != null) {
+                // AppLogger.d("MainActivity", "📊 Worker 状态: ${workInfo.state}")
+                when (workInfo.state) {
+                    androidx.work.WorkInfo.State.ENQUEUED -> {
+                        AppLogger.d("MainActivity", "⏳ Worker 已入队，等待执行")
+                    }
+                    androidx.work.WorkInfo.State.RUNNING -> {
+                        // WorkManager 的进度现在仅作为辅助，UI 主要由 ReplaceProgressManager 驱动
+                        // 但我们可以记录一下 Worker 确实在运行
+                        // AppLogger.d(TAG, "▶️ Worker 正在运行 (WM 进度: ${workInfo.progress})")
                     }
                     androidx.work.WorkInfo.State.SUCCEEDED -> {
                         val processed = workInfo.outputData.getInt(
@@ -1100,19 +1708,42 @@ class MainActivity : AppCompatActivity() {
                         tvPercent.text = "100%"
                         tvCurrentFile.text = "✅ 完成"
                         
+                        // 验证文件是否真的复制成功
+                        appendLog("🔍 验证替换结果...")
+                        val packageName = kotlinx.coroutines.runBlocking {
+                            preferencesManager.appPackageName.first()
+                        }
+                        val targetPath = "/storage/emulated/0/Android/data/$packageName"
+                        
+                        val hasRoot = com.example.tfgwj.utils.RootChecker.isRooted()
+                        val verifiedFiles = verifyReplacement(packageName, hasRoot)
+                        
+                        if (verifiedFiles > 0) {
+                            appendLog("✅ 验证成功: 目标位置发现 $verifiedFiles 个文件")
+                            appendLog("   目标路径: $targetPath")
+                        } else {
+                            appendLog("⚠️ 验证警告: 目标位置没有发现文件")
+                            appendLog("   目标路径: $targetPath")
+                        }
+                        
                         // 延迟关闭对话框
                         lifecycleScope.launch {
                             kotlinx.coroutines.delay(1500)
                             replaceDialog?.dismiss()
-                            showSuccessResult(processed, failedFiles.size)
+                            showSuccessResult(processed, failedFiles.size, verifiedFiles)
                             resetReplacingState()
                         }
                     }
                     androidx.work.WorkInfo.State.FAILED -> {
+                        AppLogger.e("MainActivity", "❌ Worker 失败: ${workInfo.state}")
                         val errorMsg = workInfo.outputData.getString(
                             com.example.tfgwj.worker.FileReplaceWorker.KEY_ERROR_MESSAGE
                         ) ?: "替换失败，请查看日志"
-                        AppLogger.e("MainActivity", "替换失败: $errorMsg")
+                        AppLogger.e("MainActivity", "❌ 错误信息: $errorMsg")
+                        
+                        // 尝试获取更多错误信息
+                        val outputData = workInfo.outputData
+                        AppLogger.d("MainActivity", "❌ Worker 输出数据: ${outputData.keyValueMap}")
                         
                         appendLog("❌ 失败: $errorMsg")
                         tvErrors.visibility = View.VISIBLE
@@ -1135,13 +1766,93 @@ class MainActivity : AppCompatActivity() {
         }
     }
     
-    private fun showSuccessResult(fileCount: Int, failedCount: Int = 0) {
-        val toastMessage = if (failedCount > 0) {
-            "替换完成！$fileCount 个文件成功，$failedCount 个失败"
-        } else {
-            "替换完成！$fileCount 个文件"
+    private fun showSuccessResult(fileCount: Int, failedCount: Int = 0, verifiedCount: Int = -1) {
+        val toastMessage = when {
+            failedCount > 0 -> "替换完成！$fileCount 个文件成功，$failedCount 个失败"
+            verifiedCount >= 0 && verifiedCount != fileCount -> "替换完成！$fileCount 个文件，验证发现 $verifiedCount 个文件"
+            else -> "替换完成！$fileCount 个文件"
         }
-        Toast.makeText(this, toastMessage, Toast.LENGTH_SHORT).show()
+        AppLogger.action("替换完成", "成功 $fileCount 个文件，验证 $verifiedCount 个文件")
+        
+        android.widget.Toast.makeText(this, toastMessage, android.widget.Toast.LENGTH_LONG).show()
+    }
+    
+    /**
+     * 验证替换结果，检查目标位置是否有文件
+     * @param packageName 目标应用包名
+     * @param hasRoot 是否有 Root 权限
+     * @return 验证到的文件数量
+     */
+    private fun verifyReplacement(packageName: String, hasRoot: Boolean): Int {
+        val targetPath = "/storage/emulated/0/Android/data/$packageName"
+        
+        return if (hasRoot) {
+            // Root 模式：使用 Root 命令验证
+            verifyReplacementViaRoot(targetPath)
+        } else {
+            // 非 Root 模式：使用原生 API 验证
+            verifyReplacementViaNative(targetPath)
+        }
+    }
+    
+    /**
+     * 使用 Root 命令验证替换结果
+     */
+    private fun verifyReplacementViaRoot(targetPath: String): Int {
+        return try {
+            // 使用 find 命令统计文件数量
+            val command = "find \"$targetPath\" -type f 2>/dev/null | wc -l"
+            val result = com.example.tfgwj.utils.RootChecker.executeRootCommand(command)
+            
+            val count = result?.trim()?.toIntOrNull() ?: 0
+            AppLogger.d("MainActivity", "Root 验证: $targetPath 有 $count 个文件")
+            count
+        } catch (e: Exception) {
+            AppLogger.e("MainActivity", "Root 验证失败", e)
+            0
+        }
+    }
+    
+    /**
+     * 检查是否是增量更新
+     * @return true 表示是增量更新（第二次替换）
+     */
+    private fun checkIsIncrementalUpdate(packageName: String): Boolean {
+        val targetBase = "/storage/emulated/0/Android/data/$packageName"
+        val targetDir = java.io.File(targetBase)
+        
+        if (!targetDir.exists()) {
+            AppLogger.d("MainActivity", "首次替换：目标目录不存在")
+            return false
+        }
+        
+        // 检查是否有已经复制的文件
+        val hasFiles = targetDir.walk().filter { it.isFile }.count()
+        val isIncremental = hasFiles > 0
+        
+        AppLogger.d("MainActivity", "增量更新检查: 目标目录有 $hasFiles 个文件")
+        
+        return isIncremental
+    }
+    
+    /**
+     * 使用原生 API 验证替换结果
+     */
+    private fun verifyReplacementViaNative(targetPath: String): Int {
+        return try {
+            val targetDir = java.io.File(targetPath)
+            if (targetDir.exists()) {
+                val count = targetDir.walk().filter { it.isFile }.count()
+                AppLogger.d("MainActivity", "原生验证: $targetPath 有 $count 个文件")
+                count
+            } else {
+                AppLogger.w("MainActivity", "原生验证: $targetPath 不存在")
+                0
+            }
+        } catch (e: Exception) {
+            AppLogger.e("MainActivity", "原生验证失败", e)
+            0
+        }
     }
 
     private fun showFailedResult(error: String, path: String? = null) {
@@ -1551,7 +2262,10 @@ class MainActivity : AppCompatActivity() {
                 
                 if (result.success) {
                     // 步骤2: 复制文件到主包
-                    val configTargetPath = "$selectedMainPackPath/Android/data/com.tencent.tmgp.pubgmhd/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/Config/Android"
+                    // 获取当前选择的应用包名
+                    val packageName = preferencesManager.appPackageName.first()
+                    val configTargetPath = PermissionChecker.getAppConfigPath(packageName)
+                        .replace("/storage/emulated/0/Android/data/", "$selectedMainPackPath/Android/data/")
                     val configTargetDir = File(configTargetPath)
                     
                     if (!configTargetDir.exists()) {
@@ -2058,10 +2772,12 @@ class MainActivity : AppCompatActivity() {
             .create()
         
         dialog.show()
-        
+
         lifecycleScope.launch {
+            val packageName = preferencesManager.appPackageName.first()
             val result = SmartCacheManager.cleanEnvironment(
                 this@MainActivity,
+                packageName,
                 shizukuManager
             ) { current, total, currentItem ->
                 // 在主线程更新 UI
@@ -2090,7 +2806,10 @@ class MainActivity : AppCompatActivity() {
      * 一键启动游戏
      */
     private fun launchGame() {
-        val packageName = PermissionChecker.PUBG_PACKAGE_NAME
+        // 获取当前选择的应用包名（使用 runBlocking 在非协程上下文中获取）
+        val packageName = kotlinx.coroutines.runBlocking {
+            preferencesManager.appPackageName.first()
+        }
         AppLogger.action("启动游戏", packageName)
         
         try {
@@ -2104,6 +2823,117 @@ class MainActivity : AppCompatActivity() {
             AppLogger.e("MainActivity", "启动游戏失败", e)
             Toast.makeText(this, "启动失败: ${e.message}", Toast.LENGTH_SHORT).show()
         }
+    }
+
+    /**
+     * 验证环境
+     * 1. 强制停止目标应用
+     * 2. 检测是否需要 Shizuku
+     * 3. 更新 UI 显示验证结果
+     */
+    private fun checkEnvironment(forceRefresh: Boolean = false) {
+        lifecycleScope.launch {
+            val mainPackCard = binding.includeMainPack.root
+            val statusText = mainPackCard.findViewById<TextView>(R.id.tv_env_status)
+            val detailText = mainPackCard.findViewById<TextView>(R.id.tv_env_detail)
+            val progressBar = mainPackCard.findViewById<ProgressBar>(R.id.progress_env_check)
+            
+            // 如果已经在授权流程中，不重复触发
+            if (statusText.text == "⏳ 等待权限" && !forceRefresh) return@launch
+
+            // 显示加载状态 (只在非强制刷新且没缓存时显示明显加载)
+            statusText.text = "检测中..."
+            detailText.text = "正在停止应用并验证权限..."
+            progressBar.visibility = View.VISIBLE
+            
+            try {
+                // 如果是强制刷新，先强制停止目标应用 (符合用户之前逻辑)
+                if (forceRefresh) {
+                    val packageName = preferencesManager.appPackageName.first()
+                    forceStopApp(packageName)
+                }
+
+                // 直接使用权限管理器的统一入口
+                // 它内部已经适配了 [Root -> Normal -> Shizuku] 的三层检测逻辑
+                val status = permissionManager.checkAllPermissions(forceRefresh)
+                
+                // 更新 UI
+                detailText.text = status.statusMessage
+                
+                when {
+                    status.canAccessPrivateDir -> {
+                        statusText.setTextColor(getColor(R.color.success_color))
+                        when {
+                            status.hasRoot && !status.needsShizuku -> statusText.text = "✅ Root"
+                            !status.needsShizuku -> statusText.text = "✅ 正常"
+                            else -> statusText.text = "✅ Shizuku"
+                        }
+                        AppLogger.action("环境验证成功", statusText.text.toString())
+                    }
+                    status.needsShizuku -> {
+                        // 需要 Shizuku 但未就绪
+                        val isAuthorized = shizukuManager.isAuthorized.value
+                        val isConnected = shizukuManager.isServiceConnected.value
+                        
+                        if (isAuthorized && !isConnected) {
+                            statusText.text = "⏳ 连接中"
+                            shizukuManager.bindUserService() 
+                        } else {
+                            statusText.text = "⏳ 等待权限"
+                            shizukuManager.requestPermission { granted ->
+                                lifecycleScope.launch {
+                                    if (granted) {
+                                        delay(1000)
+                                        checkEnvironment(forceRefresh = true) // 授权后强制刷新一次
+                                    } else {
+                                        statusText.text = "⚠️ 需要授权"
+                                        statusText.setTextColor(getColor(R.color.error_color))
+                                        AppLogger.action("环境验证失败", "用户拒绝 Shizuku")
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    else -> {
+                        statusText.text = "⚠️ 需授权"
+                        statusText.setTextColor(getColor(R.color.error_color))
+                    }
+                }
+                
+            } catch (e: Exception) {
+                statusText.text = "❌ 异常"
+                statusText.setTextColor(getColor(R.color.error_color))
+                detailText.text = "检测失败: ${e.message}"
+                AppLogger.e("MainActivity", "环境验证异常", e)
+            } finally {
+                if (statusText.text != "⏳ 等待权限" && statusText.text != "⏳ 连接中") {
+                    progressBar.visibility = View.GONE
+                }
+            }
+        }
+    }
+
+    /**
+     * 强制停止应用
+     */
+    private suspend fun forceStopApp(packageName: String) {
+        try {
+            val process = Runtime.getRuntime().exec(arrayOf("am", "force-stop", packageName))
+            process.waitFor()
+            Log.d(TAG, "已强制停止应用: $packageName")
+            kotlinx.coroutines.delay(500) // 等待应用完全停止
+        } catch (e: Exception) {
+            Log.w(TAG, "强制停止应用失败: $packageName", e)
+        }
+    }
+
+/**
+     * 检测是否需要 Shizuku
+     * 注意：Root 设备使用 Root 命令验证，非 Root 设备使用普通 API 验证
+     */
+    private suspend fun checkIfNeedShizuku(packageName: String): Boolean {
+        // 直接复用 PermissionChecker 的逻辑，避免重复实现
+        return PermissionChecker.checkPermissionAccess(packageName, stopAppFirst = false).needsShizuku
     }
 
     /**

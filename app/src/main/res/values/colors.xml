@@ -17,6 +17,8 @@
     <color name="text_primary">#212121</color>
     <color name="text_secondary">#757575</color>
     <color name="text_hint">#9E9E9E</color>
+    <color name="primary_text_color">#212121</color>
+    <color name="secondary_text_color">#757575</color>
     
     <!-- 状态颜色 -->
     <color name="success_color">#4CAF50</color>

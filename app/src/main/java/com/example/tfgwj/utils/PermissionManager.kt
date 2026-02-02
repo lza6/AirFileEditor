@@ -18,6 +18,12 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import org.json.JSONObject
+import java.io.File
+import java.io.FileWriter
+import java.util.Scanner
 
 /**
  * 权限管理器
@@ -39,6 +45,8 @@ class PermissionManager(private val context: Context) {
     data class PermissionStatus(
         val hasStoragePermission: Boolean = false,      // 基本存储权限
         val hasManageStorage: Boolean = false,          // 所有文件访问权限
+        val hasRoot: Boolean = false,                    // 是否有 Root 权限
+        val rootManagerType: String = "",               // Root 管理器类型（Magisk, SuperSU 等）
         val needsShizuku: Boolean = false,              // 是否需要 Shizuku
         val hasShizukuPermission: Boolean = false,      // Shizuku 已授权
         val isShizukuAvailable: Boolean = false,        // Shizuku 可用
@@ -51,50 +59,167 @@ class PermissionManager(private val context: Context) {
     val permissionStatus: StateFlow<PermissionStatus> = _permissionStatus.asStateFlow()
     
     private val shizukuManager = ShizukuManager.getInstance(context)
+    private val mutex = Mutex()
+    
+    // 缓存配置路径
+    private val CONFIG_FILE_PATH = "${PermissionChecker.CACHE_DIR}/.config/env_status.json"
     
     /**
      * 检查所有权限状态
      */
-    suspend fun checkAllPermissions(): PermissionStatus = withContext(Dispatchers.IO) {
-        Log.d(TAG, "检查所有权限...")
-        
-        // 基本存储权限
-        val hasStorage = checkStoragePermission()
-        
-        // 所有文件访问权限
-        val hasManageStorage = checkManageStoragePermission()
-        
-        // Shizuku 状态
-        val isShizukuAvailable = shizukuManager.isAvailable.value
-        val hasShizukuPerm = shizukuManager.isAuthorized.value
-        val isServiceConnected = shizukuManager.isServiceConnected.value
-        
-        // 检测是否需要 Shizuku（通过实际创建文件测试）
-        val checkResult = PermissionChecker.checkPermissionAccess(stopAppFirst = false)
-        val needsShizuku = checkResult.needsShizuku
-        val canAccessPrivate = checkResult.canAccessDirectly || (hasShizukuPerm && isServiceConnected)
-        
-        // 生成状态消息
-        val message = buildStatusMessage(
-            hasStorage, hasManageStorage, needsShizuku, 
-            hasShizukuPerm, isShizukuAvailable, isServiceConnected, canAccessPrivate
-        )
-        
-        val status = PermissionStatus(
-            hasStoragePermission = hasStorage,
-            hasManageStorage = hasManageStorage,
-            needsShizuku = needsShizuku,
-            hasShizukuPermission = hasShizukuPerm,
-            isShizukuAvailable = isShizukuAvailable,
-            isShizukuServiceConnected = isServiceConnected,
-            canAccessPrivateDir = canAccessPrivate,
-            statusMessage = message
-        )
-        
-        _permissionStatus.value = status
-        Log.d(TAG, "权限状态: $status")
-        
-        status
+    suspend fun checkAllPermissions(forceRefresh: Boolean = false): PermissionStatus = mutex.withLock {
+        withContext(Dispatchers.IO) {
+            Log.d(TAG, "检测所有权限 (forceRefresh=$forceRefresh)...")
+            
+            // 1. 如果不是强制刷新，尝试从持久化配置加载 (快径)
+            if (!forceRefresh) {
+                val cachedStatus = loadEnvConfig()
+                if (cachedStatus != null) {
+                    Log.i(TAG, "🚀 [快径] 已从持久化配置加载环境: ${cachedStatus.statusMessage}")
+                    _permissionStatus.value = cachedStatus
+                    return@withContext cachedStatus
+                }
+            }
+
+            // 2. 执行常规检测 (慢径)
+            Log.d(TAG, "🐢 [慢径] 开始物理验证环境...")
+            
+            // 基本存储权限
+            val hasStorage = checkStoragePermission()
+            
+            // 所有文件访问权限
+            val hasManageStorage = checkManageStoragePermission()
+            
+            // Shizuku 状态
+            val isShizukuAvailable = shizukuManager.isAvailable.value
+            val hasShizukuPerm = shizukuManager.isAuthorized.value
+            val isServiceConnected = shizukuManager.isServiceConnected.value
+            
+            // 检测是否需要 Shizuku（通过实际创建文件测试）
+            val checkResult = PermissionChecker.checkPermissionAccess(stopAppFirst = false)
+            val needsShizuku = checkResult.needsShizuku
+            val canAccessPrivate = checkResult.canAccessDirectly || (hasShizukuPerm && isServiceConnected)
+            
+            // 检测 Root 权限
+            val hasRoot = RootChecker.isRooted()
+            val rootManagerType = if (hasRoot) RootChecker.getRootManagerType() else ""
+            
+            // 生成状态消息
+            val message = buildStatusMessage(
+                hasStorage, hasManageStorage, hasRoot, rootManagerType,
+                needsShizuku, 
+                hasShizukuPerm, isShizukuAvailable, isServiceConnected, canAccessPrivate
+            )
+            
+            val status = PermissionStatus(
+                hasStoragePermission = hasStorage,
+                hasManageStorage = hasManageStorage,
+                hasRoot = hasRoot,
+                rootManagerType = rootManagerType,
+                needsShizuku = needsShizuku,
+                hasShizukuPermission = hasShizukuPerm,
+                isShizukuAvailable = isShizukuAvailable,
+                isShizukuServiceConnected = isServiceConnected,
+                canAccessPrivateDir = canAccessPrivate,
+                statusMessage = message
+            )
+            
+            // 3. 将有效结果持久化
+            if (canAccessPrivate) {
+                saveEnvConfig(status)
+            }
+            
+            _permissionStatus.value = status
+            Log.d(TAG, "权限状态已更新并持久化: $status")
+            
+            status
+        }
+    }
+
+    /**
+     * 保存环境配置到持久化存储
+     */
+    private fun saveEnvConfig(status: PermissionStatus) {
+        try {
+            val dir = File(PermissionChecker.CACHE_DIR, ".config")
+            if (!dir.exists()) dir.mkdirs()
+            
+            val json = JSONObject().apply {
+                put("hasRoot", status.hasRoot)
+                put("rootManagerType", status.rootManagerType)
+                put("needsShizuku", status.needsShizuku)
+                put("canAccessPrivateDir", status.canAccessPrivateDir)
+                put("androidVersion", Build.VERSION.SDK_INT)
+                put("brand", Build.BRAND)
+                put("model", Build.MODEL)
+                put("timestamp", System.currentTimeMillis())
+            }
+            
+            FileWriter(CONFIG_FILE_PATH).use { it.write(json.toString()) }
+            Log.d(TAG, "环境配置已保存到: $CONFIG_FILE_PATH")
+        } catch (e: Exception) {
+            Log.w(TAG, "保存环境配置失败: ${e.message}")
+        }
+    }
+
+    /**
+     * 从持久化存储加载环境配置
+     */
+    private fun loadEnvConfig(): PermissionStatus? {
+        return try {
+            val file = File(CONFIG_FILE_PATH)
+            if (!file.exists()) return null
+            
+            val content = Scanner(file).useDelimiter("\\A").next()
+            val json = JSONObject(content)
+            
+            // 校验设备信息，如果设备信息变了（比如系统更新或换手机），则失效
+            val androidVersion = json.getInt("androidVersion")
+            val brand = json.getString("brand")
+            val model = json.getString("model")
+            
+            if (androidVersion != Build.VERSION.SDK_INT || brand != Build.BRAND || model != Build.MODEL) {
+                Log.d(TAG, "环境配置已过期 (设备信息不匹配)")
+                return null
+            }
+
+            // 重新获取动态状态（Shizuku 是否运行中等）
+            val hasRoot = json.getBoolean("hasRoot")
+            val canAccessPrivate = json.getBoolean("canAccessPrivateDir")
+            val needsShizuku = json.getBoolean("needsShizuku")
+            
+            // 下面这些属性需要根据当前应用运行情况动态获取
+            val hasStorage = checkStoragePermission()
+            val hasManageStorage = checkManageStoragePermission()
+            val isShizukuAvailable = shizukuManager.isAvailable.value
+            val hasShizukuPerm = shizukuManager.isAuthorized.value
+            val isServiceConnected = shizukuManager.isServiceConnected.value
+            
+            // 只有当环境确实满足要求时才返回缓存
+            if (!hasManageStorage) return null
+            if (needsShizuku && (!hasShizukuPerm || !isServiceConnected)) return null
+
+            val message = buildStatusMessage(
+                hasStorage, hasManageStorage, hasRoot, json.getString("rootManagerType"),
+                needsShizuku, hasShizukuPerm, isShizukuAvailable, isServiceConnected, canAccessPrivate
+            )
+
+            PermissionStatus(
+                hasStoragePermission = hasStorage,
+                hasManageStorage = hasManageStorage,
+                hasRoot = hasRoot,
+                rootManagerType = json.getString("rootManagerType"),
+                needsShizuku = needsShizuku,
+                hasShizukuPermission = hasShizukuPerm,
+                isShizukuAvailable = isShizukuAvailable,
+                isShizukuServiceConnected = isServiceConnected,
+                canAccessPrivateDir = canAccessPrivate,
+                statusMessage = message
+            )
+        } catch (e: Exception) {
+            Log.w(TAG, "加载持久化配置失败: ${e.message}")
+            null
+        }
     }
     
     /**
@@ -192,10 +317,13 @@ class PermissionManager(private val context: Context) {
     
     /**
      * 生成状态消息
+     * 注意：Root 设备不需要存储权限即可访问私有目录
      */
     private fun buildStatusMessage(
         hasStorage: Boolean,
         hasManageStorage: Boolean,
+        hasRoot: Boolean,
+        rootManagerType: String,
         needsShizuku: Boolean,
         hasShizukuPerm: Boolean,
         isShizukuAvailable: Boolean,
@@ -203,13 +331,32 @@ class PermissionManager(private val context: Context) {
         canAccessPrivate: Boolean
     ): String {
         return when {
+            // 优先检查是否真正具备访问能力
+            canAccessPrivate -> {
+                if (hasRoot && !needsShizuku) "✓ 已就绪 (Root 访问已验证)"
+                else if (!needsShizuku) "✓ 已就绪 (普通模式访问已验证)"
+                else "✓ 已就绪 (Shizuku 授权已生效)"
+            }
+            
+            // 如果具备 Root 但检测到无法写入（对应用户的限制性 Root 情况）
+            hasRoot && needsShizuku -> "Root 访问受限，正在回退到 Shizuku..."
+            
+            // 非 Root 设备或 Root 受限时的传统逻辑
             !hasStorage -> "需要存储权限"
             !hasManageStorage -> "需要所有文件访问权限"
-            !needsShizuku -> "可直接访问（无需 Shizuku）"
-            !isShizukuAvailable -> "需要安装并启动 Shizuku"
-            !hasShizukuPerm -> "需要 Shizuku 授权"
-            !isServiceConnected -> "Shizuku 服务连接中..."
-            canAccessPrivate -> "✓ 已就绪"
+            
+            // Shizuku 相关状态
+            needsShizuku -> {
+                when {
+                    !isShizukuAvailable -> "检测到数据读写受限，需安装并启动 Shizuku"
+                    !hasShizukuPerm -> "需要 Shizuku 授权方可访问数据"
+                    !isServiceConnected -> "Shizuku 服务正在启动中..."
+                    else -> "检测数据目录访问权限中..."
+                }
+            }
+            
+            // 最后才是检测到的基础权限
+            hasRoot -> "已检出 Root ($rootManagerType)，验证中..."
             else -> "权限检查完成"
         }
     }

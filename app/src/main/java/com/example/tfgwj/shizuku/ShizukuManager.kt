@@ -13,6 +13,10 @@ import com.example.tfgwj.IFileOperationService
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import rikka.shizuku.Shizuku
 import rikka.shizuku.Shizuku.UserServiceArgs
 
@@ -21,6 +25,9 @@ import rikka.shizuku.Shizuku.UserServiceArgs
  * 负责 Shizuku 权限管理和 UserService 绑定
  */
 class ShizukuManager private constructor(private val context: Context) {
+    
+    // Watchdog Scope
+    private val watchdogScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO + kotlinx.coroutines.SupervisorJob())
 
     companion object {
         private const val TAG = "ShizukuManager"
@@ -119,6 +126,34 @@ class ShizukuManager private constructor(private val context: Context) {
         
         // 初始检查
         checkAvailability()
+        
+        // 启动 Watchdog (稳定性增强)
+        startWatchdog()
+    }
+    
+    /**
+     * 启动 Watchdog
+     * 实时监控 UserService 存活并在 IO 挂起时自动重连
+     */
+    private fun startWatchdog() {
+        watchdogScope.launch {
+            while (isActive) {
+                try {
+                    delay(5000) // 每 5 秒检查一次
+                    
+                    if (_isAuthorized.value && !_isServiceConnected.value) {
+                         // 只有当 Shizuku 已经授权但服务未连接时才尝试重连
+                         // 避免在未安装 Shizuku 时无限重试
+                         if (Shizuku.pingBinder()) {
+                             Log.w(TAG, "Watchdog: 检测到服务断开，尝试自动重连...")
+                             bindUserService()
+                         }
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Watchdog 异常", e)
+                }
+            }
+        }
     }
 
     /**
@@ -238,6 +273,7 @@ class ShizukuManager private constructor(private val context: Context) {
      * 销毁管理器，移除所有监听器
      */
     fun destroy() {
+        watchdogScope.cancel() // 停止 Watchdog
         Shizuku.removeBinderReceivedListener(binderReceivedListener)
         Shizuku.removeBinderDeadListener(binderDeadListener)
         Shizuku.removeRequestPermissionResultListener(permissionResultListener)

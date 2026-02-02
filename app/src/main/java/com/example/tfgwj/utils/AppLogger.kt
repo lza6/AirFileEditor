@@ -30,10 +30,14 @@ object AppLogger {
     private const val TAG = "AppLogger"
     private const val MAX_LOG_SIZE = 10 * 1024 * 1024L  // 10MB
     private const val LOG_FILE_NAME = "app_log.txt"
+    private const val MAX_MEMORY_LOGS = 500  // 内存中最多保留 500 条日志
     
     private var logFile: File? = null
     private var printWriter: PrintWriter? = null
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
+    
+    // 内存中的日志收集器（用于实时显示）
+    private val memoryLogs = java.util.concurrent.ConcurrentLinkedQueue<String>()
     
     // 使用 Channel 限制待写入日志数量（内存敏感）
     private val logChannel = Channel<String>(
@@ -99,7 +103,8 @@ object AppLogger {
     fun registerLowMemoryCallback(context: Context) {
         context.registerComponentCallbacks(object : ComponentCallbacks2 {
             override fun onTrimMemory(level: Int) {
-                if (level >= ComponentCallbacks2.TRIM_MEMORY_MODERATE) {
+                // TRIM_MEMORY_MODERATE = 60，使用数值避免弃用警告
+                if (level >= 60) {
                     flushAndReduceBuffer()
                 }
             }
@@ -170,12 +175,41 @@ object AppLogger {
     }
     
     /**
+     * 记录按钮点击事件
+     */
+    fun buttonClick(buttonName: String, details: String = "") {
+        val msg = if (details.isNotEmpty()) "按钮: $buttonName | $details" else "按钮: $buttonName"
+        log("BUTTON", "UI", msg)
+    }
+    
+    /**
      * 记录函数执行
      */
     fun func(functionName: String, action: String, success: Boolean, details: String = "") {
         val result = if (success) "SUCCESS" else "FAILED"
         val msg = "$action | Function: $functionName | Result: $result | $details"
         log("FUNC", "APP", msg)
+    }
+    
+    /**
+     * 获取内存中的日志（用于实时显示）
+     */
+    fun getMemoryLogs(): List<String> {
+        return memoryLogs.toList()
+    }
+    
+    /**
+     * 获取最近的日志（指定数量）
+     */
+    fun getRecentLogs(count: Int = 100): List<String> {
+        return memoryLogs.toList().takeLast(count)
+    }
+    
+    /**
+     * 清空内存日志
+     */
+    fun clearMemoryLogs() {
+        memoryLogs.clear()
     }
     
     fun file(operation: String, path: String, success: Boolean = true, error: String? = null) {
@@ -226,8 +260,18 @@ object AppLogger {
     
     private fun log(level: String, tag: String, message: String) {
         val timestamp = dateFormat.format(Date())
-        val logLine = "[$timestamp] [$level] [$tag] $message"
         
+        // 结构化日志 (JSON ish)
+        // 为了保持 compat，文件里还是写一行，但格式化为:
+        // {"time":"...", "level":"...", "tag":"...", "msg":"..."}
+        // 但用户可能喜欢看纯文本，所以我们保持纯文本显示在内存日志，文件日志使用 JSON
+        
+        val logLineDisplay = "[$timestamp] [$level] [$tag] $message"
+        
+        // JSON 格式 (手动拼接避免引入 Gson/Jackson 依赖)
+        val safeMsg = message.replace("\"", "\\\"").replace("\n", "\\n")
+        val jsonLog = "{\"time\":\"$timestamp\", \"level\":\"$level\", \"tag\":\"$tag\", \"msg\":\"$safeMsg\", \"device\":\"${android.os.Build.MODEL}\"}"
+
         // 系统日志立即打印
         Log.println(when(level) {
             "ERROR" -> Log.ERROR
@@ -236,10 +280,16 @@ object AppLogger {
             else -> Log.DEBUG
         }, tag, message)
 
-        // 文件日志通过 Channel 异步写入
+        // 添加到内存日志队列（文本格式，方便 UI 显示）
+        memoryLogs.offer(logLineDisplay)
+        while (memoryLogs.size > MAX_MEMORY_LOGS) {
+            memoryLogs.poll()
+        }
+
+        // 文件日志通过 Channel 异步写入 (JSON 格式)
         logScope.launch {
             try {
-                logChannel.trySend(logLine)
+                logChannel.trySend(jsonLog)
             } catch (e: Exception) {
                 // Channel 满时自动丢弃最旧的日志
             }
