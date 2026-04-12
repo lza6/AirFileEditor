@@ -4,17 +4,16 @@ import android.content.ComponentCallbacks2
 import android.content.Context
 import android.content.res.Configuration
 import android.os.Environment
-import android.os.Process
 import android.util.Log
 import kotlinx.coroutines.*
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.channels.Channel
 import java.io.File
 import java.io.FileWriter
 import java.io.PrintWriter
 import java.text.SimpleDateFormat
 import java.util.*
 import java.util.concurrent.Executors
-import kotlinx.coroutines.channels.BufferOverflow
-import kotlinx.coroutines.channels.Channel
 
 /**
  * 日志管理器
@@ -26,31 +25,31 @@ import kotlinx.coroutines.channels.Channel
  * - 批量写入减少 I/O
  */
 object AppLogger {
-    
     private const val TAG = "AppLogger"
-    private const val MAX_LOG_SIZE = 10 * 1024 * 1024L  // 10MB
+    private const val MAX_LOG_SIZE = 10 * 1024 * 1024L // 10MB
     private const val LOG_FILE_NAME = "app_log.txt"
-    private const val MAX_MEMORY_LOGS = 500  // 内存中最多保留 500 条日志
-    
+    private const val MAX_MEMORY_LOGS = 500 // 内存中最多保留 500 条日志
+
     private var logFile: File? = null
     private var printWriter: PrintWriter? = null
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
-    
+
     // 内存中的日志收集器（用于实时显示）
     private val memoryLogs = java.util.concurrent.ConcurrentLinkedQueue<String>()
-    
+
     // 使用 Channel 限制待写入日志数量（内存敏感）
-    private val logChannel = Channel<String>(
-        capacity = 100,
-        onBufferOverflow = BufferOverflow.DROP_OLDEST
-    )
-    
+    private val logChannel =
+        Channel<String>(
+            capacity = 100,
+            onBufferOverflow = BufferOverflow.DROP_OLDEST,
+        )
+
     // 异步日志作用域，使用单线程确保日志顺序
     private val logScope = CoroutineScope(Executors.newSingleThreadExecutor().asCoroutineDispatcher() + SupervisorJob())
-    
+
     // 批量写入标志
     private var isFlushing = false
-    
+
     /**
      * 初始化日志
      * @param context 用于获取备选路径
@@ -60,63 +59,65 @@ object AppLogger {
             // 如果已经初始化在外部存储，直接返回
             return
         }
-        
+
         try {
             // 默认优先尝试私有目录，保证刚安装时也能记录
             var dir = context?.getExternalFilesDir("logs") ?: File(Environment.getExternalStorageDirectory(), "听风改文件/logs")
-            
+
             // 如果有权限且外部目录可用，则尝试使用外部目录
-            if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.R || 
-                Environment.isExternalStorageManager()) {
+            if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.R ||
+                Environment.isExternalStorageManager()
+            ) {
                 val publicDir = File(Environment.getExternalStorageDirectory(), "听风改文件/logs")
                 if (publicDir.exists() || publicDir.mkdirs()) {
                     dir = publicDir
                 }
             }
-            
+
             logFile = File(dir, LOG_FILE_NAME)
             if (!logFile!!.exists()) logFile?.createNewFile()
-            
+
             checkFileSize()
-            
+
             // 重新打开流
             printWriter?.close()
             printWriter = PrintWriter(FileWriter(logFile!!, true), true)
-            
+
             // 启动批量写入协程
             startBatchWriter()
-            
+
             // 注册低内存回调
             context?.let { registerLowMemoryCallback(it) }
-            
+
             writeHeader()
             Log.d(TAG, "日志系统初始化: ${logFile!!.absolutePath}")
-            
         } catch (e: Exception) {
             Log.e(TAG, "初始化日志失败", e)
         }
     }
-    
+
     /**
      * 注册低内存警告处理
      */
     fun registerLowMemoryCallback(context: Context) {
-        context.registerComponentCallbacks(object : ComponentCallbacks2 {
-            override fun onTrimMemory(level: Int) {
-                // TRIM_MEMORY_MODERATE = 60，使用数值避免弃用警告
-                if (level >= 60) {
+        context.registerComponentCallbacks(
+            object : ComponentCallbacks2 {
+                override fun onTrimMemory(level: Int) {
+                    // TRIM_MEMORY_MODERATE = 60，使用数值避免弃用警告
+                    if (level >= 60) {
+                        flushAndReduceBuffer()
+                    }
+                }
+
+                override fun onLowMemory() {
                     flushAndReduceBuffer()
                 }
-            }
-            
-            override fun onLowMemory() {
-                flushAndReduceBuffer()
-            }
-            
-            override fun onConfigurationChanged(c: Configuration) {}
-        })
+
+                override fun onConfigurationChanged(c: Configuration) {}
+            },
+        )
     }
-    
+
     /**
      * 低内存时刷新日志并减少缓冲区
      */
@@ -138,23 +139,39 @@ object AppLogger {
         Log.d(TAG, "权限变更，刷新日志路径...")
         init(context)
     }
-    
+
     private fun writeHeader() {
-        val header = """
+        val header =
+            """
             听风改文件 日志记录
             启动时间: ${dateFormat.format(Date())}
             设备信息: ${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}
             Android 版本: ${android.os.Build.VERSION.RELEASE} (API ${android.os.Build.VERSION.SDK_INT})
             ----------------------------------------------------------------
-        """.trimIndent()
+            """.trimIndent()
         printWriter?.println(header)
     }
-    
-    fun i(tag: String, message: String) = log("INFO", tag, message)
-    fun d(tag: String, message: String) = log("DEBUG", tag, message)
-    fun w(tag: String, message: String) = log("WARN", tag, message)
 
-    fun e(tag: String, message: String, throwable: Throwable? = null) {
+    fun i(
+        tag: String,
+        message: String,
+    ) = log("INFO", tag, message)
+
+    fun d(
+        tag: String,
+        message: String,
+    ) = log("DEBUG", tag, message)
+
+    fun w(
+        tag: String,
+        message: String,
+    ) = log("WARN", tag, message)
+
+    fun e(
+        tag: String,
+        message: String,
+        throwable: Throwable? = null,
+    ) {
         log("ERROR", tag, message)
         throwable?.let {
             val errorLog = "  异常堆栈: ${Log.getStackTraceString(it)}"
@@ -168,74 +185,94 @@ object AppLogger {
         }
         Log.e(tag, message, throwable)
     }
-    
-    fun action(action: String, details: String = "") {
+
+    fun action(
+        action: String,
+        details: String = "",
+    ) {
         val msg = if (details.isNotEmpty()) "$action | $details" else action
         log("ACTION", "USER", msg)
     }
-    
+
     /**
      * 记录按钮点击事件
      */
-    fun buttonClick(buttonName: String, details: String = "") {
+    fun buttonClick(
+        buttonName: String,
+        details: String = "",
+    ) {
         val msg = if (details.isNotEmpty()) "按钮: $buttonName | $details" else "按钮: $buttonName"
         log("BUTTON", "UI", msg)
     }
-    
+
     /**
      * 记录函数执行
      */
-    fun func(functionName: String, action: String, success: Boolean, details: String = "") {
+    fun func(
+        functionName: String,
+        action: String,
+        success: Boolean,
+        details: String = "",
+    ) {
         val result = if (success) "SUCCESS" else "FAILED"
         val msg = "$action | Function: $functionName | Result: $result | $details"
         log("FUNC", "APP", msg)
     }
-    
+
     /**
      * 获取内存中的日志（用于实时显示）
      */
     fun getMemoryLogs(): List<String> {
         return memoryLogs.toList()
     }
-    
+
     /**
      * 获取最近的日志（指定数量）
      */
     fun getRecentLogs(count: Int = 100): List<String> {
         return memoryLogs.toList().takeLast(count)
     }
-    
+
     /**
      * 清空内存日志
      */
     fun clearMemoryLogs() {
         memoryLogs.clear()
     }
-    
-    fun file(operation: String, path: String, success: Boolean = true, error: String? = null) {
+
+    fun file(
+        operation: String,
+        path: String,
+        success: Boolean = true,
+        error: String? = null,
+    ) {
         val status = if (success) "SUCCESS" else "FAILED"
         val msg = "$operation | Result: $status | Path: $path"
         log("FILE", "IO", if (error != null) "$msg | ERR: $error" else msg)
     }
-    
-    fun progress(current: Int, total: Int, currentFile: String) {
+
+    fun progress(
+        current: Int,
+        total: Int,
+        currentFile: String,
+    ) {
         val percent = if (total > 0) (current * 100 / total) else 0
         log("PROGRESS", "REPLACE", "[$percent%] $current/$total | $currentFile")
     }
-    
+
     /**
      * 批量写入日志到文件，减少 I/O 操作
      */
     private suspend fun flushLogs() {
         if (isFlushing) return
         isFlushing = true
-        
+
         try {
             val batch = mutableListOf<String>()
             while (logChannel.tryReceive().getOrNull()?.also { batch.add(it) } != null) {
                 if (batch.size >= 50) break
             }
-            
+
             if (batch.isNotEmpty()) {
                 printWriter?.println(batch.joinToString("\n"))
             }
@@ -245,7 +282,7 @@ object AppLogger {
             isFlushing = false
         }
     }
-    
+
     /**
      * 启动批量写入协程
      */
@@ -257,28 +294,36 @@ object AppLogger {
             }
         }
     }
-    
-    private fun log(level: String, tag: String, message: String) {
+
+    private fun log(
+        level: String,
+        tag: String,
+        message: String,
+    ) {
         val timestamp = dateFormat.format(Date())
-        
+
         // 结构化日志 (JSON ish)
         // 为了保持 compat，文件里还是写一行，但格式化为:
         // {"time":"...", "level":"...", "tag":"...", "msg":"..."}
         // 但用户可能喜欢看纯文本，所以我们保持纯文本显示在内存日志，文件日志使用 JSON
-        
+
         val logLineDisplay = "[$timestamp] [$level] [$tag] $message"
-        
+
         // JSON 格式 (手动拼接避免引入 Gson/Jackson 依赖)
         val safeMsg = message.replace("\"", "\\\"").replace("\n", "\\n")
         val jsonLog = "{\"time\":\"$timestamp\", \"level\":\"$level\", \"tag\":\"$tag\", \"msg\":\"$safeMsg\", \"device\":\"${android.os.Build.MODEL}\"}"
 
         // 系统日志立即打印
-        Log.println(when(level) {
-            "ERROR" -> Log.ERROR
-            "WARN" -> Log.WARN
-            "INFO" -> Log.INFO
-            else -> Log.DEBUG
-        }, tag, message)
+        Log.println(
+            when (level) {
+                "ERROR" -> Log.ERROR
+                "WARN" -> Log.WARN
+                "INFO" -> Log.INFO
+                else -> Log.DEBUG
+            },
+            tag,
+            message,
+        )
 
         // 添加到内存日志队列（文本格式，方便 UI 显示）
         memoryLogs.offer(logLineDisplay)
@@ -295,7 +340,7 @@ object AppLogger {
             }
         }
     }
-    
+
     /**
      * 检查文件大小，采用低内存消耗的方式保留末尾
      */
@@ -306,11 +351,11 @@ object AppLogger {
                 // 仅保留最后 2MB。使用 RandomAccessFile 避免将整个 10MB 读入内存
                 val keepSize = 2 * 1024 * 1024L
                 val tempFile = File(file.parent, "log_temp.txt")
-                
+
                 java.io.RandomAccessFile(file, "r").use { raf ->
                     val startPos = file.length() - keepSize
                     raf.seek(if (startPos > 0) startPos else 0)
-                    
+
                     java.io.FileOutputStream(tempFile).use { fos ->
                         val buffer = ByteArray(64 * 1024)
                         var read: Int
@@ -320,23 +365,22 @@ object AppLogger {
                         }
                     }
                 }
-                
+
                 printWriter?.close()
                 if (file.delete()) {
                     tempFile.renameTo(file)
                 }
                 printWriter = PrintWriter(FileWriter(file, true), true)
-                
             } catch (e: Exception) {
                 Log.e(TAG, "清理日志 OOM 保护失败", e)
             }
         }
     }
-    
+
     fun separator(title: String = "") {
         printWriter?.println(if (title.isNotEmpty()) "--- $title ---" else "--------------------------------")
     }
-    
+
     fun close() {
         try {
             printWriter?.println("\n--- 日志结束: ${dateFormat.format(Date())} ---")
@@ -346,9 +390,9 @@ object AppLogger {
             Log.e(TAG, "关闭日志失败", e)
         }
     }
-    
+
     fun getLogContent(): String = logFile?.readText() ?: "无法读取日志"
-    
+
     fun getLogSize(): String {
         val size = logFile?.length() ?: 0
         return when {

@@ -1,6 +1,10 @@
 package com.example.tfgwj.utils
 
 import android.util.Log
+import com.example.tfgwj.performance.MetricCollector
+import com.example.tfgwj.performance.MetricNames
+import com.example.tfgwj.performance.MetricUnits
+import com.example.tfgwj.performance.PerformanceMonitor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -14,32 +18,69 @@ import java.nio.channels.FileChannel
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
- * IO 优化器
- * 集成 NIO Zero-Copy、动态并发控制、增量更新检测等技术
+ * IoOptimizer - V7.0.0 Storage Type Detection Upgrade
+ *
+ * Integrated with StorageTypeDetector for intelligent buffer optimization:
+ * - SSD/UFS: 1MB buffer for high-speed storage
+ * - eMMC/HDD: 512KB buffer for slower storage
+ * - Dynamic memory-aware buffer sizing
+ *
+ * Features:
+ * - NIO Zero-Copy
+ * - Dynamic concurrency control
+ * - Incremental update detection
  */
 object IoOptimizer {
     private const val TAG = "IoOptimizer"
-    
-    // 动态并发度：CPU 核心数
+
+    // Dynamic concurrency: CPU core count
     private val CORE_COUNT = Runtime.getRuntime().availableProcessors()
     private val MAX_CONCURRENCY = CORE_COUNT.coerceAtLeast(4)
-    
-    // 缓冲区池 (对象池) - 减少密集 IO 时的 GC 压力
+
+    // Buffer pool (object pool) - reduce GC pressure during intensive IO
     private val BUFFER_POOL = java.util.concurrent.ConcurrentLinkedQueue<ByteArray>()
     private const val POOL_SIZE = 8
-    
+
     /**
-     * 获取最佳缓冲区大小 (基于当前可用内存)
+     * V7.0.0: Get optimal buffer size based on storage type and available memory
+     *
+     * Integration with StorageTypeDetector:
+     * - Detects storage type (SSD/UFS vs eMMC/HDD)
+     * - Adjusts buffer size accordingly
+     * - Falls back to memory-based calculation if detection fails
      */
-    fun getOptimalBufferSize(): Int {
+    fun getOptimalBufferSize(context: android.content.Context? = null): Int {
+        // V7.0.0: Use StorageTypeDetector for intelligent buffer sizing
+        return try {
+            StorageTypeDetector.getOptimalBufferSize(context)
+        } catch (e: Exception) {
+            // Fallback to original memory-based logic
+            Log.w(TAG, "StorageTypeDetector failed, using fallback: ${e.message}")
+            getOptimalBufferSizeLegacy(context)
+        }
+    }
+
+    /**
+     * Legacy buffer size calculation (fallback)
+     */
+    private fun getOptimalBufferSizeLegacy(context: android.content.Context? = null): Int {
         val runtime = Runtime.getRuntime()
         val maxMemoryMB = runtime.maxMemory() / (1024 * 1024)
-        
+
+        // If context available, get ActivityManager.MemoryInfo
+        val availablePercent =
+            context?.let {
+                val am = it.getSystemService(android.content.Context.ACTIVITY_SERVICE) as? android.app.ActivityManager
+                val mi = android.app.ActivityManager.MemoryInfo()
+                am?.getMemoryInfo(mi)
+                if (mi.totalMem > 0) (mi.availMem.toFloat() / mi.totalMem * 100).toInt() else -1
+            } ?: -1
+
         return when {
-            maxMemoryMB < 128 -> 128 * 1024      // < 128MB: 128KB
-            maxMemoryMB < 256 -> 256 * 1024      // 128-256MB: 256KB
-            maxMemoryMB < 512 -> 512 * 1024      // 256-512MB: 512KB
-            else -> 1024 * 1024                   // >= 512MB: 1MB
+            availablePercent in 0..10 || maxMemoryMB < 128 -> 128 * 1024 // Very low memory: 128KB
+            availablePercent in 11..25 || maxMemoryMB < 256 -> 256 * 1024 // Low memory: 256KB
+            maxMemoryMB < 512 -> 512 * 1024 // Mid-range: 512KB
+            else -> 1024 * 1024 // High-end: 1MB
         }
     }
 
@@ -58,53 +99,171 @@ object IoOptimizer {
             BUFFER_POOL.offer(buffer)
         }
     }
-    
+
+    private fun unmap(buffer: java.nio.MappedByteBuffer?) {
+        if (buffer == null) return
+        try {
+            val unsafeClass = Class.forName("sun.misc.Unsafe")
+            val theUnsafeField = unsafeClass.getDeclaredField("theUnsafe")
+            theUnsafeField.isAccessible = true
+            val unsafe = theUnsafeField.get(null)
+            val invokeCleanerMethod = unsafeClass.getMethod("invokeCleaner", java.nio.ByteBuffer::class.java)
+            invokeCleanerMethod.invoke(unsafe, buffer)
+        } catch (e: Exception) {
+            try {
+                val cleanerMethod = buffer.javaClass.getMethod("cleaner")
+                cleanerMethod.isAccessible = true
+                val cleaner = cleanerMethod.invoke(buffer)
+                if (cleaner != null) {
+                    val cleanMethod = cleaner.javaClass.getMethod("clean")
+                    cleanMethod.isAccessible = true
+                    cleanMethod.invoke(cleaner)
+                }
+            } catch (ignored: Exception) {
+            }
+        }
+    }
+
     /**
-     * 快速复制文件 (NIO Zero-Copy)
+     * 极速复制文件 (智能调度：mmap 原生映射 / NIO Zero-Copy)
+     * V6.1.0 引入 Chunked mmap，支持大文件分片映射
      */
-    fun fastCopy(source: File, target: File): Boolean {
+    fun fastCopy(
+        source: File,
+        target: File,
+    ): Boolean {
+        val startTime = System.currentTimeMillis()
+        val size = source.length()
+        var usedMmap = true
+
         return try {
             if (!target.parentFile?.exists()!!) {
                 target.parentFile?.mkdirs()
             }
-            
-            FileInputStream(source).channel.use { sourceChannel ->
-                FileOutputStream(target).channel.use { targetChannel ->
-                    val size = sourceChannel.size()
-                    var transferred: Long = 0
-                    while (transferred < size) {
-                        transferred += sourceChannel.transferTo(transferred, size - transferred, targetChannel)
+
+            if (size <= 0) return false
+
+            if (!target.exists()) {
+                target.createNewFile()
+            }
+
+            // V6.1.0 引入分片 mmap (对全量文件生效，除非映射失败)
+            java.io.RandomAccessFile(source, "r").use { rafSrc ->
+                java.io.RandomAccessFile(target, "rw").use { rafDest ->
+                    rafDest.setLength(size)
+                    val inChannel = rafSrc.channel
+                    val outChannel = rafDest.channel
+
+                    // 单片映射阈值：8MB
+                    val chunkSize = 8L * 1024 * 1024
+                    var position = 0L
+
+                    while (position < size) {
+                        val remaining = size - position
+                        val currentChunk = if (remaining < chunkSize) remaining else chunkSize
+
+                        var inBuffer: java.nio.MappedByteBuffer? = null
+                        var outBuffer: java.nio.MappedByteBuffer? = null
+                        try {
+                            inBuffer = inChannel.map(FileChannel.MapMode.READ_ONLY, position, currentChunk)
+                            outBuffer = outChannel.map(FileChannel.MapMode.READ_WRITE, position, currentChunk)
+
+                            outBuffer.put(inBuffer)
+                            position += currentChunk
+                        } finally {
+                            unmap(inBuffer)
+                            unmap(outBuffer)
+                        }
                     }
+                    outChannel.force(true) // 硬件层物理落盘
                 }
             }
-            // 保持修改时间一致，便于后续增量校验
+
             target.setLastModified(source.lastModified())
+
+            // 记录性能指标
+            val durationMs = System.currentTimeMillis() - startTime
+            PerformanceMonitor.recordIOCopy(
+                bytesCopied = size,
+                durationMs = durationMs,
+                usedMmap = true,
+                wasIncrementalSkip = false,
+            )
+
             true
         } catch (e: Exception) {
-            Log.e(TAG, "FastCopy 失败: ${source.name}", e)
-            false
+            Log.e(TAG, "FastCopy (mmap) 失败: ${source.name}, 尝试 NIO Fallback", e)
+            usedMmap = false
+
+            // Fallback to NIO transferTo
+            try {
+                FileInputStream(source).channel.use { sourceChannel ->
+                    FileOutputStream(target).channel.use { targetChannel ->
+                        val channelSize = sourceChannel.size()
+                        var transferred: Long = 0
+                        while (transferred < channelSize) {
+                            transferred += sourceChannel.transferTo(transferred, channelSize - transferred, targetChannel)
+                        }
+                    }
+                }
+                target.setLastModified(source.lastModified())
+
+                // 记录性能指标（NIO Fallback）
+                val durationMs = System.currentTimeMillis() - startTime
+                PerformanceMonitor.recordIOCopy(
+                    bytesCopied = size,
+                    durationMs = durationMs,
+                    usedMmap = false,
+                    wasIncrementalSkip = false,
+                )
+
+                true
+            } catch (fallbackE: Exception) {
+                Log.e(TAG, "NIO Fallback 亦失败: ${source.name}", fallbackE)
+                false
+            }
         }
     }
-    
+
     /**
      * 增量检测：判断文件是否需要更新
      */
-    fun needsUpdate(source: File, target: File): Boolean {
-        if (!target.exists()) return true
-        if (source.length() != target.length()) return true
-        
+    fun needsUpdate(
+        source: File,
+        target: File,
+    ): Boolean {
+        if (!target.exists()) {
+            MetricCollector.recordIO(
+                name = MetricNames.IO_INCREMENTAL_HIT_RATE,
+                value = 0.0,
+                unit = MetricUnits.PERCENT,
+                tags = mapOf("reason" to "target_not_exists"),
+            )
+            return true
+        }
+        if (source.length() != target.length()) {
+            MetricCollector.recordIO(
+                name = MetricNames.IO_INCREMENTAL_HIT_RATE,
+                value = 0.0,
+                unit = MetricUnits.PERCENT,
+                tags = mapOf("reason" to "size_mismatch"),
+            )
+            return true
+        }
+
         // 如果文件大小相同且修改时间完全一致，大概率是同一个文件
         if (source.lastModified() == target.lastModified()) return false
-        
-        // 进一步校验：如果是小文件（< 5MB），做快速 MD5 校验
+
+        // 小文件 (< 5MB) 执行全量 MD5 极速校验
         if (source.length() < 5 * 1024 * 1024) {
             return !FileHasher.areFilesEqual(source, target)
         }
-        
-        // 大文件且时间不一致，为了安全起见认为需要更新
-        return true
+
+        // 5MB 以上大文件利用 V4.0.0 最新实装的抽样哈希 (首/中/尾 比对)
+        // 消除全量读取大文件的几秒甚至几十秒耗时，把比对压缩到毫秒级
+        return !FileHasher.areFilesEqualWithSampling(source, target)
     }
-    
+
     /**
      * 并行处理文件列表
      * @param items 要处理的项
@@ -114,42 +273,45 @@ object IoOptimizer {
     suspend fun <T> parallelProcess(
         items: List<T>,
         action: suspend (T) -> Boolean,
-        progressCallback: ((Int, Int, String) -> Unit)? = null
-    ): ProcessResult = coroutineScope {
-        val total = items.size
-        val successCount = AtomicInteger(0)
-        val failedCount = AtomicInteger(0)
-        val semaphore = Semaphore(MAX_CONCURRENCY)
-        
-        val deferreds = items.map { item ->
-            async(Dispatchers.IO) {
-                semaphore.withPermit {
-                    val success = action(item)
-                    val currentSuccess = if (success) successCount.incrementAndGet() else successCount.get()
-                    val currentFailed = if (!success) failedCount.incrementAndGet() else failedCount.get()
-                    
-                    val itemName = when (item) {
-                        is File -> item.name
-                        is String -> item
-                        else -> item.toString()
+        progressCallback: ((Int, Int, String) -> Unit)? = null,
+    ): ProcessResult =
+        coroutineScope {
+            val total = items.size
+            val successCount = AtomicInteger(0)
+            val failedCount = AtomicInteger(0)
+            val semaphore = Semaphore(MAX_CONCURRENCY)
+
+            val deferreds =
+                items.map { item ->
+                    async(Dispatchers.IO) {
+                        semaphore.withPermit {
+                            val success = action(item)
+                            val currentSuccess = if (success) successCount.incrementAndGet() else successCount.get()
+                            val currentFailed = if (!success) failedCount.incrementAndGet() else failedCount.get()
+
+                            val itemName =
+                                when (item) {
+                                    is File -> item.name
+                                    is String -> item
+                                    else -> item.toString()
+                                }
+
+                            progressCallback?.invoke(currentSuccess + currentFailed, total, itemName)
+                            success
+                        }
                     }
-                    
-                    progressCallback?.invoke(currentSuccess + currentFailed, total, itemName)
-                    success
                 }
-            }
+
+            deferreds.awaitAll()
+
+            ProcessResult(
+                success = failedCount.get() == 0,
+                successCount = successCount.get(),
+                failedCount = failedCount.get(),
+                total = total,
+            )
         }
-        
-        deferreds.awaitAll()
-        
-        ProcessResult(
-            success = failedCount.get() == 0,
-            successCount = successCount.get(),
-            failedCount = failedCount.get(),
-            total = total
-        )
-    }
-    
+
     /**
      * 处理结果数据类
      */
@@ -157,6 +319,6 @@ object IoOptimizer {
         val success: Boolean,
         val successCount: Int,
         val failedCount: Int,
-        val total: Int
+        val total: Int,
     )
 }

@@ -16,16 +16,22 @@ import com.example.tfgwj.manager.PatchManager
  */
 class PatchVersionAdapter(
     private val onItemClick: (PatchManager.PatchVersion) -> Unit,
-    private val onDeleteClick: (PatchManager.PatchVersion) -> Unit
+    private val onDeleteClick: (PatchManager.PatchVersion) -> Unit,
 ) : ListAdapter<PatchManager.PatchVersion, PatchVersionAdapter.ViewHolder>(DiffCallback()) {
-
-    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
-        val view = LayoutInflater.from(parent.context)
-            .inflate(R.layout.item_patch_version, parent, false)
+    override fun onCreateViewHolder(
+        parent: ViewGroup,
+        viewType: Int,
+    ): ViewHolder {
+        val view =
+            LayoutInflater.from(parent.context)
+                .inflate(R.layout.item_patch_version, parent, false)
         return ViewHolder(view)
     }
 
-    override fun onBindViewHolder(holder: ViewHolder, position: Int) {
+    override fun onBindViewHolder(
+        holder: ViewHolder,
+        position: Int,
+    ) {
         holder.bind(getItem(position))
     }
 
@@ -39,7 +45,7 @@ class PatchVersionAdapter(
             tvName.text = item.name
             tvSize.text = item.sizeText
             tvFileCount.text = "${item.fileCount} 个文件"
-            
+
             itemView.setOnClickListener { onItemClick(item) }
             btnDelete.setOnClickListener { onDeleteClick(item) }
         }
@@ -48,12 +54,12 @@ class PatchVersionAdapter(
     class DiffCallback : DiffUtil.ItemCallback<PatchManager.PatchVersion>() {
         override fun areItemsTheSame(
             oldItem: PatchManager.PatchVersion,
-            newItem: PatchManager.PatchVersion
+            newItem: PatchManager.PatchVersion,
         ): Boolean = oldItem.path == newItem.path
 
         override fun areContentsTheSame(
             oldItem: PatchManager.PatchVersion,
-            newItem: PatchManager.PatchVersion
+            newItem: PatchManager.PatchVersion,
         ): Boolean = oldItem == newItem
     }
 }

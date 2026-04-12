@@ -11,7 +11,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 class AppManager(private val context: Context) {
-
     companion object {
         private const val TAG = "AppManager"
 
@@ -27,13 +26,13 @@ class AppManager(private val context: Context) {
 
     private val shizukuManager = ShizukuManager.getInstance(context)
     private val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
-    
+
     private val _isAppRunning = MutableStateFlow(false)
     val isAppRunning: StateFlow<Boolean> = _isAppRunning.asStateFlow()
-    
+
     private val _currentPackageName = MutableStateFlow("")
     val currentPackageName: StateFlow<String> = _currentPackageName.asStateFlow()
-    
+
     /**
      * 检查应用是否安装
      * @param packageName 应用包名
@@ -48,7 +47,7 @@ class AppManager(private val context: Context) {
             false
         }
     }
-    
+
     /**
      * 检查应用是否运行
      * @param packageName 应用包名
@@ -56,7 +55,7 @@ class AppManager(private val context: Context) {
      */
     fun checkAppRunning(packageName: String): Boolean {
         _currentPackageName.value = packageName
-        
+
         // 优先使用Shizuku检查（更准确）
         if (shizukuManager.isAuthorized.value) {
             val isRunning = shizukuManager.isAppRunning(packageName)
@@ -64,14 +63,14 @@ class AppManager(private val context: Context) {
             Log.d(TAG, "App running (Shizuku): $packageName = $isRunning")
             return isRunning
         }
-        
+
         // 使用原生方式检查
         val isRunning = checkAppRunningNative(packageName)
         _isAppRunning.value = isRunning
         Log.d(TAG, "App running (Native): $packageName = $isRunning")
         return isRunning
     }
-    
+
     /**
      * 使用原生方式检查应用是否运行
      * @param packageName 应用包名
@@ -79,12 +78,13 @@ class AppManager(private val context: Context) {
      */
     private fun checkAppRunningNative(packageName: String): Boolean {
         return try {
-            val runningProcesses = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                activityManager.runningAppProcesses
-            } else {
-                return false
-            }
-            
+            val runningProcesses =
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                    activityManager.runningAppProcesses
+                } else {
+                    return false
+                }
+
             runningProcesses?.any { processInfo ->
                 processInfo.processName == packageName || processInfo.pkgList.contains(packageName)
             } ?: false
@@ -93,7 +93,7 @@ class AppManager(private val context: Context) {
             false
         }
     }
-    
+
     /**
      * 停止应用
      * @param packageName 应用包名
@@ -101,12 +101,12 @@ class AppManager(private val context: Context) {
      */
     fun stopApp(packageName: String): Boolean {
         _currentPackageName.value = packageName
-        
+
         if (!isAppInstalled(packageName)) {
             Log.w(TAG, "App not installed: $packageName")
             return false
         }
-        
+
         // 优先使用Shizuku停止（更强力）
         if (shizukuManager.isAuthorized.value) {
             val success = shizukuManager.stopApp(packageName)
@@ -117,7 +117,7 @@ class AppManager(private val context: Context) {
             }
             Log.w(TAG, "Failed to stop app with Shizuku, trying native method")
         }
-        
+
         // 使用原生方式停止
         val success = stopAppNative(packageName)
         if (success) {
@@ -126,7 +126,7 @@ class AppManager(private val context: Context) {
         }
         return success
     }
-    
+
     /**
      * 使用原生方式停止应用
      * @param packageName 应用包名
@@ -145,7 +145,7 @@ class AppManager(private val context: Context) {
             false
         }
     }
-    
+
     /**
      * 强制停止应用（Shizuku专用）
      * @param packageName 应用包名
@@ -153,12 +153,12 @@ class AppManager(private val context: Context) {
      */
     fun forceStopApp(packageName: String): Boolean {
         _currentPackageName.value = packageName
-        
+
         if (!shizukuManager.isAuthorized.value) {
             Log.w(TAG, "Shizuku not authorized, cannot force stop")
             return false
         }
-        
+
         return try {
             // 使用am force-stop命令强制停止
             val success = shizukuManager.stopApp(packageName)
@@ -172,7 +172,7 @@ class AppManager(private val context: Context) {
             false
         }
     }
-    
+
     /**
      * 获取应用信息
      * @param packageName 应用包名
@@ -186,20 +186,21 @@ class AppManager(private val context: Context) {
                 packageName = packageName,
                 appName = appInfo.loadLabel(context.packageManager).toString(),
                 versionName = packageInfo.versionName ?: "",
-                versionCode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                    packageInfo.longVersionCode
-                } else {
-                    @Suppress("DEPRECATION")
-                    packageInfo.versionCode.toLong()
-                },
-                icon = appInfo.loadIcon(context.packageManager)
+                versionCode =
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                        packageInfo.longVersionCode
+                    } else {
+                        @Suppress("DEPRECATION")
+                        packageInfo.versionCode.toLong()
+                    },
+                icon = appInfo.loadIcon(context.packageManager),
             )
         } catch (e: Exception) {
             Log.e(TAG, "Failed to get app info: $packageName", e)
             null
         }
     }
-    
+
     /**
      * 获取所有已安装的应用
      * @return 应用列表
@@ -214,13 +215,14 @@ class AppManager(private val context: Context) {
                         packageName = appInfo.packageName,
                         appName = appInfo.loadLabel(context.packageManager).toString(),
                         versionName = packageInfo.versionName ?: "",
-                        versionCode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                            packageInfo.longVersionCode
-                        } else {
-                            @Suppress("DEPRECATION")
-                            packageInfo.versionCode.toLong()
-                        },
-                        icon = appInfo.loadIcon(context.packageManager)
+                        versionCode =
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                                packageInfo.longVersionCode
+                            } else {
+                                @Suppress("DEPRECATION")
+                                packageInfo.versionCode.toLong()
+                            },
+                        icon = appInfo.loadIcon(context.packageManager),
                     )
                 } catch (e: Exception) {
                     null
@@ -231,7 +233,7 @@ class AppManager(private val context: Context) {
             emptyList()
         }
     }
-    
+
     /**
      * 搜索游戏应用
      * @param keywords 搜索关键词
@@ -241,7 +243,7 @@ class AppManager(private val context: Context) {
         return getInstalledApps().filter { appInfo ->
             keywords.any { keyword ->
                 appInfo.appName.contains(keyword, ignoreCase = true) ||
-                appInfo.packageName.contains(keyword, ignoreCase = true)
+                    appInfo.packageName.contains(keyword, ignoreCase = true)
             }
         }
     }
@@ -252,5 +254,5 @@ data class AppInfo(
     val appName: String,
     val versionName: String,
     val versionCode: Long,
-    val icon: android.graphics.drawable.Drawable
+    val icon: android.graphics.drawable.Drawable,
 )

@@ -9,8 +9,10 @@ import rikka.shizuku.Shizuku
  * Shizuku 权限请求 Contract
  */
 class ShizukuRequestContract : ActivityResultContract<Unit, Boolean>() {
-
-    override fun createIntent(context: Context, input: Unit): Intent {
+    override fun createIntent(
+        context: Context,
+        input: Unit,
+    ): Intent {
         return try {
             Shizuku.requestPermission(0)
             Intent() // 返回空 Intent，Shizuku 通过回调处理结果
@@ -19,7 +21,10 @@ class ShizukuRequestContract : ActivityResultContract<Unit, Boolean>() {
         }
     }
 
-    override fun parseResult(resultCode: Int, intent: Intent?): Boolean {
+    override fun parseResult(
+        resultCode: Int,
+        intent: Intent?,
+    ): Boolean {
         return resultCode == android.app.Activity.RESULT_OK
     }
 }

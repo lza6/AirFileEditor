@@ -12,23 +12,22 @@ import kotlin.system.exitProcess
  * 此服务在 Shizuku 特权进程中运行，具有 root 或 adb 权限
  */
 class FileOperationService : IFileOperationService.Stub() {
-    
     companion object {
         private const val TAG = "FileOperationService"
     }
-    
+
     // 复制状态数据类
     private data class CopyState(
         var current: Int = 0,
         var errorCount: Int = 0,
         var lastReportedCount: Int = 0,
-        var lastReportTime: Long = 0L
+        var lastReportTime: Long = 0L,
     )
-    
+
     init {
         Log.d(TAG, "FileOperationService 已创建，运行在 UID: ${android.os.Process.myUid()}")
     }
-    
+
     /**
      * 销毁服务
      */
@@ -36,14 +35,14 @@ class FileOperationService : IFileOperationService.Stub() {
         Log.d(TAG, "FileOperationService 正在销毁...")
         exitProcess(0)
     }
-    
+
     /**
      * 检查服务是否存活
      */
     override fun isAlive(): Boolean {
         return true
     }
-    
+
     /**
      * 创建目录
      */
@@ -60,7 +59,7 @@ class FileOperationService : IFileOperationService.Stub() {
             false
         }
     }
-    
+
     /**
      * 删除文件或目录
      */
@@ -77,7 +76,7 @@ class FileOperationService : IFileOperationService.Stub() {
             false
         }
     }
-    
+
     private fun deleteRecursively(file: File): Boolean {
         if (file.isDirectory) {
             file.listFiles()?.forEach { child ->
@@ -86,12 +85,15 @@ class FileOperationService : IFileOperationService.Stub() {
         }
         return file.delete()
     }
-    
+
     /**
      * 复制文件 (使用 cp -p 保留属性)
      * 自动创建目标文件夹（如果不存在）
      */
-    override fun copyFile(sourcePath: String, targetPath: String): Boolean {
+    override fun copyFile(
+        sourcePath: String,
+        targetPath: String,
+    ): Boolean {
         // 先确保目标目录存在
         val targetFile = File(targetPath)
         val parentDir = targetFile.parent
@@ -102,16 +104,16 @@ class FileOperationService : IFileOperationService.Stub() {
                 Log.e(TAG, "创建目标目录失败: $parentDir, exitCode=$mkdirResult")
             }
         }
-        
+
         // 使用 shell cp 命令，保留时间戳 (-p) 和权限，捕获错误输出
         val cmd = "cp -p \"$sourcePath\" \"$targetPath\" 2>&1"
         Log.d(TAG, "执行复制: $cmd")
-        
+
         try {
             val process = Runtime.getRuntime().exec(arrayOf("sh", "-c", cmd))
             val errorOutput = process.inputStream.bufferedReader().readText()
             val exitCode = process.waitFor()
-            
+
             if (exitCode != 0 || errorOutput.isNotEmpty()) {
                 Log.e(TAG, "复制失败: $sourcePath -> $targetPath, exitCode=$exitCode, error=$errorOutput")
             }
@@ -121,23 +123,26 @@ class FileOperationService : IFileOperationService.Stub() {
             return false
         }
     }
-    
+
     /**
      * 复制目录 (递归, 使用 cp -r -p)
      */
-    override fun copyDirectory(sourcePath: String, targetPath: String): Boolean {
+    override fun copyDirectory(
+        sourcePath: String,
+        targetPath: String,
+    ): Boolean {
         // 确保目标父目录存在 (mkdir -p)
         val targetFile = File(targetPath)
         val parentDir = targetFile.parent
         if (parentDir != null) {
             executeCommand("mkdir -p \"$parentDir\"")
         }
-        
+
         val cmd = "cp -r -p \"$sourcePath\" \"$targetPath\""
         Log.d(TAG, "执行目录复制: $cmd")
         return executeCommand(cmd) == 0
     }
-    
+
     /**
      * 检查文件是否存在
      */
@@ -149,7 +154,7 @@ class FileOperationService : IFileOperationService.Stub() {
             false
         }
     }
-    
+
     /**
      * 执行 shell 命令
      */
@@ -162,7 +167,7 @@ class FileOperationService : IFileOperationService.Stub() {
             -1
         }
     }
-    
+
     /**
      * 执行命令并返回输出
      */
@@ -177,14 +182,14 @@ class FileOperationService : IFileOperationService.Stub() {
             ""
         }
     }
-    
+
     /**
      * 停止应用
      */
     override fun stopApp(packageName: String): Boolean {
         return executeCommand("am force-stop $packageName") == 0
     }
-    
+
     /**
      * 检查应用是否运行
      */
@@ -196,7 +201,11 @@ class FileOperationService : IFileOperationService.Stub() {
     /**
      * 复制目录并带进度回调 (高性能优化版)
      */
-    override fun copyDirectoryWithProgress(sourcePath: String, targetPath: String, callback: com.example.tfgwj.ICopyCallback?) {
+    override fun copyDirectoryWithProgress(
+        sourcePath: String,
+        targetPath: String,
+        callback: com.example.tfgwj.ICopyCallback?,
+    ) {
         Thread {
             try {
                 // 1. 获取文件总数 (使用 find 命令，速度快)
@@ -204,34 +213,34 @@ class FileOperationService : IFileOperationService.Stub() {
                 val countProcess = Runtime.getRuntime().exec(arrayOf("sh", "-c", countCmd))
                 val totalFiles = countProcess.inputStream.bufferedReader().readText().trim().toIntOrNull() ?: 0
                 countProcess.waitFor()
-                
+
                 Log.d(TAG, "待复制文件总数: $totalFiles")
-                
+
                 if (totalFiles == 0) {
                     callback?.onCompleted(0)
                     return@Thread
                 }
-                
+
                 // 2. 确保目标父目录存在
                 val targetFile = File(targetPath)
                 val parentDir = targetFile.parent
                 if (parentDir != null) {
                     executeCommand("mkdir -p \"$parentDir\"")
                 }
-                
+
                 // 3. 执行复制 (cp -v -r -p)
                 val cpCmd = "cp -v -r -p \"$sourcePath/.\" \"$targetPath/\""
                 Log.d(TAG, "执行批量复制: $cpCmd")
-                
+
                 val process = Runtime.getRuntime().exec(arrayOf("sh", "-c", cpCmd))
-                
+
                 // 同时读取 stdout 和 stderr
                 val stdoutReader = BufferedReader(InputStreamReader(process.inputStream))
                 val stderrReader = BufferedReader(InputStreamReader(process.errorStream))
-                
+
                 val state = CopyState()
                 var line: String?
-                
+
                 // 先读取 stdout
                 var stdoutLineCount = 0
                 while (stdoutReader.readLine().also { line = it } != null) {
@@ -242,7 +251,7 @@ class FileOperationService : IFileOperationService.Stub() {
                     processLine(line!!, state, totalFiles, callback)
                 }
                 Log.d(TAG, "stdout 总共读取 $stdoutLineCount 行")
-                
+
                 // 再读取 stderr（可能包含错误信息和详细输出）
                 var stderrLineCount = 0
                 while (stderrReader.readLine().also { line = it } != null) {
@@ -252,17 +261,23 @@ class FileOperationService : IFileOperationService.Stub() {
                     processLine(text, state, totalFiles, callback)
                 }
                 Log.d(TAG, "stderr 总共读取 $stderrLineCount 行")
-                
+
                 val exitCode = process.waitFor()
-                
+
                 // 执行 sync 确保数据写入磁盘
                 Runtime.getRuntime().exec("sync").waitFor()
-                
+
                 // 计算错误率
                 val errorRate = if (totalFiles > 0) state.errorCount.toFloat() / totalFiles else 0f
-                
-                Log.d(TAG, "复制统计: 成功=${state.current}, 错误=${state.errorCount}, 总数=${totalFiles}, 退出码=$exitCode, 错误率=${String.format("%.2f", errorRate * 100)}%")
-                
+
+                Log.d(
+                    TAG,
+                    "复制统计: 成功=${state.current}, 错误=${state.errorCount}, 总数=$totalFiles, 退出码=$exitCode, 错误率=${String.format(
+                        "%.2f",
+                        errorRate * 100,
+                    )}%",
+                )
+
                 // 只有在退出码为 0（成功）时才视为完成
                 if (exitCode == 0) {
                     // 如果 state.current 为 0 但命令成功，可能是 cp -v 输出格式不匹配
@@ -274,7 +289,7 @@ class FileOperationService : IFileOperationService.Stub() {
                         val actualCount = recountProc.inputStream.bufferedReader().readText().trim().toIntOrNull() ?: 0
                         recountProc.waitFor()
                         Log.d(TAG, "重新统计目标目录文件数: $actualCount")
-                        
+
                         // 如果目标目录有文件，则使用实际计数
                         if (actualCount > 0) {
                             state.current = actualCount
@@ -290,7 +305,7 @@ class FileOperationService : IFileOperationService.Stub() {
                             Log.d(TAG, "目标目录内容:\n$lsOutput")
                         }
                     }
-                    
+
                     if (state.current > 0) {
                         if (state.errorCount > 0) {
                             Log.w(TAG, "复制完成但有 ${state.errorCount} 个文件失败 (错误率: ${String.format("%.2f", errorRate * 100)}%)")
@@ -305,63 +320,82 @@ class FileOperationService : IFileOperationService.Stub() {
                     Log.e(TAG, "复制命令失败，退出码: $exitCode")
                     callback?.onError("复制失败，退出码: $exitCode")
                 }
-                
             } catch (e: Exception) {
                 Log.e(TAG, "批量复制失败", e)
                 try {
                     callback?.onError(e.message)
-                } catch (ignore: Exception) {}
+                } catch (ignore: Exception) {
+                }
             }
         }.start()
     }
 
     /**
      * 清理目录（删除指定目录下的所有内容，可指定白名单）
-     * 
+     *
      * 优化策略：
      * 1. 先用 find 统计待删除的实际文件/文件夹总数
      * 2. 逐个删除顶层目录（每个 rm -rf 在后台等待完成）
      * 3. 实时报告当前正在删除的目录
      */
+
     /**
      * 处理 cp 命令输出行
      */
-    private fun processLine(text: String, state: CopyState, totalFiles: Int, callback: com.example.tfgwj.ICopyCallback?) {
+    private fun processLine(
+        text: String,
+        state: CopyState,
+        totalFiles: Int,
+        callback: com.example.tfgwj.ICopyCallback?,
+    ) {
         // cp -v 输出格式可能是: 'source' -> 'target' 或 "removed 'source'" 或其他格式
         // 我们尝试从输出中提取文件名
-        val fileName = when {
-            // 格式: '/path/to/source.txt' -> '/path/to/target.txt'
-            text.contains(" -> ") -> {
-                text.substringBefore(" ->").trim('\'').substringAfterLast("/")
-            }
-            // 格式: "'/path/to/file.xxx'" - 匹配常见文件扩展名
-            text.contains("'") && (text.contains(".") || text.contains("/")) -> {
-                val trimmed = text.trim('\'')
-                // 检查是否包含路径分隔符
-                if (trimmed.contains("/")) {
-                    trimmed.substringAfterLast("/")
-                } else {
-                    trimmed
+        val fileName =
+            when {
+                // 格式: '/path/to/source.txt' -> '/path/to/target.txt'
+                text.contains(" -> ") -> {
+                    text.substringBefore(" ->").trim('\'').substringAfterLast("/")
                 }
-            }
-            // 格式: "/path/to/file" -> "/path/to/target"
-            text.startsWith("/") && text.contains("/") -> {
-                text.substringAfterLast("/")
-            }
-            // 其他格式：任何包含点号或斜杠的文本
-            text.contains(".") || text.contains("/") -> {
-                val cleaned = text.trim()
-                if (cleaned.contains("/")) {
-                    cleaned.substringAfterLast("/")
-                } else {
-                    cleaned
+                // 格式: "'/path/to/file.xxx'" - 匹配常见文件扩展名
+                text.contains("'") && (text.contains(".") || text.contains("/")) -> {
+                    val trimmed = text.trim('\'')
+                    // 检查是否包含路径分隔符
+                    if (trimmed.contains("/")) {
+                        trimmed.substringAfterLast("/")
+                    } else {
+                        trimmed
+                    }
                 }
+                // 格式: "/path/to/file" -> "/path/to/target"
+                text.startsWith("/") && text.contains("/") -> {
+                    text.substringAfterLast("/")
+                }
+                // 其他格式：任何包含点号或斜杠的文本
+                text.contains(".") || text.contains("/") -> {
+                    val cleaned = text.trim()
+                    if (cleaned.contains("/")) {
+                        cleaned.substringAfterLast("/")
+                    } else {
+                        cleaned
+                    }
+                }
+                else -> null
             }
-            else -> null
-        }
-        
+
         // 检查是否是错误信息
-        if (text.contains("cp:") || text.contains("error") || text.contains("denied") || text.contains("failed") || text.contains("No such file") || text.contains("cannot stat") || text.contains("cannot overwrite")) {
+        if (text.contains(
+                "cp:",
+            ) ||
+            text.contains(
+                "error",
+            ) ||
+            text.contains(
+                "denied",
+            ) ||
+            text.contains(
+                "failed",
+            ) || text.contains("No such file") || text.contains("cannot stat") || text.contains("cannot overwrite")
+        ) {
             // 捕获错误输出，记录详细信息
             Log.e(TAG, "Copy Error: $text")
             // 提取失败的文件名并回报
@@ -390,7 +424,7 @@ class FileOperationService : IFileOperationService.Stub() {
             }
         }
     }
-    
+
     /**
      * 从错误信息中提取文件名
      */
@@ -406,72 +440,80 @@ class FileOperationService : IFileOperationService.Stub() {
             pathParts.lastOrNull { it.isNotEmpty() }
         }
     }
-    
-    override fun cleanDirectoryWithProgress(basePath: String, whiteList: Array<out String>?, callback: com.example.tfgwj.IDeleteCallback?) {
+
+    override fun cleanDirectoryWithProgress(
+        basePath: String,
+        whiteList: Array<out String>?,
+        callback: com.example.tfgwj.IDeleteCallback?,
+    ) {
         Thread {
             try {
                 Log.d(TAG, "开始清理目录: $basePath, 白名单: ${whiteList?.toList()}")
                 callback?.onProgress(0, 0, "🔍 正在扫描目录...")
-                
+
                 // 1. 列出目录下的顶层项
                 val lsCmd = "ls -1 \"$basePath\" 2>/dev/null"
                 val lsProcess = Runtime.getRuntime().exec(arrayOf("sh", "-c", lsCmd))
-                val items = lsProcess.inputStream.bufferedReader().readText()
-                    .split("\n")
-                    .map { it.trim() }
-                    .filter { it.isNotEmpty() }
+                val items =
+                    lsProcess.inputStream.bufferedReader().readText()
+                        .split("\n")
+                        .map { it.trim() }
+                        .filter { it.isNotEmpty() }
                 lsProcess.waitFor()
-                
+
                 if (items.isEmpty()) {
                     Log.d(TAG, "目录为空，无需清理")
                     callback?.onCompleted(0)
                     return@Thread
                 }
-                
+
                 Log.d(TAG, "扫描到 ${items.size} 个项目")
                 callback?.onProgress(0, items.size, "🔍 扫描到 ${items.size} 个项目，准备删除...")
-                
+
                 // 2. 过滤白名单
                 val whiteSet = whiteList?.map { it.lowercase() }?.toSet() ?: emptySet()
                 val toDelete = items.filter { !whiteSet.contains(it.lowercase()) }
-                
+
                 if (toDelete.isEmpty()) {
                     Log.d(TAG, "过滤后无需删除")
                     callback?.onCompleted(0)
                     return@Thread
                 }
-                
+
                 Log.d(TAG, "待删除顶层项: ${toDelete.size} 个")
                 callback?.onProgress(0, toDelete.size, "🚀 开始并发删除 ${toDelete.size} 个项目...")
-                
+
                 // 3. 高并发删除顶层目录（提高并发数到 8）
-                val maxConcurrency = 8  // 提高并发数到 8，加快删除速度
+                val maxConcurrency = 8 // 提高并发数到 8，加快删除速度
                 val deletedCount = java.util.concurrent.atomic.AtomicInteger(0)
                 val errorCount = java.util.concurrent.atomic.AtomicInteger(0)
-                
+
                 // 使用线程池并发删除
-                val executor = java.util.concurrent.ThreadPoolExecutor(
-                    maxConcurrency, maxConcurrency,
-                    0L, java.util.concurrent.TimeUnit.MILLISECONDS,
-                    java.util.concurrent.LinkedBlockingQueue()
-                )
-                
+                val executor =
+                    java.util.concurrent.ThreadPoolExecutor(
+                        maxConcurrency,
+                        maxConcurrency,
+                        0L,
+                        java.util.concurrent.TimeUnit.MILLISECONDS,
+                        java.util.concurrent.LinkedBlockingQueue(),
+                    )
+
                 // 用于同步的计数器
                 val latch = java.util.concurrent.CountDownLatch(toDelete.size)
-                
+
                 toDelete.forEach { item ->
                     executor.submit {
                         try {
                             val itemPath = "$basePath/$item"
-                            
+
                             // 立即报告正在删除
                             callback?.onProgress(deletedCount.get(), toDelete.size, "🗑️ $item")
-                            
+
                             // 执行删除
                             val deleteCmd = "rm -rf \"$itemPath\" 2>&1"
                             val proc = Runtime.getRuntime().exec(arrayOf("sh", "-c", deleteCmd))
                             val exitCode = proc.waitFor()
-                            
+
                             if (exitCode == 0) {
                                 deletedCount.incrementAndGet()
                                 Log.d(TAG, "删除成功: $item")
@@ -481,7 +523,6 @@ class FileOperationService : IFileOperationService.Stub() {
                                 Log.e(TAG, "删除失败: $item")
                                 callback?.onProgress(deletedCount.get(), toDelete.size, "❌ 失败: $item")
                             }
-                            
                         } catch (e: Exception) {
                             Log.e(TAG, "删除异常: $item", e)
                             errorCount.incrementAndGet()
@@ -490,13 +531,13 @@ class FileOperationService : IFileOperationService.Stub() {
                         }
                     }
                 }
-                
+
                 // 等待所有删除任务完成
                 latch.await()
                 executor.shutdown()
-                
+
                 Log.d(TAG, "并发清理完成: 成功删除 ${deletedCount.get()} 项, 失败 ${errorCount.get()} 个目录")
-                
+
                 if (deletedCount.get() > 0) {
                     callback?.onCompleted(deletedCount.get())
                 } else if (errorCount.get() > 0) {
@@ -504,12 +545,12 @@ class FileOperationService : IFileOperationService.Stub() {
                 } else {
                     callback?.onCompleted(0)
                 }
-                
             } catch (e: Exception) {
                 Log.e(TAG, "清理目录失败", e)
                 try {
                     callback?.onError(e.message)
-                } catch (ignore: Exception) {}
+                } catch (ignore: Exception) {
+                }
             }
         }.start()
     }

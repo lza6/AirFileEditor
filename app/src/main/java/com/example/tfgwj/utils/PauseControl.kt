@@ -1,25 +1,24 @@
 package com.example.tfgwj.utils
 
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.delay
 
 /**
  * 全局暂停/恢复控制器
  * 用于协调所有耗时任务（解压、复制、清理）的暂停状态
  */
 object PauseControl {
-    
     // 是否处于暂停状态
     private val _isPaused = MutableStateFlow(false)
     val isPaused: StateFlow<Boolean> = _isPaused.asStateFlow()
-    
+
     // 互斥锁，用于保护状态变更
     private val mutex = Mutex()
-    
+
     /**
      * 暂停任务
      */
@@ -31,7 +30,7 @@ object PauseControl {
             }
         }
     }
-    
+
     /**
      * 恢复任务
      */
@@ -43,7 +42,7 @@ object PauseControl {
             }
         }
     }
-    
+
     /**
      * 切换暂停/恢复状态
      */
@@ -54,7 +53,7 @@ object PauseControl {
             pause()
         }
     }
-    
+
     /**
      * 检查并等待（如果在暂停状态）
      * 在耗时循环中调用此方法
@@ -68,7 +67,7 @@ object PauseControl {
             AppLogger.d("PauseControl", "Wait 结束，继续执行")
         }
     }
-    
+
     /**
      * 重置状态（任务结束时调用）
      */

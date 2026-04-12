@@ -5,12 +5,11 @@ package com.example.tfgwj.model
  * 用于向用户提供明确的错误信息和解决方案
  */
 sealed class ReplaceError {
-    
     abstract val title: String
     abstract val message: String
     abstract val solution: String
     abstract val canRetry: Boolean
-    
+
     /**
      * 权限被拒绝
      */
@@ -20,7 +19,7 @@ sealed class ReplaceError {
         override val solution = "请授予 Shizuku 权限后重试"
         override val canRetry = true
     }
-    
+
     /**
      * 存储空间不足
      */
@@ -29,7 +28,7 @@ sealed class ReplaceError {
         override val message = "需要 ${formatSize(required)} 但只有 ${formatSize(available)} 可用"
         override val solution = "请清理存储空间后重试"
         override val canRetry = true
-        
+
         private fun formatSize(bytes: Long): String {
             return when {
                 bytes >= 1024L * 1024L * 1024L -> String.format("%.2f GB", bytes / 1024.0 / 1024.0 / 1024.0)
@@ -38,7 +37,7 @@ sealed class ReplaceError {
             }
         }
     }
-    
+
     /**
      * 文件访问失败
      */
@@ -48,7 +47,7 @@ sealed class ReplaceError {
         override val solution = "原因: $cause\n请检查文件是否存在或被占用"
         override val canRetry = true
     }
-    
+
     /**
      * Shizuku 未连接
      */
@@ -58,7 +57,7 @@ sealed class ReplaceError {
         override val solution = "请启动 Shizuku 应用并授权后重试"
         override val canRetry = true
     }
-    
+
     /**
      * 源目录不存在
      */
@@ -68,7 +67,7 @@ sealed class ReplaceError {
         override val solution = "请重新选择主包目录"
         override val canRetry = false
     }
-    
+
     /**
      * Android 目录缺失
      */
@@ -78,7 +77,7 @@ sealed class ReplaceError {
         override val solution = "主包必须包含 Android/data/com.tencent.tmgp.pubgmhd/ 目录"
         override val canRetry = false
     }
-    
+
     /**
      * 任务已取消
      */
@@ -88,7 +87,7 @@ sealed class ReplaceError {
         override val solution = "可以点击重试继续替换未完成的文件"
         override val canRetry = true
     }
-    
+
     /**
      * 未知错误
      */
@@ -108,10 +107,10 @@ data class ResumeState(
     val targetPath: String,
     val totalFiles: Int,
     val completedFiles: List<String>,
-    val failedFiles: Map<String, String>   // path -> error message
+    val failedFiles: Map<String, String>, // path -> error message
 ) {
     val remainingCount: Int get() = totalFiles - completedFiles.size
     val failedCount: Int get() = failedFiles.size
-    
+
     fun isCompleted() = completedFiles.size >= totalFiles
 }

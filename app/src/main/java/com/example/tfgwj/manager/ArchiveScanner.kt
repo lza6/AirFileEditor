@@ -13,129 +13,132 @@ import java.io.File
  * 扫描 /storage/emulated/0/ 下的压缩包（排除 Android 目录）
  */
 class ArchiveScanner private constructor() {
-    
     companion object {
         private const val TAG = "ArchiveScanner"
         private const val STORAGE_ROOT = "/storage/emulated/0"
         private const val CACHE_FILE_NAME = ".archive_scan_cache"
-        
+
         // 支持的压缩包格式
         private val ARCHIVE_EXTENSIONS = setOf("zip", "7z", "rar")
-        
+
         // 排除的目录
         private val EXCLUDED_DIRS = setOf("Android", ".android_secure")
-        
+
         @Volatile
         private var instance: ArchiveScanner? = null
-        
+
         fun getInstance(): ArchiveScanner {
             return instance ?: synchronized(this) {
                 instance ?: ArchiveScanner().also { instance = it }
             }
         }
     }
-    
+
     /**
      * 压缩包信息
      */
     data class ArchiveInfo(
-        val name: String,           // 文件名
-        val path: String,           // 完整路径
-        val sizeBytes: Long,        // 大小（字节）
-        val sizeText: String,       // 大小显示文本
-        val extension: String,      // 扩展名
-        val lastModified: Long      // 最后修改时间
+        val name: String, // 文件名
+        val path: String, // 完整路径
+        val sizeBytes: Long, // 大小（字节）
+        val sizeText: String, // 大小显示文本
+        val extension: String, // 扩展名
+        val lastModified: Long, // 最后修改时间
     )
-    
+
     // 扫描结果
     private val _archives = MutableStateFlow<List<ArchiveInfo>>(emptyList())
     val archives: StateFlow<List<ArchiveInfo>> = _archives.asStateFlow()
-    
+
     // 扫描状态
     private val _isScanning = MutableStateFlow(false)
     val isScanning: StateFlow<Boolean> = _isScanning.asStateFlow()
-    
+
     // 扫描进度 (0-1)
     private val _scanProgress = MutableStateFlow(0f)
     val scanProgress: StateFlow<Float> = _scanProgress.asStateFlow()
-    
+
     // 扫描状态文字
     private val _scanStatus = MutableStateFlow("")
     val scanStatus: StateFlow<String> = _scanStatus.asStateFlow()
-    
+
     // 缓存的路径集合
     private var cachedPaths = mutableSetOf<String>()
-    
+
     /**
      * 扫描压缩包
      * @param useCache 是否使用缓存加速
      */
-    suspend fun scanArchives(useCache: Boolean = true): List<ArchiveInfo> = withContext(Dispatchers.IO) {
-        if (_isScanning.value) {
-            return@withContext _archives.value
+    suspend fun scanArchives(useCache: Boolean = true): List<ArchiveInfo> =
+        withContext(Dispatchers.IO) {
+            if (_isScanning.value) {
+                return@withContext _archives.value
+            }
+
+            _isScanning.value = true
+            _scanProgress.value = 0f
+            _scanStatus.value = "正在扫描..."
+
+            val results = mutableListOf<ArchiveInfo>()
+
+            try {
+                // 加载缓存
+                if (useCache) {
+                    loadCache()
+                }
+
+                val rootDir = File(STORAGE_ROOT)
+                val topLevelDirs =
+                    rootDir.listFiles { file ->
+                        file.isDirectory && file.name !in EXCLUDED_DIRS
+                    } ?: emptyArray()
+
+                val totalDirs = topLevelDirs.size
+
+                topLevelDirs.forEachIndexed { index, dir ->
+                    _scanStatus.value = "正在扫描: ${dir.name} (${results.size} 个)"
+
+                    // 扫描该目录
+                    scanDirectory(dir, results)
+
+                    _scanProgress.value = (index + 1).toFloat() / totalDirs
+                }
+
+                // 也扫描根目录下的压缩包
+                rootDir.listFiles { file ->
+                    file.isFile && file.extension.lowercase() in ARCHIVE_EXTENSIONS
+                }?.forEach { file ->
+                    results.add(createArchiveInfo(file))
+                }
+
+                // 按最后修改时间排序（最新的在前）
+                results.sortByDescending { it.lastModified }
+
+                _archives.value = results
+
+                // 保存缓存
+                saveCache(results.map { it.path }.toSet())
+
+                Log.d(TAG, "扫描完成，找到 ${results.size} 个压缩包")
+                _scanStatus.value = "找到 ${results.size} 个压缩包"
+            } catch (e: Exception) {
+                Log.e(TAG, "扫描压缩包失败", e)
+                _scanStatus.value = "扫描失败: ${e.message}"
+            } finally {
+                _isScanning.value = false
+                _scanProgress.value = 1f
+            }
+
+            results
         }
-        
-        _isScanning.value = true
-        _scanProgress.value = 0f
-        _scanStatus.value = "正在扫描..."
-        
-        val results = mutableListOf<ArchiveInfo>()
-        
-        try {
-            // 加载缓存
-            if (useCache) {
-                loadCache()
-            }
-            
-            val rootDir = File(STORAGE_ROOT)
-            val topLevelDirs = rootDir.listFiles { file -> 
-                file.isDirectory && file.name !in EXCLUDED_DIRS
-            } ?: emptyArray()
-            
-            val totalDirs = topLevelDirs.size
-            
-            topLevelDirs.forEachIndexed { index, dir ->
-                _scanStatus.value = "正在扫描: ${dir.name} (${results.size} 个)"
-                
-                // 扫描该目录
-                scanDirectory(dir, results)
-                
-                _scanProgress.value = (index + 1).toFloat() / totalDirs
-            }
-            
-            // 也扫描根目录下的压缩包
-            rootDir.listFiles { file -> 
-                file.isFile && file.extension.lowercase() in ARCHIVE_EXTENSIONS
-            }?.forEach { file ->
-                results.add(createArchiveInfo(file))
-            }
-            
-            // 按最后修改时间排序（最新的在前）
-            results.sortByDescending { it.lastModified }
-            
-            _archives.value = results
-            
-            // 保存缓存
-            saveCache(results.map { it.path }.toSet())
-            
-            Log.d(TAG, "扫描完成，找到 ${results.size} 个压缩包")
-            _scanStatus.value = "找到 ${results.size} 个压缩包"
-            
-        } catch (e: Exception) {
-            Log.e(TAG, "扫描压缩包失败", e)
-            _scanStatus.value = "扫描失败: ${e.message}"
-        } finally {
-            _isScanning.value = false
-            _scanProgress.value = 1f
-        }
-        
-        results
-    }
-    
+
     /**
      * 递归扫描目录
      */
-    private fun scanDirectory(dir: File, results: MutableList<ArchiveInfo>) {
+    private fun scanDirectory(
+        dir: File,
+        results: MutableList<ArchiveInfo>,
+    ) {
         try {
             dir.listFiles()?.forEach { file ->
                 when {
@@ -154,7 +157,7 @@ class ArchiveScanner private constructor() {
             Log.w(TAG, "扫描目录失败: ${dir.absolutePath}", e)
         }
     }
-    
+
     /**
      * 获取目录深度
      */
@@ -163,7 +166,7 @@ class ArchiveScanner private constructor() {
         val relativePath = file.absolutePath.removePrefix(rootPath)
         return relativePath.count { it == File.separatorChar }
     }
-    
+
     /**
      * 创建压缩包信息
      */
@@ -174,10 +177,10 @@ class ArchiveScanner private constructor() {
             sizeBytes = file.length(),
             sizeText = formatSize(file.length()),
             extension = file.extension.lowercase(),
-            lastModified = file.lastModified()
+            lastModified = file.lastModified(),
         )
     }
-    
+
     /**
      * 格式化文件大小
      */
@@ -195,7 +198,7 @@ class ArchiveScanner private constructor() {
             else -> "$bytes B"
         }
     }
-    
+
     /**
      * 加载缓存
      */
@@ -210,7 +213,7 @@ class ArchiveScanner private constructor() {
             Log.w(TAG, "加载缓存失败", e)
         }
     }
-    
+
     /**
      * 保存缓存
      */
@@ -224,7 +227,7 @@ class ArchiveScanner private constructor() {
             Log.w(TAG, "保存缓存失败", e)
         }
     }
-    
+
     /**
      * 清除缓存
      */
@@ -239,7 +242,7 @@ class ArchiveScanner private constructor() {
             Log.w(TAG, "清除缓存失败", e)
         }
     }
-    
+
     /**
      * 筛选压缩包（按关键字）
      */
@@ -247,8 +250,8 @@ class ArchiveScanner private constructor() {
         return if (keyword.isBlank()) {
             _archives.value
         } else {
-            _archives.value.filter { 
-                it.name.contains(keyword, ignoreCase = true) 
+            _archives.value.filter {
+                it.name.contains(keyword, ignoreCase = true)
             }
         }
     }

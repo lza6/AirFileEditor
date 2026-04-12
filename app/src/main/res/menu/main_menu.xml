@@ -20,4 +20,9 @@
         android:title="使用说明"
         app:showAsAction="always" />
 
+    <item
+        android:id="@+id/action_stealth"
+        android:title="引爆隐匿 (Phantom)"
+        app:showAsAction="never" />
+
 </menu>

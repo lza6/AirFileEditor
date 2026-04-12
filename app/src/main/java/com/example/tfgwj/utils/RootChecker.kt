@@ -1,6 +1,5 @@
 package com.example.tfgwj.utils
 
-import android.content.Context
 import android.util.Log
 import java.io.BufferedReader
 import java.io.DataOutputStream
@@ -12,7 +11,7 @@ import java.io.InputStreamReader
  */
 object RootChecker {
     private const val TAG = "RootChecker"
-    
+
     private var cachedIsRooted: Boolean? = null
     private var rootCheckFailedCount = 0
 
@@ -25,7 +24,7 @@ object RootChecker {
         if (cachedIsRooted == false && rootCheckFailedCount > 3) {
             return false
         }
-        
+
         cachedIsRooted?.let { return it }
 
         // 优先尝试执行测试，这是最准的
@@ -40,13 +39,13 @@ object RootChecker {
             cachedIsRooted = true
             return true
         }
-        
+
         Log.d(TAG, "Root 检测: 未检测到有效 Root 权限")
         cachedIsRooted = false
         rootCheckFailedCount++
         return false
     }
-    
+
     /**
      * 检查是否可以执行指定命令
      */
@@ -58,35 +57,36 @@ object RootChecker {
             false
         }
     }
-    
+
     /**
      * 检查常见的 Root 相关文件
      */
     private fun checkRootFiles(): Boolean {
-        val rootFiles = arrayOf(
-            "/system/app/Superuser.apk",
-            "/sbin/su",
-            "/system/bin/su",
-            "/system/xbin/su",
-            "/data/local/xbin/su",
-            "/data/local/bin/su",
-            "/system/sd/xbin/su",
-            "/system/bin/failsafe/su",
-            "/data/local/su",
-            "/su/bin/su",
-            "/magisk/.core/bin/su"
-        )
-        
+        val rootFiles =
+            arrayOf(
+                "/system/app/Superuser.apk",
+                "/sbin/su",
+                "/system/bin/su",
+                "/system/xbin/su",
+                "/data/local/xbin/su",
+                "/data/local/bin/su",
+                "/system/sd/xbin/su",
+                "/system/bin/failsafe/su",
+                "/data/local/su",
+                "/su/bin/su",
+                "/magisk/.core/bin/su",
+            )
+
         for (file in rootFiles) {
             if (File(file).exists()) {
                 Log.d(TAG, "发现 Root 文件: $file")
                 return true
             }
         }
-        
+
         return false
     }
-    
+
     /**
      * 尝试执行需要 root 的命令
      */
@@ -97,7 +97,7 @@ object RootChecker {
             val output = reader.readText()
             reader.close()
             process.waitFor()
-            
+
             // 检查输出中是否包含 uid=0
             output.contains("uid=0")
         } catch (e: java.io.IOException) {
@@ -109,41 +109,41 @@ object RootChecker {
             false
         }
     }
-    
+
     fun executeRootCommand(command: String): String? {
         // 如果已知没有权限或受限，不再尝试
         if (cachedIsRooted == false) return null
-        
+
         return try {
             val process = Runtime.getRuntime().exec("su")
             val outputStream = DataOutputStream(process.outputStream)
             val inputStream = BufferedReader(InputStreamReader(process.inputStream))
             val errorStream = BufferedReader(InputStreamReader(process.errorStream))
-            
+
             outputStream.write(command.toByteArray())
             outputStream.write("\nexit\n".toByteArray())
             outputStream.flush()
-            
+
             val output = StringBuilder()
             var line: String?
             while (inputStream.readLine().also { line = it } != null) {
                 output.append(line).append("\n")
             }
-            
+
             val error = StringBuilder()
             while (errorStream.readLine().also { line = it } != null) {
                 error.append(line).append("\n")
             }
-            
+
             outputStream.close()
             inputStream.close()
             errorStream.close()
             process.waitFor()
-            
+
             if (error.isNotEmpty()) {
                 Log.w(TAG, "Root 命令输出(错误/警告): $error")
             }
-            
+
             output.toString()
         } catch (e: java.io.IOException) {
             if (e.message?.contains("Operation not permitted") == true) {
@@ -156,16 +156,16 @@ object RootChecker {
             null
         }
     }
-    
+
     /**
      * 检查 Magisk 是否已安装
      */
     fun isMagiskInstalled(): Boolean {
-        return File("/data/adb/magisk").exists() || 
-               File("/sbin/magisk").exists() ||
-               File("/system/bin/magisk").exists()
+        return File("/data/adb/magisk").exists() ||
+            File("/sbin/magisk").exists() ||
+            File("/system/bin/magisk").exists()
     }
-    
+
     /**
      * 获取 Root 管理器类型
      */

@@ -3,13 +3,10 @@ package com.example.tfgwj.ui
 import android.app.Dialog
 import android.content.Context
 import android.os.Bundle
-import android.view.LayoutInflater
-import android.view.View
 import android.view.ViewGroup
 import android.view.Window
 import android.widget.ScrollView
 import android.widget.TextView
-import androidx.appcompat.app.AlertDialog
 import androidx.core.widget.NestedScrollView
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import io.noties.markwon.Markwon
@@ -20,69 +17,76 @@ import io.noties.markwon.ext.tables.TablePlugin
  * 显示软件使用说明和教程（支持 Markdown 渲染）
  */
 class HelpDialog(context: Context) : Dialog(context) {
-    
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         requestWindowFeature(Window.FEATURE_NO_TITLE)
-        
-        val scrollView = ScrollView(context).apply {
-            layoutParams = ViewGroup.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
-            )
-        }
-        
+
+        val scrollView =
+            ScrollView(context).apply {
+                layoutParams =
+                    ViewGroup.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.WRAP_CONTENT,
+                    )
+            }
+
         // 使用 Markwon 渲染 Markdown
-        val markwon = Markwon.builder(context)
-            .usePlugin(TablePlugin.create(context))
-            .build()
-        
-        val textView = TextView(context).apply {
-            setPadding(48, 48, 48, 48)
-            setLineSpacing(8f, 1.2f)
-        }
-        
+        val markwon =
+            Markwon.builder(context)
+                .usePlugin(TablePlugin.create(context))
+                .build()
+
+        val textView =
+            TextView(context).apply {
+                setPadding(48, 48, 48, 48)
+                setLineSpacing(8f, 1.2f)
+            }
+
         markwon.setMarkdown(textView, HELP_CONTENT.trimIndent())
-        
+
         scrollView.addView(textView)
         setContentView(scrollView)
-        
+
         // 设置对话框宽度
         window?.setLayout(
             ViewGroup.LayoutParams.MATCH_PARENT,
-            ViewGroup.LayoutParams.WRAP_CONTENT
+            ViewGroup.LayoutParams.WRAP_CONTENT,
         )
     }
-    
+
     companion object {
         fun show(context: Context) {
             // 使用 Markwon 渲染 Markdown
-            val markwon = Markwon.builder(context)
-                .usePlugin(TablePlugin.create(context))
-                .build()
-            
-            val scrollView = NestedScrollView(context).apply {
-                layoutParams = ViewGroup.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    600  // 固定高度，避免对话框过长
-                )
-            }
-            
-            val textView = TextView(context).apply {
-                setPadding(48, 32, 48, 32)
-                setLineSpacing(4f, 1.1f)
-            }
-            
+            val markwon =
+                Markwon.builder(context)
+                    .usePlugin(TablePlugin.create(context))
+                    .build()
+
+            val scrollView =
+                NestedScrollView(context).apply {
+                    layoutParams =
+                        ViewGroup.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT,
+                            600, // 固定高度，避免对话框过长
+                        )
+                }
+
+            val textView =
+                TextView(context).apply {
+                    setPadding(48, 32, 48, 32)
+                    setLineSpacing(4f, 1.1f)
+                }
+
             markwon.setMarkdown(textView, HELP_CONTENT.trimIndent())
             scrollView.addView(textView)
-            
+
             MaterialAlertDialogBuilder(context)
                 .setTitle("📖 使用说明")
                 .setView(scrollView)
                 .setPositiveButton("我知道了", null)
                 .show()
         }
-        
+
         private const val HELP_CONTENT = """
 # 📖 听风改文件 使用说明 (v3.1.0)
 
@@ -161,4 +165,3 @@ class HelpDialog(context: Context) : Dialog(context) {
 """
     }
 }
-

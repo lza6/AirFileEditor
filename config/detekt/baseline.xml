@@ -1,0 +1,700 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues></ManuallySuppressedIssues>
+  <CurrentIssues>
+    <ID>ComplexCondition:FileOperationService.kt$FileOperationService$text.contains("cp:") || text.contains("error") || text.contains("denied") || text.contains("failed") || text.contains("No such file") || text.contains("cannot stat") || text.contains("cannot overwrite")</ID>
+    <ID>ComplexCondition:MainActivity.kt$MainActivity$now - lastLogTime &gt;= 100 || processed &lt;= 5 || processed &gt;= total || phase == "VERIFYING"</ID>
+    <ID>CyclomaticComplexMethod:ExtractManager.kt$ExtractManager$private fun extract7z( archivePath: String, outputPath: String, password: String? ): ExtractResult</ID>
+    <ID>CyclomaticComplexMethod:ExtractManager.kt$ExtractManager$private fun extractZip( archivePath: String, outputPath: String, password: String? ): ExtractResult</ID>
+    <ID>CyclomaticComplexMethod:FileOperationService.kt$FileOperationService$override fun copyDirectoryWithProgress(sourcePath: String, targetPath: String, callback: com.example.tfgwj.ICopyCallback?)</ID>
+    <ID>CyclomaticComplexMethod:FileOperationService.kt$FileOperationService$private fun processLine(text: String, state: CopyState, totalFiles: Int, callback: com.example.tfgwj.ICopyCallback?)</ID>
+    <ID>CyclomaticComplexMethod:FileReplaceWorker.kt$FileReplaceWorker$override suspend fun doWork(): Result</ID>
+    <ID>CyclomaticComplexMethod:FileReplaceWorker.kt$FileReplaceWorker$private suspend fun verifyFilesParallel( androidDir: File, targetPackage: String, totalFiles: Int ): Int</ID>
+    <ID>CyclomaticComplexMethod:FileStatistics.kt$FileStatistics$fun collectDirectoryTasks( sourceRoot: File, targetPackage: String, maxDepth: Int = 2, maxChildren: Int = 100 ): List&lt;CopyTask&gt;</ID>
+    <ID>CyclomaticComplexMethod:MainActivity.kt$MainActivity$private fun checkEnvironment(forceRefresh: Boolean = false)</ID>
+    <ID>CyclomaticComplexMethod:MainActivity.kt$MainActivity$private fun getPathFromContentUri(uri: Uri): String?</ID>
+    <ID>CyclomaticComplexMethod:MainActivity.kt$MainActivity$private fun getPathFromUri(uri: Uri): String?</ID>
+    <ID>CyclomaticComplexMethod:MainActivity.kt$MainActivity$private fun observeReplaceProgress( workId: java.util.UUID, incrementalUpdate: Boolean, progressBar: LinearProgressIndicator, tvPercent: TextView, tvFileCount: TextView, tvCurrentFile: TextView, tvErrors: TextView, tvSpeed: TextView, tvEta: TextView )</ID>
+    <ID>CyclomaticComplexMethod:MainActivity.kt$MainActivity$private fun updatePermissionUI(status: PermissionManager.PermissionStatus)</ID>
+    <ID>CyclomaticComplexMethod:PerformanceMonitor.kt$PerformanceMonitor$fun getOptimizationRecommendations(): List&lt;OptimizationRecommendation&gt;</ID>
+    <ID>CyclomaticComplexMethod:PermissionChecker.kt$PermissionChecker$private fun testDirectoryAccess(packageName: String = PUBG_PACKAGE_NAME): Boolean</ID>
+    <ID>CyclomaticComplexMethod:PermissionChecker.kt$PermissionChecker$suspend fun checkPermissionAccess(packageName: String = PUBG_PACKAGE_NAME, stopAppFirst: Boolean = true, context: android.content.Context? = null): CheckResult</ID>
+    <ID>CyclomaticComplexMethod:PermissionManager.kt$PermissionManager$private fun buildStatusMessage( hasStorage: Boolean, hasManageStorage: Boolean, hasRoot: Boolean, rootManagerType: String, bestMode: PermissionChecker.AccessMode, availableModes: List&lt;PermissionChecker.AccessMode&gt;, hasShizukuPerm: Boolean, isShizukuAvailable: Boolean, isServiceConnected: Boolean, canAccessPrivate: Boolean ): String</ID>
+    <ID>CyclomaticComplexMethod:RootCopyStrategy.kt$RootCopyStrategy$private suspend fun verifyFilesParallel( androidDir: File, targetPackage: String, totalFiles: Int ): Int</ID>
+    <ID>CyclomaticComplexMethod:RuleEngine.kt$RuleEngine$suspend fun fetchCloudRules(): CloudConfigResponse?</ID>
+    <ID>CyclomaticComplexMethod:StorageTypeDetector.kt$StorageTypeDetector$fun getOptimalBufferSize( context: android.content.Context? = null, storageType: StorageType? = null ): Int</ID>
+    <ID>CyclomaticComplexMethod:UniversalExtractor.kt$UniversalExtractor$private fun extractZip(path: String, outputDir: String, password: String?): ExtractResult</ID>
+    <ID>CyclomaticComplexMethod:UniversalExtractor.kt$UniversalExtractor$suspend fun extract( archivePath: String, outputDir: String, password: String? = null ): ExtractResult</ID>
+    <ID>EmptyCatchBlock:PermissionChecker.kt$PermissionChecker${}</ID>
+    <ID>EmptyCatchBlock:UniversalExtractor.kt$UniversalExtractor${}</ID>
+    <ID>EmptyCatchBlock:UpdateManager.kt$UpdateManager${}</ID>
+    <ID>EmptyFunctionBlock:AppLogger.kt$AppLogger.&lt;no name provided&gt;${}</ID>
+    <ID>ForbiddenComment:MetricCollector.kt$MetricCollector$// TODO: 持久化到 Room DB 或文件</ID>
+    <ID>ForbiddenComment:SecurityConfig.kt$SecurityConfig$// TODO: 可以发送到远程日志服务</ID>
+    <ID>FunctionNaming:Animations.kt$@Composable fun CrossfadeTransition( targetState: Any?, content: @Composable (Any?) -&gt; Unit )</ID>
+    <ID>FunctionNaming:Animations.kt$@Composable fun FadeTransition( visible: Boolean, content: @Composable AnimatedVisibilityScope.() -&gt; Unit )</ID>
+    <ID>FunctionNaming:Animations.kt$@Composable fun ScaleTransition( visible: Boolean, content: @Composable AnimatedVisibilityScope.() -&gt; Unit )</ID>
+    <ID>FunctionNaming:Animations.kt$@Composable fun SlideUpTransition( visible: Boolean, content: @Composable AnimatedVisibilityScope.() -&gt; Unit )</ID>
+    <ID>FunctionNaming:ResponsiveLayout.kt$@Composable fun &lt;T&gt; AdaptiveGrid( items: List&lt;T&gt;, columns: Int = responsiveColumns(), spacing: Dp = responsiveSpacing(), itemContent: @Composable (T) -&gt; Unit )</ID>
+    <ID>FunctionNaming:ResponsiveLayout.kt$@Composable fun ResponsiveContainer( content: @Composable BoxWithConstraintsScope.() -&gt; Unit )</ID>
+    <ID>FunctionNaming:Theme.kt$@Composable fun TfgwjTheme( darkTheme: Boolean = isSystemInDarkTheme(), dynamicColor: Boolean = true, content: @Composable () -&gt; Unit )</ID>
+    <ID>ImplicitDefaultLocale:AppLogger.kt$AppLogger$String.format("%.2f KB", size / 1024.0)</ID>
+    <ID>ImplicitDefaultLocale:AppLogger.kt$AppLogger$String.format("%.2f MB", size / 1024.0 / 1024.0)</ID>
+    <ID>ImplicitDefaultLocale:ArchiveFile.kt$ArchiveFile$String.format("%.2f GB", gb)</ID>
+    <ID>ImplicitDefaultLocale:ArchiveFile.kt$ArchiveFile$String.format("%.2f KB", kb)</ID>
+    <ID>ImplicitDefaultLocale:ArchiveFile.kt$ArchiveFile$String.format("%.2f MB", mb)</ID>
+    <ID>ImplicitDefaultLocale:ArchiveScanner.kt$ArchiveScanner$String.format("%.2f GB", bytes.toDouble() / (1024L * 1024L * 1024L))</ID>
+    <ID>ImplicitDefaultLocale:ArchiveScanner.kt$ArchiveScanner$String.format("%.2f KB", bytes.toDouble() / 1024L)</ID>
+    <ID>ImplicitDefaultLocale:ArchiveScanner.kt$ArchiveScanner$String.format("%.2f MB", bytes.toDouble() / (1024L * 1024L))</ID>
+    <ID>ImplicitDefaultLocale:BackupManager.kt$BackupInfo$String.format("%.2f GB", gb)</ID>
+    <ID>ImplicitDefaultLocale:BackupManager.kt$BackupInfo$String.format("%.2f KB", kb)</ID>
+    <ID>ImplicitDefaultLocale:BackupManager.kt$BackupInfo$String.format("%.2f MB", mb)</ID>
+    <ID>ImplicitDefaultLocale:ExtractManager.kt$ExtractManager$String.format("%.1f", speedKb)</ID>
+    <ID>ImplicitDefaultLocale:FileOperationService.kt$FileOperationService$String.format("%.2f", errorRate * 100)</ID>
+    <ID>ImplicitDefaultLocale:FileTimeModifier.kt$FileTimeModifier$String.format( "%04d-%02d-%02d %02d:%02d:%02d", calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH) + 1, calendar.get(Calendar.DAY_OF_MONTH), calendar.get(Calendar.HOUR_OF_DAY), calendar.get(Calendar.MINUTE), calendar.get(Calendar.SECOND) )</ID>
+    <ID>ImplicitDefaultLocale:FloatingBallManager.kt$FloatingBallManager$String.format("%.1f MB/s", speed)</ID>
+    <ID>ImplicitDefaultLocale:MainActivity.kt$MainActivity$String.format("%.0f", currentSpeed)</ID>
+    <ID>ImplicitDefaultLocale:MainActivity.kt$MainActivity$String.format("%.2f GB", bytes.toDouble() / (1024L * 1024L * 1024L))</ID>
+    <ID>ImplicitDefaultLocale:MainActivity.kt$MainActivity$String.format("%.2f KB", bytes.toDouble() / 1024L)</ID>
+    <ID>ImplicitDefaultLocale:MainActivity.kt$MainActivity$String.format("%.2f MB", bytes.toDouble() / (1024L * 1024L))</ID>
+    <ID>ImplicitDefaultLocale:MainPackManager.kt$MainPackManager$String.format("%.2f GB", bytes.toDouble() / (1024L * 1024L * 1024L))</ID>
+    <ID>ImplicitDefaultLocale:MainPackManager.kt$MainPackManager$String.format("%.2f KB", bytes.toDouble() / 1024L)</ID>
+    <ID>ImplicitDefaultLocale:MainPackManager.kt$MainPackManager$String.format("%.2f MB", bytes.toDouble() / (1024L * 1024L))</ID>
+    <ID>ImplicitDefaultLocale:PatchManager.kt$PatchManager$String.format("%.2f GB", bytes.toDouble() / (1024L * 1024L * 1024L))</ID>
+    <ID>ImplicitDefaultLocale:PatchManager.kt$PatchManager$String.format("%.2f KB", bytes.toDouble() / 1024L)</ID>
+    <ID>ImplicitDefaultLocale:PatchManager.kt$PatchManager$String.format("%.2f MB", bytes.toDouble() / (1024L * 1024L))</ID>
+    <ID>ImplicitDefaultLocale:PerformanceDashboardActivity.kt$PerformanceDashboardActivity$String.format("%.1f", ioStats.incrementalHitRate)</ID>
+    <ID>ImplicitDefaultLocale:PerformanceDashboardActivity.kt$PerformanceDashboardActivity$String.format("%.1f", ioStats.mmapFallbackRate)</ID>
+    <ID>ImplicitDefaultLocale:PerformanceDashboardActivity.kt$PerformanceDashboardActivity$String.format("%.1f", usagePercent)</ID>
+    <ID>ImplicitDefaultLocale:PerformanceDashboardActivity.kt$PerformanceDashboardActivity$String.format("%.2f", bytes / (1024.0 * 1024 * 1024))</ID>
+    <ID>ImplicitDefaultLocale:PerformanceDashboardActivity.kt$PerformanceDashboardActivity$String.format("%.2f", bytes / (1024.0 * 1024))</ID>
+    <ID>ImplicitDefaultLocale:PerformanceDashboardActivity.kt$PerformanceDashboardActivity$String.format("%.2f", bytes / 1024.0)</ID>
+    <ID>ImplicitDefaultLocale:PerformanceDashboardActivity.kt$PerformanceDashboardActivity$String.format("%.2f", ioStats.avgSpeedMBps)</ID>
+    <ID>ImplicitDefaultLocale:PerformanceMonitor.kt$PerformanceMonitor$String.format("%.1f", ioStats.avgSpeedMBps)</ID>
+    <ID>ImplicitDefaultLocale:PerformanceMonitor.kt$PerformanceMonitor$String.format("%.1f", ioStats.incrementalHitRate)</ID>
+    <ID>ImplicitDefaultLocale:PerformanceMonitor.kt$PerformanceMonitor$String.format("%.1f", ioStats.mmapFallbackRate)</ID>
+    <ID>ImplicitDefaultLocale:PerformanceMonitor.kt$PerformanceMonitor$String.format("%.1f", memoryUsagePercent)</ID>
+    <ID>ImplicitDefaultLocale:ProgressTracker.kt$ProgressTracker$String.format("%.2f", avgSpeed)</ID>
+    <ID>ImplicitDefaultLocale:ReplaceError.kt$ReplaceError.StorageInsufficient$String.format("%.2f GB", bytes / 1024.0 / 1024.0 / 1024.0)</ID>
+    <ID>ImplicitDefaultLocale:ReplaceError.kt$ReplaceError.StorageInsufficient$String.format("%.2f KB", bytes / 1024.0)</ID>
+    <ID>ImplicitDefaultLocale:ReplaceError.kt$ReplaceError.StorageInsufficient$String.format("%.2f MB", bytes / 1024.0 / 1024.0)</ID>
+    <ID>ImplicitDefaultLocale:StorageChecker.kt$StorageChecker$String.format("%.2f GB", bytes.toDouble() / (1024L * 1024L * 1024L))</ID>
+    <ID>ImplicitDefaultLocale:StorageChecker.kt$StorageChecker$String.format("%.2f KB", bytes.toDouble() / 1024L)</ID>
+    <ID>ImplicitDefaultLocale:StorageChecker.kt$StorageChecker$String.format("%.2f MB", bytes.toDouble() / (1024L * 1024L))</ID>
+    <ID>ImplicitDefaultLocale:StorageChecker.kt$StorageChecker.StorageCheckResult.Companion$String.format("%.2f GB", bytes.toDouble() / (1024L * 1024L * 1024L))</ID>
+    <ID>ImplicitDefaultLocale:StorageChecker.kt$StorageChecker.StorageCheckResult.Companion$String.format("%.2f KB", bytes.toDouble() / 1024L)</ID>
+    <ID>ImplicitDefaultLocale:StorageChecker.kt$StorageChecker.StorageCheckResult.Companion$String.format("%.2f MB", bytes.toDouble() / (1024L * 1024L))</ID>
+    <ID>LargeClass:FileReplaceWorker.kt$FileReplaceWorker : CoroutineWorker</ID>
+    <ID>LargeClass:MainActivity.kt$MainActivity : AppCompatActivity</ID>
+    <ID>LongMethod:ArchiveManager.kt$ArchiveManager$suspend fun extractArchive( archiveFile: ArchiveFile, password: String? = null, outputPath: String? = null )</ID>
+    <ID>LongMethod:ExtractManager.kt$ExtractManager$private fun extract7z( archivePath: String, outputPath: String, password: String? ): ExtractResult</ID>
+    <ID>LongMethod:ExtractManager.kt$ExtractManager$private fun extractZip( archivePath: String, outputPath: String, password: String? ): ExtractResult</ID>
+    <ID>LongMethod:FileOperationService.kt$FileOperationService$override fun cleanDirectoryWithProgress(basePath: String, whiteList: Array&lt;out String&gt;?, callback: com.example.tfgwj.IDeleteCallback?)</ID>
+    <ID>LongMethod:FileOperationService.kt$FileOperationService$override fun copyDirectoryWithProgress(sourcePath: String, targetPath: String, callback: com.example.tfgwj.ICopyCallback?)</ID>
+    <ID>LongMethod:FileReplaceWorker.kt$FileReplaceWorker$override suspend fun doWork(): Result</ID>
+    <ID>LongMethod:FileReplaceWorker.kt$FileReplaceWorker$private suspend fun executeNormalCopy( androidDir: File, targetPackage: String, incrementalUpdate: Boolean ): InternalResult</ID>
+    <ID>LongMethod:FileReplaceWorker.kt$FileReplaceWorker$private suspend fun verifyFilesParallel( androidDir: File, targetPackage: String, totalFiles: Int ): Int</ID>
+    <ID>LongMethod:FileReplaceWorkerV2.kt$FileReplaceWorkerV2$override suspend fun doWork(): Result</ID>
+    <ID>LongMethod:IoOptimizer.kt$IoOptimizer$fun fastCopy(source: File, target: File): Boolean</ID>
+    <ID>LongMethod:MainActivity.kt$MainActivity$private fun checkEnvironment(forceRefresh: Boolean = false)</ID>
+    <ID>LongMethod:MainActivity.kt$MainActivity$private fun extractAndUpdateToMainPack(archive: ArchiveScanner.ArchiveInfo, versionName: String, versionDir: File)</ID>
+    <ID>LongMethod:MainActivity.kt$MainActivity$private fun extractArchiveToCache(archive: ArchiveScanner.ArchiveInfo)</ID>
+    <ID>LongMethod:MainActivity.kt$MainActivity$private fun getPathFromUri(uri: Uri): String?</ID>
+    <ID>LongMethod:MainActivity.kt$MainActivity$private fun handleExtractAndUpdate(uri: Uri)</ID>
+    <ID>LongMethod:MainActivity.kt$MainActivity$private fun initViews()</ID>
+    <ID>LongMethod:MainActivity.kt$MainActivity$private fun observeReplaceProgress( workId: java.util.UUID, incrementalUpdate: Boolean, progressBar: LinearProgressIndicator, tvPercent: TextView, tvFileCount: TextView, tvCurrentFile: TextView, tvErrors: TextView, tvSpeed: TextView, tvEta: TextView )</ID>
+    <ID>LongMethod:MainActivity.kt$MainActivity$private fun setupObservers()</ID>
+    <ID>LongMethod:MainActivity.kt$MainActivity$private fun showReplaceProgressDialog(path: String)</ID>
+    <ID>LongMethod:NormalCopyStrategy.kt$NormalCopyStrategy$override suspend fun executeBatchCopy( sourceDir: File, incrementalUpdate: Boolean, callback: CopyStrategy.ProgressCallback? ): CopyStrategy.CopyResult</ID>
+    <ID>LongMethod:PerformanceDashboardActivity.kt$PerformanceDashboardActivity$override fun onCreate(savedInstanceState: Bundle?)</ID>
+    <ID>LongMethod:PerformanceMonitor.kt$PerformanceMonitor$fun getDiagnosticReport(): DiagnosticReport</ID>
+    <ID>LongMethod:PerformanceMonitor.kt$PerformanceMonitor$fun getOptimizationRecommendations(): List&lt;OptimizationRecommendation&gt;</ID>
+    <ID>LongMethod:PermissionChecker.kt$PermissionChecker$private fun testDirectoryAccess(packageName: String = PUBG_PACKAGE_NAME): Boolean</ID>
+    <ID>LongMethod:PermissionChecker.kt$PermissionChecker$suspend fun checkPermissionAccess(packageName: String = PUBG_PACKAGE_NAME, stopAppFirst: Boolean = true, context: android.content.Context? = null): CheckResult</ID>
+    <ID>LongMethod:RuleEngine.kt$RuleEngine$suspend fun fetchCloudRules(): CloudConfigResponse?</ID>
+    <ID>LongMethod:UniversalExtractor.kt$UniversalExtractor$private fun extractZip(path: String, outputDir: String, password: String?): ExtractResult</ID>
+    <ID>LongParameterList:CopyStrategy.kt$CopyStrategy.ProgressCallback$( progress: Int, processed: Int, total: Int, currentFile: String, speed: Float = 0f, phase: String = "REPLACING" )</ID>
+    <ID>LongParameterList:FileReplaceWorker.kt$FileReplaceWorker$(progress: Int, processed: Int, total: Int, message: String, mode: String, speed: Float = 0f, phase: String = "REPLACING")</ID>
+    <ID>LongParameterList:FloatingBallManager.kt$FloatingBallManager$( progress: Int, processed: Int, total: Int, currentFile: String, mode: String, speed: Float, phase: String = "REPLACING" )</ID>
+    <ID>LongParameterList:MainActivity.kt$MainActivity$( path: String, progressBar: LinearProgressIndicator, tvPercent: TextView, tvFileCount: TextView, tvCurrentFile: TextView, tvErrors: TextView, tvSpeed: TextView, tvEta: TextView )</ID>
+    <ID>LongParameterList:MainActivity.kt$MainActivity$( workId: java.util.UUID, incrementalUpdate: Boolean, progressBar: LinearProgressIndicator, tvPercent: TextView, tvFileCount: TextView, tvCurrentFile: TextView, tvErrors: TextView, tvSpeed: TextView, tvEta: TextView )</ID>
+    <ID>LongParameterList:ModeSelectionDialog.kt$ModeSelectionDialog$( layout: View, titleView: TextView, descView: TextView, mode: PermissionChecker.AccessMode, androidVersion: Int, isRecommended: Boolean )</ID>
+    <ID>LongParameterList:PermissionManager.kt$PermissionManager$( hasStorage: Boolean, hasManageStorage: Boolean, hasRoot: Boolean, rootManagerType: String, bestMode: PermissionChecker.AccessMode, availableModes: List&lt;PermissionChecker.AccessMode&gt;, hasShizukuPerm: Boolean, isShizukuAvailable: Boolean, isServiceConnected: Boolean, canAccessPrivate: Boolean )</ID>
+    <ID>LongParameterList:ReplaceProgressManager.kt$ReplaceProgressManager$( processed: Int, total: Int, currentFile: String, progress: Int, speed: Float = 0f, phase: String = "REPLACING" )</ID>
+    <ID>LoopWithTooManyJumpStatements:ArchiveManager.kt$ArchiveManager$for</ID>
+    <ID>LoopWithTooManyJumpStatements:FileReplaceWorker.kt$FileReplaceWorker$for</ID>
+    <ID>MagicNumber:AccessibilityUtils.kt$100</ID>
+    <ID>MagicNumber:Animations.kt$100</ID>
+    <ID>MagicNumber:Animations.kt$1000</ID>
+    <ID>MagicNumber:Animations.kt$10f</ID>
+    <ID>MagicNumber:Animations.kt$150</ID>
+    <ID>MagicNumber:Animations.kt$200</ID>
+    <ID>MagicNumber:Animations.kt$250</ID>
+    <ID>MagicNumber:Animations.kt$2f</ID>
+    <ID>MagicNumber:Animations.kt$300</ID>
+    <ID>MagicNumber:Animations.kt$350</ID>
+    <ID>MagicNumber:Animations.kt$400</ID>
+    <ID>MagicNumber:Animations.kt$50</ID>
+    <ID>MagicNumber:Animations.kt$500</ID>
+    <ID>MagicNumber:Animations.kt$5f</ID>
+    <ID>MagicNumber:AppLogger.kt$AppLogger$100</ID>
+    <ID>MagicNumber:AppLogger.kt$AppLogger$1024</ID>
+    <ID>MagicNumber:AppLogger.kt$AppLogger$1024.0</ID>
+    <ID>MagicNumber:AppLogger.kt$AppLogger$1024L</ID>
+    <ID>MagicNumber:AppLogger.kt$AppLogger$50</ID>
+    <ID>MagicNumber:AppLogger.kt$AppLogger$500</ID>
+    <ID>MagicNumber:AppLogger.kt$AppLogger$64</ID>
+    <ID>MagicNumber:AppLogger.kt$AppLogger.&lt;no name provided&gt;$60</ID>
+    <ID>MagicNumber:ArchiveFile.kt$ArchiveFile$1024.0</ID>
+    <ID>MagicNumber:ArchiveManager.kt$ArchiveManager$8192</ID>
+    <ID>MagicNumber:ArchiveScanner.kt$ArchiveScanner$1024L</ID>
+    <ID>MagicNumber:ArchiveScanner.kt$ArchiveScanner$3</ID>
+    <ID>MagicNumber:BackupManager.kt$BackupInfo$1024.0</ID>
+    <ID>MagicNumber:Color.kt$0xFF001F33</ID>
+    <ID>MagicNumber:Color.kt$0xFF003300</ID>
+    <ID>MagicNumber:Color.kt$0xFF003D66</ID>
+    <ID>MagicNumber:Color.kt$0xFF005C99</ID>
+    <ID>MagicNumber:Color.kt$0xFF006600</ID>
+    <ID>MagicNumber:Color.kt$0xFF007ACC</ID>
+    <ID>MagicNumber:Color.kt$0xFF00CC00</ID>
+    <ID>MagicNumber:Color.kt$0xFF1A1A1A</ID>
+    <ID>MagicNumber:Color.kt$0xFF330000</ID>
+    <ID>MagicNumber:Color.kt$0xFF331400</ID>
+    <ID>MagicNumber:Color.kt$0xFF333333</ID>
+    <ID>MagicNumber:Color.kt$0xFF4D4D4D</ID>
+    <ID>MagicNumber:Color.kt$0xFF660000</ID>
+    <ID>MagicNumber:Color.kt$0xFF662800</ID>
+    <ID>MagicNumber:Color.kt$0xFF666666</ID>
+    <ID>MagicNumber:Color.kt$0xFF66FF66</ID>
+    <ID>MagicNumber:Color.kt$0xFF990000</ID>
+    <ID>MagicNumber:Color.kt$0xFF993C00</ID>
+    <ID>MagicNumber:Color.kt$0xFF99D6FF</ID>
+    <ID>MagicNumber:Color.kt$0xFF99FF99</ID>
+    <ID>MagicNumber:Color.kt$0xFFCC0000</ID>
+    <ID>MagicNumber:Color.kt$0xFFCC5000</ID>
+    <ID>MagicNumber:Color.kt$0xFFCCCCCC</ID>
+    <ID>MagicNumber:Color.kt$0xFFCCEBFF</ID>
+    <ID>MagicNumber:Color.kt$0xFFE6E6E6</ID>
+    <ID>MagicNumber:Color.kt$0xFFF2F2F2</ID>
+    <ID>MagicNumber:Color.kt$0xFFFCFCFC</ID>
+    <ID>MagicNumber:Color.kt$0xFFFF6666</ID>
+    <ID>MagicNumber:Color.kt$0xFFFF9999</ID>
+    <ID>MagicNumber:Color.kt$0xFFFFB380</ID>
+    <ID>MagicNumber:Color.kt$0xFFFFD9B3</ID>
+    <ID>MagicNumber:CopyConfig.kt$CopyConfig.Companion$1024</ID>
+    <ID>MagicNumber:CopyConfig.kt$CopyConfig.Companion$32</ID>
+    <ID>MagicNumber:CopyConfig.kt$CopyConfig.Companion$4</ID>
+    <ID>MagicNumber:ExtractManager.kt$ExtractManager$100</ID>
+    <ID>MagicNumber:ExtractManager.kt$ExtractManager$1000</ID>
+    <ID>MagicNumber:ExtractManager.kt$ExtractManager$1000.0</ID>
+    <ID>MagicNumber:ExtractManager.kt$ExtractManager$1024</ID>
+    <ID>MagicNumber:ExtractManager.kt$ExtractManager$2000</ID>
+    <ID>MagicNumber:ExtractManager.kt$ExtractManager$256</ID>
+    <ID>MagicNumber:FileHasher.kt$FileHasher$1024</ID>
+    <ID>MagicNumber:FileHasher.kt$FileHasher$1024L</ID>
+    <ID>MagicNumber:FileHasher.kt$FileHasher$3</ID>
+    <ID>MagicNumber:FileHasher.kt$FileHasher$4</ID>
+    <ID>MagicNumber:FileHasher.kt$FileHasher$512</ID>
+    <ID>MagicNumber:FileHasher.kt$FileHasher$64</ID>
+    <ID>MagicNumber:FileOperationService.kt$FileOperationService$100</ID>
+    <ID>MagicNumber:FileOperationService.kt$FileOperationService$20</ID>
+    <ID>MagicNumber:FileOperationService.kt$FileOperationService$5</ID>
+    <ID>MagicNumber:FileOperationService.kt$FileOperationService$50</ID>
+    <ID>MagicNumber:FileOperationService.kt$FileOperationService$8</ID>
+    <ID>MagicNumber:FileReplaceResult.kt$FileReplaceResult$100f</ID>
+    <ID>MagicNumber:FileReplaceWorker.kt$FileReplaceWorker$10</ID>
+    <ID>MagicNumber:FileReplaceWorker.kt$FileReplaceWorker$100</ID>
+    <ID>MagicNumber:FileReplaceWorker.kt$FileReplaceWorker$1000</ID>
+    <ID>MagicNumber:FileReplaceWorker.kt$FileReplaceWorker$2000</ID>
+    <ID>MagicNumber:FileReplaceWorker.kt$FileReplaceWorker$300</ID>
+    <ID>MagicNumber:FileReplaceWorker.kt$FileReplaceWorker$32</ID>
+    <ID>MagicNumber:FileReplaceWorker.kt$FileReplaceWorker$4</ID>
+    <ID>MagicNumber:FileReplaceWorker.kt$FileReplaceWorker$500</ID>
+    <ID>MagicNumber:FileReplaceWorker.kt$FileReplaceWorker$90</ID>
+    <ID>MagicNumber:FileReplaceWorker.kt$FileReplaceWorker$95</ID>
+    <ID>MagicNumber:FileReplaceWorkerV2.kt$FileReplaceWorkerV2$500</ID>
+    <ID>MagicNumber:FileTimeModifier.kt$FileTimeModifier$10</ID>
+    <ID>MagicNumber:FileTimeModifier.kt$FileTimeModifier$15</ID>
+    <ID>MagicNumber:FileTimeModifier.kt$FileTimeModifier$20</ID>
+    <ID>MagicNumber:FileTimeModifier.kt$FileTimeModifier$2027</ID>
+    <ID>MagicNumber:FileTimeModifier.kt$FileTimeModifier$3</ID>
+    <ID>MagicNumber:FileTimeModifier.kt$FileTimeModifier$4</ID>
+    <ID>MagicNumber:FileTimeModifier.kt$FileTimeModifier$50</ID>
+    <ID>MagicNumber:FileTimeModifier.kt$FileTimeModifier$7</ID>
+    <ID>MagicNumber:FileTimeModifier.kt$FileTimeModifier$8</ID>
+    <ID>MagicNumber:FileTimeModifier.kt$FileTimeModifier$9</ID>
+    <ID>MagicNumber:FloatingBallManager.kt$FloatingBallManager$10</ID>
+    <ID>MagicNumber:FloatingBallManager.kt$FloatingBallManager$100</ID>
+    <ID>MagicNumber:FloatingBallManager.kt$FloatingBallManager$150</ID>
+    <ID>MagicNumber:FloatingBallManager.kt$FloatingBallManager$2000</ID>
+    <ID>MagicNumber:FloatingBallManager.kt$FloatingBallManager$50</ID>
+    <ID>MagicNumber:FloatingBallManager.kt$FloatingBallManager$56</ID>
+    <ID>MagicNumber:FloatingBallManager.kt$FloatingBallManager.&lt;no name provided&gt;$15</ID>
+    <ID>MagicNumber:HelpDialog.kt$HelpDialog$1.2f</ID>
+    <ID>MagicNumber:HelpDialog.kt$HelpDialog$48</ID>
+    <ID>MagicNumber:HelpDialog.kt$HelpDialog$8f</ID>
+    <ID>MagicNumber:HelpDialog.kt$HelpDialog.Companion$1.1f</ID>
+    <ID>MagicNumber:HelpDialog.kt$HelpDialog.Companion$32</ID>
+    <ID>MagicNumber:HelpDialog.kt$HelpDialog.Companion$48</ID>
+    <ID>MagicNumber:HelpDialog.kt$HelpDialog.Companion$4f</ID>
+    <ID>MagicNumber:HelpDialog.kt$HelpDialog.Companion$600</ID>
+    <ID>MagicNumber:InputValidator.kt$InputValidator$1000</ID>
+    <ID>MagicNumber:IoOptimizer.kt$IoOptimizer$10</ID>
+    <ID>MagicNumber:IoOptimizer.kt$IoOptimizer$100</ID>
+    <ID>MagicNumber:IoOptimizer.kt$IoOptimizer$1024</ID>
+    <ID>MagicNumber:IoOptimizer.kt$IoOptimizer$11</ID>
+    <ID>MagicNumber:IoOptimizer.kt$IoOptimizer$128</ID>
+    <ID>MagicNumber:IoOptimizer.kt$IoOptimizer$25</ID>
+    <ID>MagicNumber:IoOptimizer.kt$IoOptimizer$256</ID>
+    <ID>MagicNumber:IoOptimizer.kt$IoOptimizer$4</ID>
+    <ID>MagicNumber:IoOptimizer.kt$IoOptimizer$5</ID>
+    <ID>MagicNumber:IoOptimizer.kt$IoOptimizer$512</ID>
+    <ID>MagicNumber:IoOptimizer.kt$IoOptimizer$8L</ID>
+    <ID>MagicNumber:IoRateCalculator.kt$IoRateCalculator$1000.0</ID>
+    <ID>MagicNumber:IoRateCalculator.kt$IoRateCalculator$1024</ID>
+    <ID>MagicNumber:IoRateCalculator.kt$IoRateCalculator$60</ID>
+    <ID>MagicNumber:MainActivity.kt$MainActivity$0.5f</ID>
+    <ID>MagicNumber:MainActivity.kt$MainActivity$10</ID>
+    <ID>MagicNumber:MainActivity.kt$MainActivity$100</ID>
+    <ID>MagicNumber:MainActivity.kt$MainActivity$1000</ID>
+    <ID>MagicNumber:MainActivity.kt$MainActivity$1000.0</ID>
+    <ID>MagicNumber:MainActivity.kt$MainActivity$1024</ID>
+    <ID>MagicNumber:MainActivity.kt$MainActivity$1024L</ID>
+    <ID>MagicNumber:MainActivity.kt$MainActivity$14f</ID>
+    <ID>MagicNumber:MainActivity.kt$MainActivity$1500</ID>
+    <ID>MagicNumber:MainActivity.kt$MainActivity$16</ID>
+    <ID>MagicNumber:MainActivity.kt$MainActivity$2</ID>
+    <ID>MagicNumber:MainActivity.kt$MainActivity$200</ID>
+    <ID>MagicNumber:MainActivity.kt$MainActivity$2000</ID>
+    <ID>MagicNumber:MainActivity.kt$MainActivity$24</ID>
+    <ID>MagicNumber:MainActivity.kt$MainActivity$3</ID>
+    <ID>MagicNumber:MainActivity.kt$MainActivity$30</ID>
+    <ID>MagicNumber:MainActivity.kt$MainActivity$300</ID>
+    <ID>MagicNumber:MainActivity.kt$MainActivity$5</ID>
+    <ID>MagicNumber:MainActivity.kt$MainActivity$50</ID>
+    <ID>MagicNumber:MainActivity.kt$MainActivity$500</ID>
+    <ID>MagicNumber:MainActivity.kt$MainActivity$60</ID>
+    <ID>MagicNumber:MainPackManager.kt$MainPackManager$1024L</ID>
+    <ID>MagicNumber:MainPackManager.kt$MainPackManager$3</ID>
+    <ID>MagicNumber:MainPackManager.kt$MainPackManager$5</ID>
+    <ID>MagicNumber:MainViewModel.kt$MainViewModel$100</ID>
+    <ID>MagicNumber:MetricCollector.kt$MetricCollector$1000</ID>
+    <ID>MagicNumber:MetricCollector.kt$MetricCollector$5000</ID>
+    <ID>MagicNumber:MiniChartView.kt$MiniChartView$0.05f</ID>
+    <ID>MagicNumber:MiniChartView.kt$MiniChartView$0.95f</ID>
+    <ID>MagicNumber:MiniChartView.kt$MiniChartView$3f</ID>
+    <ID>MagicNumber:MiniChartView.kt$MiniChartView$50</ID>
+    <ID>MagicNumber:MiniChartView.kt$MiniChartView$60</ID>
+    <ID>MagicNumber:NetworkClient.kt$NetworkClient$1024</ID>
+    <ID>MagicNumber:NetworkClient.kt$NetworkClient$10L</ID>
+    <ID>MagicNumber:NetworkClient.kt$NetworkClient.LoggingInterceptor$1_000_000</ID>
+    <ID>MagicNumber:NormalCopyOrchestrator.kt$NormalCopyOrchestrator$10</ID>
+    <ID>MagicNumber:NormalCopyOrchestrator.kt$NormalCopyOrchestrator$5</ID>
+    <ID>MagicNumber:NormalCopyOrchestrator.kt$NormalCopyOrchestrator.IoRateCalculator$1000.0</ID>
+    <ID>MagicNumber:NormalCopyOrchestrator.kt$NormalCopyOrchestrator.IoRateCalculator$1024</ID>
+    <ID>MagicNumber:NormalCopyStrategy.kt$NormalCopyStrategy$10</ID>
+    <ID>MagicNumber:NormalCopyStrategy.kt$NormalCopyStrategy$100</ID>
+    <ID>MagicNumber:NormalCopyStrategy.kt$NormalCopyStrategy$32</ID>
+    <ID>MagicNumber:NormalCopyStrategy.kt$NormalCopyStrategy$4</ID>
+    <ID>MagicNumber:PatchManager.kt$PatchManager$0.95</ID>
+    <ID>MagicNumber:PatchManager.kt$PatchManager$10</ID>
+    <ID>MagicNumber:PatchManager.kt$PatchManager$1024L</ID>
+    <ID>MagicNumber:PauseControl.kt$PauseControl$200</ID>
+    <ID>MagicNumber:PerformanceDashboardActivity.kt$PerformanceDashboardActivity$100</ID>
+    <ID>MagicNumber:PerformanceDashboardActivity.kt$PerformanceDashboardActivity$1024</ID>
+    <ID>MagicNumber:PerformanceDashboardActivity.kt$PerformanceDashboardActivity$1024.0</ID>
+    <ID>MagicNumber:PerformanceDashboardActivity.kt$PerformanceDashboardActivity$14f</ID>
+    <ID>MagicNumber:PerformanceDashboardActivity.kt$PerformanceDashboardActivity$16</ID>
+    <ID>MagicNumber:PerformanceDashboardActivity.kt$PerformanceDashboardActivity$18f</ID>
+    <ID>MagicNumber:PerformanceDashboardActivity.kt$PerformanceDashboardActivity$24f</ID>
+    <ID>MagicNumber:PerformanceDashboardActivity.kt$PerformanceDashboardActivity$32</ID>
+    <ID>MagicNumber:PerformanceDashboardActivity.kt$PerformanceDashboardActivity$8</ID>
+    <ID>MagicNumber:PerformanceMonitor.kt$PerformanceMonitor$10</ID>
+    <ID>MagicNumber:PerformanceMonitor.kt$PerformanceMonitor$10.0</ID>
+    <ID>MagicNumber:PerformanceMonitor.kt$PerformanceMonitor$100</ID>
+    <ID>MagicNumber:PerformanceMonitor.kt$PerformanceMonitor$1000</ID>
+    <ID>MagicNumber:PerformanceMonitor.kt$PerformanceMonitor$1024</ID>
+    <ID>MagicNumber:PerformanceMonitor.kt$PerformanceMonitor$128</ID>
+    <ID>MagicNumber:PerformanceMonitor.kt$PerformanceMonitor$16</ID>
+    <ID>MagicNumber:PerformanceMonitor.kt$PerformanceMonitor$20</ID>
+    <ID>MagicNumber:PerformanceMonitor.kt$PerformanceMonitor$20.0</ID>
+    <ID>MagicNumber:PerformanceMonitor.kt$PerformanceMonitor$256</ID>
+    <ID>MagicNumber:PerformanceMonitor.kt$PerformanceMonitor$4</ID>
+    <ID>MagicNumber:PerformanceMonitor.kt$PerformanceMonitor$50</ID>
+    <ID>MagicNumber:PerformanceMonitor.kt$PerformanceMonitor$50.0</ID>
+    <ID>MagicNumber:PerformanceMonitor.kt$PerformanceMonitor$512</ID>
+    <ID>MagicNumber:PerformanceMonitor.kt$PerformanceMonitor$8</ID>
+    <ID>MagicNumber:PerformanceMonitor.kt$PerformanceMonitor$80.0</ID>
+    <ID>MagicNumber:PermissionChecker.kt$PermissionChecker$30</ID>
+    <ID>MagicNumber:PermissionManager.kt$PermissionManager$30</ID>
+    <ID>MagicNumber:ProgressPredictor.kt$ProgressPredictor$0.3f</ID>
+    <ID>MagicNumber:ProgressPredictor.kt$ProgressPredictor$0.7f</ID>
+    <ID>MagicNumber:ProgressPredictor.kt$ProgressPredictor$100</ID>
+    <ID>MagicNumber:ProgressPredictor.kt$ProgressPredictor$1000f</ID>
+    <ID>MagicNumber:ProgressPredictor.kt$ProgressPredictor.Companion$3600</ID>
+    <ID>MagicNumber:ProgressPredictor.kt$ProgressPredictor.Companion$60</ID>
+    <ID>MagicNumber:ProgressPredictor.kt$ProgressPredictor.SpeedInfo$1000</ID>
+    <ID>MagicNumber:ProgressPredictor.kt$ProgressPredictor.SpeedInfo$1024</ID>
+    <ID>MagicNumber:ProgressPredictor.kt$ProgressPredictor.SpeedInfo$3600</ID>
+    <ID>MagicNumber:ProgressPredictor.kt$ProgressPredictor.SpeedInfo$60</ID>
+    <ID>MagicNumber:ProgressTracker.kt$ProgressTracker$100</ID>
+    <ID>MagicNumber:ProgressTracker.kt$ProgressTracker$1000.0</ID>
+    <ID>MagicNumber:ProgressTracker.kt$SpeedCalculator$1000.0</ID>
+    <ID>MagicNumber:ProgressTracker.kt$SpeedCalculator$1000L</ID>
+    <ID>MagicNumber:ReplaceError.kt$ReplaceError.StorageInsufficient$1024.0</ID>
+    <ID>MagicNumber:ReplaceError.kt$ReplaceError.StorageInsufficient$1024L</ID>
+    <ID>MagicNumber:ResponsiveLayout.kt$3</ID>
+    <ID>MagicNumber:ResponsiveLayout.kt$600</ID>
+    <ID>MagicNumber:ResponsiveLayout.kt$840</ID>
+    <ID>MagicNumber:RootChecker.kt$RootChecker$3</ID>
+    <ID>MagicNumber:RootCopyOrchestrator.kt$RootCopyOrchestrator$300</ID>
+    <ID>MagicNumber:RootCopyOrchestrator.kt$RootCopyOrchestrator$5</ID>
+    <ID>MagicNumber:RootCopyStrategy.kt$RootCopyStrategy$10</ID>
+    <ID>MagicNumber:RootCopyStrategy.kt$RootCopyStrategy$100</ID>
+    <ID>MagicNumber:RootCopyStrategy.kt$RootCopyStrategy$300</ID>
+    <ID>MagicNumber:RootCopyStrategy.kt$RootCopyStrategy$500</ID>
+    <ID>MagicNumber:RootCopyStrategy.kt$RootCopyStrategy$90</ID>
+    <ID>MagicNumber:RootCopyStrategy.kt$RootCopyStrategy$95</ID>
+    <ID>MagicNumber:RuleEngine.kt$RuleEngine$200</ID>
+    <ID>MagicNumber:RuleEngine.kt$RuleEngine$304</ID>
+    <ID>MagicNumber:ShizukuCopyOrchestrator.kt$ShizukuCopyOrchestrator$100</ID>
+    <ID>MagicNumber:ShizukuCopyOrchestrator.kt$ShizukuCopyOrchestrator$2000</ID>
+    <ID>MagicNumber:ShizukuCopyOrchestrator.kt$ShizukuCopyOrchestrator$5</ID>
+    <ID>MagicNumber:ShizukuCopyOrchestrator.kt$ShizukuCopyOrchestrator$500</ID>
+    <ID>MagicNumber:ShizukuCopyStrategy.kt$ShizukuCopyStrategy$100</ID>
+    <ID>MagicNumber:ShizukuCopyStrategy.kt$ShizukuCopyStrategy$2000</ID>
+    <ID>MagicNumber:ShizukuCopyStrategy.kt$ShizukuCopyStrategy$500</ID>
+    <ID>MagicNumber:ShizukuCopyStrategy.kt$ShizukuCopyStrategy$95</ID>
+    <ID>MagicNumber:ShizukuManager.kt$ShizukuManager$1.5</ID>
+    <ID>MagicNumber:ShizukuManager.kt$ShizukuManager$5000L</ID>
+    <ID>MagicNumber:ShizukuManager.kt$ShizukuManager$60000L</ID>
+    <ID>MagicNumber:StorageChecker.kt$StorageChecker$100</ID>
+    <ID>MagicNumber:StorageChecker.kt$StorageChecker$1024</ID>
+    <ID>MagicNumber:StorageChecker.kt$StorageChecker$1024L</ID>
+    <ID>MagicNumber:StorageChecker.kt$StorageChecker.StorageCheckResult.Companion$1024L</ID>
+    <ID>MagicNumber:StorageTypeDetector.kt$StorageTypeDetector$10</ID>
+    <ID>MagicNumber:StorageTypeDetector.kt$StorageTypeDetector$100</ID>
+    <ID>MagicNumber:StorageTypeDetector.kt$StorageTypeDetector$1024</ID>
+    <ID>MagicNumber:StorageTypeDetector.kt$StorageTypeDetector$11</ID>
+    <ID>MagicNumber:StorageTypeDetector.kt$StorageTypeDetector$128</ID>
+    <ID>MagicNumber:StorageTypeDetector.kt$StorageTypeDetector$1_000_000_000.0</ID>
+    <ID>MagicNumber:StorageTypeDetector.kt$StorageTypeDetector$25</ID>
+    <ID>MagicNumber:StorageTypeDetector.kt$StorageTypeDetector$256</ID>
+    <ID>MagicNumber:StorageTypeDetector.kt$StorageTypeDetector$26</ID>
+    <ID>MagicNumber:StorageTypeDetector.kt$StorageTypeDetector$4096</ID>
+    <ID>MagicNumber:StorageTypeDetector.kt$StorageTypeDetector$50</ID>
+    <ID>MagicNumber:StorageTypeDetector.kt$StorageTypeDetector$512</ID>
+    <ID>MagicNumber:UniversalExtractor.kt$UniversalExtractor$100</ID>
+    <ID>MagicNumber:UpdateManager.kt$UpdateManager$100</ID>
+    <ID>MagicNumber:UpdateManager.kt$UpdateManager$1024</ID>
+    <ID>MagicNumber:UpdateManager.kt$UpdateManager$2</ID>
+    <ID>MagicNumber:UpdateManager.kt$UpdateManager$200</ID>
+    <ID>MagicNumber:UpdateManager.kt$UpdateManager$206</ID>
+    <ID>MagicNumber:UpdateManager.kt$UpdateManager$32768</ID>
+    <ID>MagicNumber:UpdateManager.kt$UpdateManager$50</ID>
+    <ID>MatchingDeclarationName:ResponsiveLayout.kt$WindowSizeClass</ID>
+    <ID>MaxLineLength:AppLogger.kt$AppLogger$val jsonLog = "{\"time\":\"$timestamp\", \"level\":\"$level\", \"tag\":\"$tag\", \"msg\":\"$safeMsg\", \"device\":\"${android.os.Build.MODEL}\"}"</ID>
+    <ID>MaxLineLength:AppLogger.kt$AppLogger$var dir = context?.getExternalFilesDir("logs") ?: File(Environment.getExternalStorageDirectory(), "听风改文件/logs")</ID>
+    <ID>MaxLineLength:ArchiveManager.kt$ArchiveManager$Toast.makeText(context, "${archiveFile.fileType.uppercase()}格式暂不支持，请使用ZIP或GZ格式", Toast.LENGTH_SHORT).show()</ID>
+    <ID>MaxLineLength:CopyConfig.kt$CopyConfig.Companion$val activityManager = context.getSystemService(android.content.Context.ACTIVITY_SERVICE) as android.app.ActivityManager</ID>
+    <ID>MaxLineLength:ExtractManager.kt$ExtractManager$_extractStatus.value = "已完成: $extractedCount 个文件 (${String.format("%.1f", speedKb)} KB/s)"</ID>
+    <ID>MaxLineLength:ExtractManager.kt$ExtractManager$_extractStatus.value = "正在解压: ${entry.name} (${String.format("%.1f", speedKb)} KB/s)"</ID>
+    <ID>MaxLineLength:FileHasher.kt$FileHasher$private</ID>
+    <ID>MaxLineLength:FileOperationService.kt$FileOperationService$Log.d(TAG, "复制统计: 成功=${state.current}, 错误=${state.errorCount}, 总数=${totalFiles}, 退出码=$exitCode, 错误率=${String.format("%.2f", errorRate * 100)}%")</ID>
+    <ID>MaxLineLength:FileOperationService.kt$FileOperationService$Log.w(TAG, "复制完成但有 ${state.errorCount} 个文件失败 (错误率: ${String.format("%.2f", errorRate * 100)}%)")</ID>
+    <ID>MaxLineLength:FileOperationService.kt$FileOperationService$if</ID>
+    <ID>MaxLineLength:FileOperationService.kt$FileOperationService$override</ID>
+    <ID>MaxLineLength:FileOperationService.kt$FileOperationService$private</ID>
+    <ID>MaxLineLength:FileReplaceWorker.kt$FileReplaceWorker$"mkdir -p \"${File(task.targetDir).parent}\" &amp;&amp; cp -p -v \"${task.sourceDir.absolutePath}\" \"${task.targetDir}\""</ID>
+    <ID>MaxLineLength:FileReplaceWorker.kt$FileReplaceWorker$if</ID>
+    <ID>MaxLineLength:FileReplaceWorker.kt$FileReplaceWorker$private</ID>
+    <ID>MaxLineLength:FileReplaceWorker.kt$FileReplaceWorker$private suspend</ID>
+    <ID>MaxLineLength:FileReplaceWorker.kt$FileReplaceWorker$updateProgressState(p, totalFiles, totalFiles, "🔍 正在校验: $current/$totalFiles", "ROOT_BATCH", phase = "VERIFYING")</ID>
+    <ID>MaxLineLength:FileReplaceWorker.kt$FileReplaceWorker$val p = ((currentProcessed.toFloat() / totalFiles) * 100).toInt().coerceIn(0, 100)</ID>
+    <ID>MaxLineLength:FileReplaceWorker.kt$FileReplaceWorker$val p = if (totalFiles &gt; 0) (currentCount.toFloat() / totalFiles * 95).toInt().coerceIn(0, 95) else 0</ID>
+    <ID>MaxLineLength:FloatingBallManager.kt$FloatingBallManager$AppLogger.d("FloatingBallManager", "📐 初始位置: ($x, $y), 尺寸: ${width}x${height}, 屏幕: ${screenWidth}x${screenHeight}")</ID>
+    <ID>MaxLineLength:IoOptimizer.kt$IoOptimizer$transferred += sourceChannel.transferTo(transferred, channelSize - transferred, targetChannel)</ID>
+    <ID>MaxLineLength:MainActivity.kt$MainActivity$"Shizuku 服务连接中...&lt;br&gt;&lt;br&gt;&lt;b&gt;&lt;font color=\"#FF0000\"&gt;如果一直在连接中请重启 Shizuku，授权管理那边关掉咱们的软件的授权，接着重新打开软件重新获取授权即可。&lt;/font&gt;&lt;/b&gt;"</ID>
+    <ID>MaxLineLength:MainActivity.kt$MainActivity$.</ID>
+    <ID>MaxLineLength:MainActivity.kt$MainActivity$Toast.makeText(this@MainActivity, "✅ 完成！\n解压: ${result.extractedCount} 个文件\n复制: ${copyResult.copiedCount} 个文件", Toast.LENGTH_LONG).show()</ID>
+    <ID>MaxLineLength:MainActivity.kt$MainActivity$Toast.makeText(this@MainActivity, "❌ 复制失败: ${copyResult.errorMessage}", Toast.LENGTH_LONG).show()</ID>
+    <ID>MaxLineLength:MainActivity.kt$MainActivity$contentResolver.query(it, arrayOf(android.provider.MediaStore.MediaColumns.DATA), "_id=?", arrayOf(split[1]), null)</ID>
+    <ID>MaxLineLength:MainActivity.kt$MainActivity$contentResolver.query(uri, arrayOf(android.provider.MediaStore.MediaColumns.DATA), null, null, null)</ID>
+    <ID>MaxLineLength:MainActivity.kt$MainActivity$findViewById&lt;View&gt;(R.id.action_wechat)?.performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK)</ID>
+    <ID>MaxLineLength:MainActivity.kt$MainActivity$if</ID>
+    <ID>MaxLineLength:MainActivity.kt$MainActivity$observeReplaceProgress(workRequest.id, incrementalUpdate, progressBar, tvPercent, tvFileCount, tvCurrentFile, tvErrors, tvSpeed, tvEta)</ID>
+    <ID>MaxLineLength:MainActivity.kt$MainActivity$private suspend</ID>
+    <ID>MaxLineLength:MainActivity.kt$MainActivity$status.availableModes.contains(PermissionChecker.AccessMode.SHIZUKU) &amp;&amp; !status.hasShizukuPermission -&gt; "授权 Shizuku"</ID>
+    <ID>MaxLineLength:MainActivity.kt$MainActivity$status.availableModes.contains(PermissionChecker.AccessMode.SHIZUKU) &amp;&amp; !status.isShizukuAvailable -&gt; "安装 Shizuku"</ID>
+    <ID>MaxLineLength:MainActivity.kt$MainActivity$status.hasManageStorage &amp;&amp; status.availableModes.contains(PermissionChecker.AccessMode.SHIZUKU) &amp;&amp; !status.hasShizukuPermission -&gt; View.VISIBLE</ID>
+    <ID>MaxLineLength:MainActivity.kt$MainActivity$tvCurrentItem.text = "步骤 2/2: 复制文件到主包\n源: $targetPath\n目标: $configTargetPath\n正在复制: $currentFile"</ID>
+    <ID>MaxLineLength:MainActivity.kt$MainActivity$val</ID>
+    <ID>MaxLineLength:MainActivity.kt$MainActivity$val btnUseSuggested = dialogView.findViewById&lt;com.google.android.material.button.MaterialButton&gt;(R.id.btn_use_suggested)</ID>
+    <ID>MaxLineLength:MainActivity.kt$MainActivity$val etPassword = dialogView.findViewById&lt;com.google.android.material.textfield.TextInputEditText&gt;(R.id.et_password)</ID>
+    <ID>MaxLineLength:MainActivity.kt$MainActivity$val isAtBottom = scrollView.getChildAt(0).bottom - (scrollView.height + scrollView.scrollY) &lt;= 10</ID>
+    <ID>MaxLineLength:MainPackManager.kt$MainPackManager$suspend</ID>
+    <ID>MaxLineLength:MetricCollector.kt$MetricCollector$Log.i(TAG, "MetricCollector initialized: sampleRate=$sampleRate, bufferSize=$bufferSize, flushInterval=${flushIntervalMs}ms")</ID>
+    <ID>MaxLineLength:PatchManager.kt$PatchManager$com.example.tfgwj.utils.AppLogger.func("applyPatchToMainPack", "应用小包完成", result.success, "成功: ${result.successCount}/$total")</ID>
+    <ID>MaxLineLength:PatchManager.kt$PatchManager$com.example.tfgwj.utils.AppLogger.func("deletePatchVersion", "删除小包引发异常", false, "Name: ${version.name} | Error: ${e.message}")</ID>
+    <ID>MaxLineLength:PatchManager.kt$PatchManager$com.example.tfgwj.utils.AppLogger.func("deletePatchVersion", "删除小包部分失败", false, "Name: ${version.name} | 成功: ${result.successCount}/$total")</ID>
+    <ID>MaxLineLength:PatchManager.kt$PatchManager$val defaultOffset = "${com.example.tfgwj.utils.PermissionChecker.PUBG_PACKAGE_NAME}/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/Config/Android"</ID>
+    <ID>MaxLineLength:PermissionChecker.kt$PermissionChecker$"/storage/emulated/0/Android/data/{packageName}/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/Config/Android"</ID>
+    <ID>MaxLineLength:PermissionChecker.kt$PermissionChecker$suspend</ID>
+    <ID>MaxLineLength:PermissionChecker.kt$PermissionChecker$val cleanResult = RootChecker.executeRootCommand("find \"$testDataPath\" -maxdepth 1 -name \"${TEST_FILE_PREFIX}*.tmp\" -delete 2&gt;/dev/null &amp;&amp; echo 'CLEANED' || echo 'NONE_TO_CLEAN'")</ID>
+    <ID>MaxLineLength:PermissionChecker.kt$PermissionChecker$val listOldResult = RootChecker.executeRootCommand("ls \"$testDataPath/${TEST_FILE_PREFIX}*.tmp\" 2&gt;/dev/null")</ID>
+    <ID>MaxLineLength:PermissionChecker.kt$PermissionChecker$val verifyCleanResult = RootChecker.executeRootCommand("ls \"$testDataPath/${TEST_FILE_PREFIX}*.tmp\" 2&gt;/dev/null")</ID>
+    <ID>MaxLineLength:PermissionManager.kt$PermissionManager$if</ID>
+    <ID>MaxLineLength:PermissionManager.kt$PermissionManager$val</ID>
+    <ID>MaxLineLength:PermissionManager.kt$PermissionManager$val canAccessPrivate = checkResult.bestMode != PermissionChecker.AccessMode.NONE || (hasShizukuPerm &amp;&amp; isServiceConnected)</ID>
+    <ID>MaxLineLength:ProgressTracker.kt$ProgressTracker$private val onProgressUpdate: (progress: Int, processed: Int, total: Int, message: String, speed: Float, phase: String) -&gt; Unit</ID>
+    <ID>MaxLineLength:RootCopyOrchestrator.kt$RootCopyOrchestrator$(current.toFloat() / totalFiles * config.progressPhaseReplacingMax).toInt().coerceIn(0, config.progressPhaseReplacingMax)</ID>
+    <ID>MaxLineLength:RootCopyOrchestrator.kt$RootCopyOrchestrator$val verifiedCount = verificationManager.verify(androidDir, targetPackage, totalFiles, VerificationMode.ROOT)</ID>
+    <ID>MaxLineLength:RootCopyStrategy.kt$RootCopyStrategy$"mkdir -p \"${File(task.targetDir).parent}\" &amp;&amp; cp -p -v \"${task.sourceDir.absolutePath}\" \"${task.targetDir}\""</ID>
+    <ID>MaxLineLength:RootCopyStrategy.kt$RootCopyStrategy$callback?.onProgress(p, totalFiles, totalFiles, "正在校验: $current/$totalFiles", phase = "VERIFYING")</ID>
+    <ID>MaxLineLength:RootCopyStrategy.kt$RootCopyStrategy$private</ID>
+    <ID>MaxLineLength:RootCopyStrategy.kt$RootCopyStrategy$val p = if (totalFiles &gt; 0) (currentCount.toFloat() / totalFiles * 95).toInt().coerceIn(0, 95) else 0</ID>
+    <ID>MaxLineLength:ShizukuCopyOrchestrator.kt$ShizukuCopyOrchestrator$(current.toFloat() / totalFiles * config.progressPhaseReplacingMax).toInt().coerceIn(0, config.progressPhaseReplacingMax)</ID>
+    <ID>MaxLineLength:ShizukuCopyOrchestrator.kt$ShizukuCopyOrchestrator$if</ID>
+    <ID>MaxLineLength:ShizukuCopyOrchestrator.kt$ShizukuCopyOrchestrator$val verifiedCount = verificationManager.verify(androidDir, targetPackage, totalFiles, VerificationMode.SHIZUKU)</ID>
+    <ID>MaxLineLength:ShizukuCopyStrategy.kt$ShizukuCopyStrategy$"mkdir -p \"${File(task.targetDir).parent}\" &amp;&amp; cp -p -v \"${task.sourceDir.absolutePath}\" \"${task.targetDir}\""</ID>
+    <ID>MaxLineLength:ShizukuCopyStrategy.kt$ShizukuCopyStrategy$if</ID>
+    <ID>MaxLineLength:ShizukuCopyStrategy.kt$ShizukuCopyStrategy$private</ID>
+    <ID>MaxLineLength:ShizukuManager.kt$ShizukuManager$Log.w(TAG, "Watchdog [Triggered]: 探测到 Shizuku Base Binder 存活但服务失联。执行重启序列... (Backoff: ${backoffMillis}ms)")</ID>
+    <ID>MaxLineLength:ShizukuManager.kt$ShizukuManager$fun</ID>
+    <ID>MaxLineLength:ShizukuManager.kt$ShizukuManager$private</ID>
+    <ID>MaxLineLength:SmartCacheManager.kt$SmartCacheManager$suspend</ID>
+    <ID>MaxLineLength:SmartCacheManager.kt$SmartCacheManager$val count = cleanViaShizuku(shizukuManager, savedPath, whiteList.toTypedArray(), progressCallback)</ID>
+    <ID>MaxLineLength:SmartCacheManager.kt$SmartCacheManager$val savedPath = "/storage/emulated/0/Android/data/$packageName/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved"</ID>
+    <ID>MaxLineLength:StorageChecker.kt$StorageChecker$Log.d(TAG, "采样估算: $SAMPLE_SIZE 个样本, 平均 ${formatSize(avgFileSize)}, 总 $totalFileCount 个文件, 估算 ${formatSize(estimatedSize)}")</ID>
+    <ID>MaxLineLength:StorageChecker.kt$StorageChecker.StorageCheckResult.Companion$absBytes &gt;= 1024L * 1024L * 1024L -&gt; String.format("%.2f GB", bytes.toDouble() / (1024L * 1024L * 1024L))</ID>
+    <ID>MaxLineLength:UpdateManager.kt$UpdateManager$Log.i(TAG, "⚡ Fastest winner: ${if (res.downloadUrl.contains("http")) res.downloadUrl else "Direct connection"}")</ID>
+    <ID>NestedBlockDepth:AppLogger.kt$AppLogger$private fun checkFileSize()</ID>
+    <ID>NestedBlockDepth:ArchiveManager.kt$ArchiveManager$private fun extractGz(gzFile: File, outputDir: File): Boolean</ID>
+    <ID>NestedBlockDepth:ArchiveManager.kt$ArchiveManager$private fun extractZip(zipFile: File, outputDir: File, password: String?): Boolean</ID>
+    <ID>NestedBlockDepth:ArchiveScanner.kt$ArchiveScanner$private fun scanDirectory(dir: File, results: MutableList&lt;ArchiveInfo&gt;)</ID>
+    <ID>NestedBlockDepth:ExtractManager.kt$ExtractManager$private fun extract7z( archivePath: String, outputPath: String, password: String? ): ExtractResult</ID>
+    <ID>NestedBlockDepth:ExtractManager.kt$ExtractManager$private fun extractZip( archivePath: String, outputPath: String, password: String? ): ExtractResult</ID>
+    <ID>NestedBlockDepth:FileHasher.kt$FileHasher$fun areFilesEqualWithSampling(file1: File, file2: File, sampleSize: Long = 512 * 1024L): Boolean</ID>
+    <ID>NestedBlockDepth:IoOptimizer.kt$IoOptimizer$fun fastCopy(source: File, target: File): Boolean</ID>
+    <ID>NestedBlockDepth:MainActivity.kt$MainActivity$private fun getExternalStoragePath(volumeId: String): String?</ID>
+    <ID>NestedBlockDepth:MainActivity.kt$MainActivity$private fun getPathFromContentUri(uri: Uri): String?</ID>
+    <ID>NestedBlockDepth:MainActivity.kt$MainActivity$private fun getPathFromUri(uri: Uri): String?</ID>
+    <ID>NestedBlockDepth:MainActivity.kt$MainActivity$private fun getStoragePathByUuid(uuid: String): String?</ID>
+    <ID>NestedBlockDepth:PatchManager.kt$PatchManager$private fun analyzeVersionFolder(dir: File): PatchVersion?</ID>
+    <ID>NestedBlockDepth:PermissionChecker.kt$PermissionChecker$private fun testDirectoryAccessNative(packageName: String): Boolean</ID>
+    <ID>NestedBlockDepth:StorageChecker.kt$StorageChecker$private fun calculateOverlapSize(sourceDir: File, targetDir: File): Long</ID>
+    <ID>NestedBlockDepth:StorageChecker.kt$StorageChecker$private fun estimateDirectorySize(dir: File): Pair&lt;Long, Boolean&gt;</ID>
+    <ID>NestedBlockDepth:StorageTypeDetector.kt$StorageTypeDetector$private fun checkRotationalFlag(): Boolean?</ID>
+    <ID>NestedBlockDepth:UniversalExtractor.kt$UniversalExtractor$private fun extract7z(path: String, outputDir: String, password: String?): ExtractResult</ID>
+    <ID>NestedBlockDepth:UniversalExtractor.kt$UniversalExtractor$private fun extractArchive(archiveIn: ArchiveInputStream&lt;*&gt;, outputDir: String): ExtractResult</ID>
+    <ID>NestedBlockDepth:UniversalExtractor.kt$UniversalExtractor$private fun extractGzip(path: String, outputDir: String): ExtractResult</ID>
+    <ID>NestedBlockDepth:UniversalExtractor.kt$UniversalExtractor$private fun extractXz(path: String, outputDir: String): ExtractResult</ID>
+    <ID>NestedBlockDepth:UniversalExtractor.kt$UniversalExtractor$private fun extractZip(path: String, outputDir: String, password: String?): ExtractResult</ID>
+    <ID>NestedBlockDepth:VerificationManager.kt$VerificationManager$private fun parseStatOutput(output: String?): Map&lt;String, Long&gt;</ID>
+    <ID>NestedBlockDepth:VerificationManager.kt$VerificationManager$private suspend fun verifyViaRoot( androidDir: File, targetPackage: String, totalFiles: Int ): Int</ID>
+    <ID>NestedBlockDepth:VerificationManager.kt$VerificationManager$private suspend fun verifyViaShizuku( androidDir: File, targetPackage: String, totalFiles: Int ): Int</ID>
+    <ID>NewLineAtEndOfFile:AppConstants.kt$com.example.tfgwj.utils.AppConstants.kt</ID>
+    <ID>NewLineAtEndOfFile:AppManager.kt$com.example.tfgwj.manager.AppManager.kt</ID>
+    <ID>NewLineAtEndOfFile:ArchiveFile.kt$com.example.tfgwj.model.ArchiveFile.kt</ID>
+    <ID>NewLineAtEndOfFile:ArchiveListDialog.kt$com.example.tfgwj.dialog.ArchiveListDialog.kt</ID>
+    <ID>NewLineAtEndOfFile:ArchiveManager.kt$com.example.tfgwj.manager.ArchiveManager.kt</ID>
+    <ID>NewLineAtEndOfFile:BackupManager.kt$com.example.tfgwj.manager.BackupManager.kt</ID>
+    <ID>NewLineAtEndOfFile:ExampleUnitTest.kt$com.example.tfgwj.ExampleUnitTest.kt</ID>
+    <ID>NewLineAtEndOfFile:FileHasher.kt$com.example.tfgwj.utils.FileHasher.kt</ID>
+    <ID>NewLineAtEndOfFile:FileReplaceResult.kt$com.example.tfgwj.model.FileReplaceResult.kt</ID>
+    <ID>NewLineAtEndOfFile:FloatingBallManager.kt$com.example.tfgwj.ui.FloatingBallManager.kt</ID>
+    <ID>NewLineAtEndOfFile:PreferencesManager.kt$com.example.tfgwj.data.PreferencesManager.kt</ID>
+    <ID>NewLineAtEndOfFile:ReplaceHistoryManager.kt$com.example.tfgwj.data.ReplaceHistoryManager.kt</ID>
+    <ID>NewLineAtEndOfFile:RootChecker.kt$com.example.tfgwj.utils.RootChecker.kt</ID>
+    <ID>ReturnCount:AppManager.kt$AppManager$fun stopApp(packageName: String): Boolean</ID>
+    <ID>ReturnCount:FileHasher.kt$FileHasher$fun areFilesEqual(file1: File, file2: File): Boolean</ID>
+    <ID>ReturnCount:FileHasher.kt$FileHasher$fun areFilesEqualWithSampling(file1: File, file2: File, sampleSize: Long = 512 * 1024L): Boolean</ID>
+    <ID>ReturnCount:FileHasher.kt$FileHasher$private fun compareChunks(raf1: java.io.RandomAccessFile, raf2: java.io.RandomAccessFile, startOffset: Long, sizeToRead: Long): Boolean</ID>
+    <ID>ReturnCount:FileReplaceWorker.kt$FileReplaceWorker$private fun collectTasksRecursive(source: File, target: String, tasks: MutableList&lt;CopyTask&gt;, depth: Int, maxDepth: Int)</ID>
+    <ID>ReturnCount:FileStatistics.kt$FileStatistics$fun collectRecursive(source: File, target: String, depth: Int)</ID>
+    <ID>ReturnCount:FloatingBallManager.kt$FloatingBallManager.&lt;no name provided&gt;$override fun onTouch(view: View?, event: MotionEvent): Boolean</ID>
+    <ID>ReturnCount:InputValidator.kt$InputValidator$fun isSafeFileName(fileName: String): Boolean</ID>
+    <ID>ReturnCount:InputValidator.kt$InputValidator$fun isSafeRegex(regex: String, timeoutMs: Long = 100): Boolean</ID>
+    <ID>ReturnCount:InputValidator.kt$InputValidator$fun isSafeUrl(url: String): Boolean</ID>
+    <ID>ReturnCount:InputValidator.kt$InputValidator$fun validatePath(path: String, basePath: String? = null): String?</ID>
+    <ID>ReturnCount:InputValidator.kt$InputValidator$fun validateZipEntry(targetDir: File, entryName: String): File?</ID>
+    <ID>ReturnCount:IoOptimizer.kt$IoOptimizer$fun needsUpdate(source: File, target: File): Boolean</ID>
+    <ID>ReturnCount:MainActivity.kt$MainActivity$private fun getExternalStoragePath(volumeId: String): String?</ID>
+    <ID>ReturnCount:MainPackManager.kt$MainPackManager$private fun findAndroidDirectory(baseDir: File): File?</ID>
+    <ID>ReturnCount:MainPackManager.kt$MainPackManager$private fun findAndroidDirectoryRecursive(dir: File, currentDepth: Int, maxDepth: Int): File?</ID>
+    <ID>ReturnCount:PermissionChecker.kt$PermissionChecker$private fun testDirectoryAccess(packageName: String = PUBG_PACKAGE_NAME): Boolean</ID>
+    <ID>ReturnCount:PermissionChecker.kt$PermissionChecker$private fun testDirectoryAccessShizuku(packageName: String, context: Context?): Boolean</ID>
+    <ID>ReturnCount:PermissionManager.kt$PermissionManager$private suspend fun loadEnvConfig(): PermissionStatus?</ID>
+    <ID>ReturnCount:PermissionManager.kt$PermissionManager$suspend fun ensurePermissions(): Boolean</ID>
+    <ID>ReturnCount:ProgressTracker.kt$SpeedCalculator$fun update(currentProcessed: Int, currentTime: Long): Float</ID>
+    <ID>ReturnCount:RootChecker.kt$RootChecker$fun isRooted(): Boolean</ID>
+    <ID>ReturnCount:RootCopyStrategy.kt$RootCopyStrategy$private fun collectTasksRecursive(source: File, target: String, tasks: MutableList&lt;CopyTask&gt;, depth: Int, maxDepth: Int)</ID>
+    <ID>ReturnCount:RuleEngine.kt$RuleEngine$private fun parseAndApply(jsonResult: String): CloudConfigResponse?</ID>
+    <ID>ReturnCount:ShizukuCopyStrategy.kt$ShizukuCopyStrategy$private fun collectTasksRecursive(source: File, target: String, tasks: MutableList&lt;CopyTask&gt;, depth: Int, maxDepth: Int)</ID>
+    <ID>ReturnCount:ShizukuManager.kt$ShizukuManager$fun requestPermission(callback: (Boolean) -&gt; Unit)</ID>
+    <ID>ReturnCount:SmartCacheManager.kt$SmartCacheManager$private fun cleanViaNative( savedPath: String, whiteList: List&lt;String&gt;, progressCallback: ((current: Int, total: Int, currentItem: String) -&gt; Unit)? ): Int</ID>
+    <ID>ReturnCount:SmartCacheManager.kt$SmartCacheManager$private fun performDirectOptimize(savedDir: File): String?</ID>
+    <ID>ReturnCount:SmartCacheManager.kt$SmartCacheManager$private fun performShizukuOptimize(shizukuManager: ShizukuManager, savedPath: String): String?</ID>
+    <ID>ReturnCount:StorageChecker.kt$StorageChecker$private fun estimateDirectorySize(dir: File): Pair&lt;Long, Boolean&gt;</ID>
+    <ID>ReturnCount:StorageTypeDetector.kt$StorageTypeDetector$private fun checkRotationalFlag(): Boolean?</ID>
+    <ID>ReturnCount:UpdateManager.kt$UpdateManager$private fun isNewerVersion(current: String, latest: String): Boolean</ID>
+    <ID>ReturnCount:UpdateManager.kt$UpdateManager$private fun verifyApkIntegrity(context: Context, apkFile: File, expectedSize: Long = -1): Boolean</ID>
+    <ID>SwallowedException:AppIconHelper.kt$AppIconHelper$e: Exception</ID>
+    <ID>SwallowedException:AppIconHelper.kt$AppIconHelper$e: PackageManager.NameNotFoundException</ID>
+    <ID>SwallowedException:AppLogger.kt$AppLogger$e: Exception</ID>
+    <ID>SwallowedException:AppManager.kt$AppManager$e: Exception</ID>
+    <ID>SwallowedException:AppManager.kt$AppManager$e: PackageManager.NameNotFoundException</ID>
+    <ID>SwallowedException:BackupManager.kt$BackupManager$e: Exception</ID>
+    <ID>SwallowedException:CopyConfig.kt$CopyConfig.Companion$e: Exception</ID>
+    <ID>SwallowedException:ExtractManager.kt$ExtractManager$e: Exception</ID>
+    <ID>SwallowedException:ExtractManager.kt$ExtractManager$e: PasswordRequiredException</ID>
+    <ID>SwallowedException:FileOperationService.kt$FileOperationService$e: Exception</ID>
+    <ID>SwallowedException:FileReplaceWorker.kt$FileReplaceWorker$e: Exception</ID>
+    <ID>SwallowedException:IoOptimizer.kt$IoOptimizer$e: Exception</ID>
+    <ID>SwallowedException:MainActivity.kt$MainActivity$e: Exception</ID>
+    <ID>SwallowedException:PatchManager.kt$PatchManager$e: Exception</ID>
+    <ID>SwallowedException:PermissionChecker.kt$PermissionChecker$e: Exception</ID>
+    <ID>SwallowedException:PermissionManager.kt$PermissionManager$e: Exception</ID>
+    <ID>SwallowedException:ReplaceHistoryManager.kt$ReplaceHistoryManager$e: Exception</ID>
+    <ID>SwallowedException:RootChecker.kt$RootChecker$e: Exception</ID>
+    <ID>SwallowedException:RootCopyStrategy.kt$RootCopyStrategy$e: Exception</ID>
+    <ID>SwallowedException:ShizukuCopyOrchestrator.kt$ShizukuCopyOrchestrator$e: Exception</ID>
+    <ID>SwallowedException:ShizukuCopyStrategy.kt$ShizukuCopyStrategy$e: Exception</ID>
+    <ID>SwallowedException:ShizukuManager.kt$ShizukuManager$e: Exception</ID>
+    <ID>SwallowedException:ShizukuRequestContract.kt$ShizukuRequestContract$e: Exception</ID>
+    <ID>SwallowedException:StorageTypeDetector.kt$StorageTypeDetector$e: Exception</ID>
+    <ID>SwallowedException:UniversalExtractor.kt$UniversalExtractor$e: Exception</ID>
+    <ID>SwallowedException:UniversalExtractor.kt$UniversalExtractor$e:Exception</ID>
+    <ID>SwallowedException:UpdateManager.kt$UpdateManager$e: Exception</ID>
+    <ID>ThrowsCount:ExtractManager.kt$ExtractManager$private fun extractZip( archivePath: String, outputPath: String, password: String? ): ExtractResult</ID>
+    <ID>TooGenericExceptionCaught:AppIconHelper.kt$AppIconHelper$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:AppInstaller.kt$AppInstaller$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:AppLogger.kt$AppLogger$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:AppManager.kt$AppManager$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:ArchiveManager.kt$ArchiveManager$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:ArchiveScanner.kt$ArchiveScanner$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:BackupManager.kt$BackupManager$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:CopyConfig.kt$CopyConfig.Companion$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:ExtractManager.kt$ExtractManager$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:FileHasher.kt$FileHasher$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:FileOperationService.kt$FileOperationService$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:FileReplaceWorker.kt$FileReplaceWorker$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:FileReplaceWorkerV2.kt$FileReplaceWorkerV2$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:FileTimeModifier.kt$FileTimeModifier$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:FloatingBallManager.kt$FloatingBallManager$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:InputValidator.kt$InputValidator$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:IoOptimizer.kt$IoOptimizer$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:IoOptimizer.kt$IoOptimizer$fallbackE: Exception</ID>
+    <ID>TooGenericExceptionCaught:MainActivity.kt$MainActivity$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:MainPackManager.kt$MainPackManager$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:MetricCollector.kt$MetricCollector$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:NormalCopyOrchestrator.kt$NormalCopyOrchestrator$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:NormalCopyStrategy.kt$NormalCopyStrategy$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:PatchManager.kt$PatchManager$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:PermissionChecker.kt$PermissionChecker$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:PermissionManager.kt$PermissionManager$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:ReplaceHistoryManager.kt$ReplaceHistoryManager$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:RootChecker.kt$RootChecker$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:RootCopyOrchestrator.kt$RootCopyOrchestrator$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:RootCopyStrategy.kt$RootCopyStrategy$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:RuleEngine.kt$RuleEngine$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:SecurityConfig.kt$SecurityConfig$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:ShizukuCopyOrchestrator.kt$ShizukuCopyOrchestrator$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:ShizukuCopyStrategy.kt$ShizukuCopyStrategy$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:ShizukuManager.kt$ShizukuManager$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:ShizukuRequestContract.kt$ShizukuRequestContract$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:SmartCacheManager.kt$SmartCacheManager$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:StealthManager.kt$StealthManager$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:StorageChecker.kt$StorageChecker$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:StorageTypeDetector.kt$StorageTypeDetector$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:TimePickerHelper.kt$TimePickerHelper$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:UniversalExtractor.kt$UniversalExtractor$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:UniversalExtractor.kt$UniversalExtractor$e:Exception</ID>
+    <ID>TooGenericExceptionCaught:UpdateManager.kt$UpdateManager$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:VerificationManager.kt$VerificationManager$e: Exception</ID>
+    <ID>TooManyFunctions:AppLogger.kt$AppLogger</ID>
+    <ID>TooManyFunctions:ArchiveManager.kt$ArchiveManager</ID>
+    <ID>TooManyFunctions:FileOperationService.kt$FileOperationService : Stub</ID>
+    <ID>TooManyFunctions:FileReplaceWorker.kt$FileReplaceWorker : CoroutineWorker</ID>
+    <ID>TooManyFunctions:MainActivity.kt$MainActivity : AppCompatActivity</ID>
+    <ID>TooManyFunctions:MainViewModel.kt$MainViewModel : AndroidViewModel</ID>
+    <ID>TooManyFunctions:MetricCollector.kt$MetricCollector</ID>
+    <ID>TooManyFunctions:PerformanceMonitor.kt$PerformanceMonitor</ID>
+    <ID>TooManyFunctions:PermissionChecker.kt$PermissionChecker</ID>
+    <ID>TooManyFunctions:PermissionManager.kt$PermissionManager</ID>
+    <ID>TooManyFunctions:PreferencesManager.kt$PreferencesManager</ID>
+    <ID>TooManyFunctions:ShizukuManager.kt$ShizukuManager</ID>
+    <ID>TooManyFunctions:UniversalExtractor.kt$UniversalExtractor</ID>
+    <ID>UnusedParameter:CopyStrategy.kt$CopyStrategy.CopyResult.Companion$mode: String</ID>
+    <ID>UnusedParameter:FileReplaceWorker.kt$FileReplaceWorker$incrementalUpdate: Boolean</ID>
+    <ID>UnusedParameter:FloatingBallManager.kt$FloatingBallManager$phase: String = "REPLACING"</ID>
+    <ID>UnusedParameter:MainActivity.kt$MainActivity$path: String? = null</ID>
+    <ID>UnusedParameter:MainActivity.kt$MainActivity$versionDir: File</ID>
+    <ID>UnusedParameter:ModeSelectionDialog.kt$ModeSelectionDialog$layout: View</ID>
+    <ID>UnusedParameter:NormalCopyOrchestrator.kt$NormalCopyOrchestrator$targetBase: String</ID>
+    <ID>UnusedParameter:PermissionChecker.kt$PermissionChecker$androidVersion: Int</ID>
+    <ID>UnusedParameter:PermissionManager.kt$PermissionManager$activity: Activity</ID>
+    <ID>UnusedParameter:PermissionManager.kt$PermissionManager$availableModes: List&lt;PermissionChecker.AccessMode&gt;</ID>
+    <ID>UnusedParameter:PermissionManager.kt$PermissionManager$canAccessPrivate: Boolean</ID>
+    <ID>UnusedParameter:PermissionManager.kt$PermissionManager$hasStorage: Boolean</ID>
+    <ID>UnusedParameter:SecurityConfig.kt$SecurityConfig$context: Context</ID>
+    <ID>UnusedParameter:SmartCacheManager.kt$SmartCacheManager$context: Context</ID>
+    <ID>UnusedParameter:StorageChecker.kt$StorageChecker$targetPath: String</ID>
+    <ID>UnusedParameter:StorageTypeDetector.kt$StorageTypeDetector$path: String?</ID>
+    <ID>UnusedParameter:VerificationManager.kt$VerificationManager$targetBase: String</ID>
+    <ID>UnusedPrivateMember:FileReplaceWorker.kt$FileReplaceWorker$private fun copyFileZeroCopy(source: File, target: File): Long</ID>
+    <ID>UnusedPrivateMember:FileReplaceWorker.kt$FileReplaceWorker$private fun countFilesInDir(dir: File): Int</ID>
+    <ID>UnusedPrivateMember:FileReplaceWorker.kt$FileReplaceWorker$private fun listAllFiles(dir: File): List&lt;File&gt;</ID>
+    <ID>UnusedPrivateMember:FileReplaceWorkerV2.kt$FileReplaceWorkerV2$private suspend fun updateProgressState( progress: Int, processed: Int, total: Int, message: String, speed: Float )</ID>
+    <ID>UnusedPrivateMember:MainActivity.kt$MainActivity$private fun checkIsIncrementalUpdate(packageName: String): Boolean</ID>
+    <ID>UnusedPrivateMember:MainActivity.kt$MainActivity$private fun showFailedResult(error: String, path: String? = null)</ID>
+    <ID>UnusedPrivateMember:MainActivity.kt$MainActivity$private fun updateProgressUI(result: com.example.tfgwj.model.FileReplaceResult)</ID>
+    <ID>UnusedPrivateMember:MainActivity.kt$MainActivity$private suspend fun checkIfNeedShizuku(packageName: String): Boolean</ID>
+    <ID>UnusedPrivateMember:PermissionChecker.kt$PermissionChecker$private fun testDirectoryAccess(packageName: String = PUBG_PACKAGE_NAME): Boolean</ID>
+    <ID>UnusedPrivateMember:RootChecker.kt$RootChecker$private fun canExecuteCommand(command: String): Boolean</ID>
+    <ID>UnusedPrivateProperty:ArchiveManager.kt$ArchiveManager$val passwordBytes = password?.toByteArray()</ID>
+    <ID>UnusedPrivateProperty:ArchiveManager.kt$ArchiveManager.Companion$private const val SCAN_DEBOUNCE_MS = 500L</ID>
+    <ID>UnusedPrivateProperty:CopyConfig.kt$CopyConfig.Companion$val memoryMb = getMemoryMb(context)</ID>
+    <ID>UnusedPrivateProperty:ExtractManager.kt$ExtractManager$val bufferSize = optimalBufferSize</ID>
+    <ID>UnusedPrivateProperty:FileReplaceWorkerV2.kt$FileReplaceWorkerV2$private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())</ID>
+    <ID>UnusedPrivateProperty:FileReplaceWorkerV2.kt$FileReplaceWorkerV2$val startTime = System.currentTimeMillis()</ID>
+    <ID>UnusedPrivateProperty:FileStatistics.kt$FileStatistics$private val context: android.content.Context</ID>
+    <ID>UnusedPrivateProperty:FloatingBallManager.kt$FloatingBallManager.Companion$private const val DEFAULT_X = 100</ID>
+    <ID>UnusedPrivateProperty:FloatingBallManager.kt$FloatingBallManager.Companion$private const val DEFAULT_Y = 500</ID>
+    <ID>UnusedPrivateProperty:MainActivity.kt$MainActivity$private val extractAndUpdateLauncher = registerForActivityResult( ActivityResultContracts.OpenDocument() ) { uri -&gt; if (uri != null) { handleExtractAndUpdate(uri) } }</ID>
+    <ID>UnusedPrivateProperty:MainActivity.kt$MainActivity$val predefinedApps = PermissionChecker.getSupportedAppsList().map { it.packageName }</ID>
+    <ID>UnusedPrivateProperty:MainActivity.kt$MainActivity$val sourceName = File(sourcePath).name</ID>
+    <ID>UnusedPrivateProperty:NormalCopyOrchestrator.kt$NormalCopyOrchestrator$val currentSpeed = ioRateCalculator.update(totalBytesProcessed.get())</ID>
+    <ID>UnusedPrivateProperty:PatchManager.kt$PatchManager.Companion$private const val TAG = "PatchManager"</ID>
+    <ID>UnusedPrivateProperty:PermissionChecker.kt$PermissionChecker$// 和平精英数据目录（保持向后兼容） private const val PUBG_DATA_PATH = "$STORAGE_ROOT/Android/data/$PUBG_PACKAGE_NAME"</ID>
+    <ID>UnusedPrivateProperty:ProgressPredictor.kt$ProgressPredictor.Companion$private const val TAG = "ProgressPredictor"</ID>
+    <ID>UnusedPrivateProperty:ProgressTracker.kt$ProgressTracker.Companion$// 进度平滑因子（0-1） private const val SMOOTHING_FACTOR = 0.3f</ID>
+    <ID>UnusedPrivateProperty:ReplaceHistoryManager.kt$ReplaceHistoryManager.Companion$private const val TAG = "ReplaceHistoryManager"</ID>
+    <ID>UnusedPrivateProperty:RootCopyOrchestrator.kt$RootCopyOrchestrator$val progress = if (totalFiles &gt; 0) { (current.toFloat() / totalFiles * config.progressPhaseReplacingMax).toInt().coerceIn(0, config.progressPhaseReplacingMax) } else 0</ID>
+    <ID>UnusedPrivateProperty:ShizukuCopyOrchestrator.kt$ShizukuCopyOrchestrator$val progress = if (totalFiles &gt; 0) { (current.toFloat() / totalFiles * config.progressPhaseReplacingMax).toInt().coerceIn(0, config.progressPhaseReplacingMax) } else 0</ID>
+    <ID>UnusedPrivateProperty:SmartCacheManager.kt$SmartCacheManager$val deleteResult = RootChecker.executeRootCommand(deleteCommand)</ID>
+    <ID>UnusedPrivateProperty:UpdateManager.kt$UpdateManager$// Placeholder context for verification private var verificationContext: Context? = null</ID>
+    <ID>UnusedPrivateProperty:VerificationManager.kt$VerificationManager$private val context: android.content.Context</ID>
+    <ID>UseCheckOrError:ShizukuManager.kt$ShizukuManager.Companion$throw IllegalStateException("ShizukuManager must be initialized with a context first")</ID>
+    <ID>VariableNaming:PermissionManager.kt$PermissionManager$// 缓存配置路径 private val CONFIG_FILE_PATH = "${PermissionChecker.CACHE_DIR}/.config/env_status.json"</ID>
+    <ID>WildcardImport:AccessibilityUtils.kt$import androidx.compose.ui.semantics.*</ID>
+    <ID>WildcardImport:Animations.kt$import androidx.compose.animation.*</ID>
+    <ID>WildcardImport:Animations.kt$import androidx.compose.animation.core.*</ID>
+    <ID>WildcardImport:AppLogger.kt$import kotlinx.coroutines.*</ID>
+    <ID>WildcardImport:ExampleUnitTest.kt$import org.junit.Assert.*</ID>
+    <ID>WildcardImport:FileReplaceWorker.kt$import androidx.work.*</ID>
+    <ID>WildcardImport:FileReplaceWorker.kt$import java.io.*</ID>
+    <ID>WildcardImport:FileReplaceWorkerV2.kt$import androidx.work.*</ID>
+    <ID>WildcardImport:FileReplaceWorkerV2.kt$import com.example.tfgwj.worker.orchestrator.*</ID>
+    <ID>WildcardImport:MainActivity.kt$import com.example.tfgwj.manager.*</ID>
+    <ID>WildcardImport:MainActivity.kt$import com.example.tfgwj.utils.*</ID>
+    <ID>WildcardImport:MainViewModel.kt$import com.example.tfgwj.manager.*</ID>
+    <ID>WildcardImport:MainViewModel.kt$import kotlinx.coroutines.flow.*</ID>
+    <ID>WildcardImport:MetricCollector.kt$import kotlinx.coroutines.*</ID>
+    <ID>WildcardImport:PerformanceMonitor.kt$import kotlinx.coroutines.*</ID>
+    <ID>WildcardImport:PreferencesManager.kt$import androidx.datastore.preferences.core.*</ID>
+    <ID>WildcardImport:ReplaceHistoryManager.kt$import androidx.datastore.preferences.core.*</ID>
+    <ID>WildcardImport:ResponsiveLayout.kt$import androidx.compose.foundation.layout.*</ID>
+    <ID>WildcardImport:UniversalExtractor.kt$import java.io.*</ID>
+  </CurrentIssues>
+</SmellBaseline>

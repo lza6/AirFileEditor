@@ -1,4 +1,4 @@
-# Project Specifications: tfgwj (听风改文件) V3.1.0
+# Project Specifications: tfgwj (听风改文件) V9.0.0 (Quality Foundation)
 
 ## 1. 项目愿景 (Vision)
 打造业界领先的 Android 文件自动化管理工具，专注于高效、安全、无痛的 `/Android/data` 目录文件替换与优化。
@@ -102,45 +102,68 @@ IoOptimizer (IO 优化)
 
 ## 6. 版本历史
 
-### v3.1.0 (当前版本)
+### V8.0.0 (已完成 - Orchestrator Architecture Refactoring)
+- ✅ 架构演进：FileReplaceWorker 模块化拆分
+  - ✅ 创建 `FileReplaceOrchestrator` 接口，定义统一契约
+  - ✅ 实现 `RootCopyOrchestrator` / `ShizukuCopyOrchestrator` / `NormalCopyOrchestrator`
+  - ✅ 提取 `ProgressTracker` 统一双级节流（WM 1000ms / UI 32ms）
+  - ✅ 提取 `FileStatistics` 管理文件扫描与批次生成
+  - ✅ 提取 `VerificationManager` 实现批量验证逻辑
+  - ✅ 提取 `PathConstants` 消除硬编码路径
+  - ✅ 提取 `CopyConfig` 动态配置并发度与节流参数
+  - ✅ 创建 `FileReplaceWorkerV2` 作为新版入口（V1 保留向后兼容）
+- ✅ MainActivity 集成 V2 架构（默认使用 createWorkRequestV2）
+- ✅ 文档更新与向后兼容性维护
+- ⚠️ 待完成：单元测试（ProgressTracker + Orchestrator）
+
+### V7.0.0 (已完成 - Performance & Architecture Evolution)
+- ✅ 网络层升级：HttpURLConnection → OkHttp (连接池、HTTP/2支持)
+- ✅ 断点续传：UpdateManager支持Range请求，中断后可继续
+- ✅ 存储类型检测：StorageTypeDetector识别SSD/UFS vs eMMC，智能调整缓冲区
+- ✅ 进度预测：ProgressPredictor预估剩余完成时间
+- ✅ 新增NetworkClient工具类：统一OkHttpClient管理
+
+### V6.0.0 (已完成 - Phantom Core & mmap)
+- ✅ 架构重构：基于 mmap 的极速内存映射写入 (Zero-Copy)
+- ✅ 安全屏蔽：防连带环境侦测自清模块 (Phantom Stealth)
+- ✅ 规则解耦：通过 GitHub Mirror 构建异步 JSON 规则链 (由 RuleEngine.fetchCloudRules() 实现)
+
+### V5.0.0 - V5.2.0 (已完成 - OTA 与防劫持网络层)
+- ✅ 搭载基于协程与 HttpURLConnection 的零依赖下载流
+- ✅ 并发多线程代理节点竞速，突破封锁与地域歧视
+- ✅ 防连带污染：防反向代理篡改的 HTTPS 原生降级机制 (Proxy Shield)
+- ✅ 底层安装体系并入 Omni-Installer (Root/Shizuku/Native)
+
+### V4.0.0 (已完成)
+- ✅ Omni-Mode 极限强化 (主动 Watchdog 机制)
+- ✅ IoOptimizer 抽样哈希 (Sampling Hash)
+- ✅ Shizuku 进程级进度双节流 (IPC Throttling)
+
+### v3.1.0 
 - ✅ Omni-Mode 智能检测系统
-- ✅ 手动模式选择对话框
-- ✅ IoOptimizer 性能优化引擎
-- ✅ 动态缓冲区管理
-- ✅ 并发控制优化
-- ✅ 改进权限检查系统
 
-### v2.0.0
-- ✅ Shizuku 高性能文件读写引擎
-- ✅ 智能哈希比对（增量更新）算法
-- ✅ 多格式压缩包智能识别与解压
-- ✅ 文件时间修改功能
-- ✅ 实时日志系统与悬浮窗进度管理
-- ✅ 全新 Logo 应用
+## 7. 待办路线图 (Roadmap - project_specs.md)
 
-## 7. 待办路线图 (Roadmap)
+### V8.0.0 核心任务库 (Orchestrator Architecture Refactoring) - 已完成 ✅
+- [x] **Task 11: 创建 FileReplaceOrchestrator 接口与核心抽象** (V8.0.0 完成)
+- [x] **Task 12: 实现三种模式 Orchestrator (Root/Shizuku/Normal)** (V8.0.0 完成)
+- [x] **Task 13: 创建 FileReplaceWorkerV2 并集成 Orchestrator** (V8.0.0 完成)
+- [ ] **Task 14: 单元测试 - ProgressTracker 节流验证** (待完成)
+- [ ] **Task 15: 单元测试 - Orchestrator 端到端测试** (待完成)
+- [x] **Task 16: 更新 MainActivity 集成 V2 架构** (V8.0.0 完成)
+- [x] **Task 17: 文档更新与向后兼容性维护** (V8.0.0 完成)
+  - ✅ V1 保留作为降级方案（createWorkRequest）
+  - ✅ 更新 project_specs.md 记录架构演进
+  - ✅ 无需删除 V1 代码，确保向后兼容
 
-### 近期计划 (V3.2)
-- [ ] Shizuku 稳定性卫士（Watchdog 机制）
-- [ ] 增量更新算法优化（抽样哈希）
-- [ ] 大文件分块处理优化
-- [ ] 内存占用进一步优化
-
-### 中期计划 (V4.0)
-- [ ] UI/UX 工业级重塑（Material 3 + 动效）
-- [ ] 结构化日志与自诊断系统
-- [ ] 云端配置支持
-- [ ] 多线程并发 Shizuku Copy
-
-### 长期愿景
-- [ ] AI 智能修复（自动分析并修复损坏的游戏资源文件）
-- [ ] 跨平台支持（桌面版/Web版）
-- [ ] 插件系统（支持用户自定义功能）
-- [ ] 社区生态（用户共享配置和脚本）
-
-## 8. 技术难点与解决方案
+### 后续待办 (V9.0.0 路线图)
+- [ ] 单元测试覆盖：ProgressTracker 节流验证
+- [ ] 单元测试覆盖：Orchestrator 端到端测试
+- [ ] 性能基准测试：对比 V1 vs V2 性能差异
+- [ ] 考虑迁移到 Kotlin Multiplatform (KMP) 架构
 
 ### 难点 1: Android 11+ 的分区存储限制
+
 **解决方案**: 使用 Shizuku 提供的跨进程访问能力，绕过分区存储限制。
 
 ### 难点 2: 大文件解压导致 OOM
