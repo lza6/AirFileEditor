@@ -18,17 +18,29 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.example.tfgwj.adapter.PatchVersionAdapter
+import com.example.tfgwj.ui.components.atoms.TaskStatus
+import com.example.tfgwj.ui.components.molecules.PermissionCard
+import com.example.tfgwj.ui.components.organisms.MainDashboard
 import com.example.tfgwj.data.PreferencesManager
 import com.example.tfgwj.databinding.ActivityMainBinding
 import com.example.tfgwj.manager.*
+import com.example.tfgwj.performance.PerformanceMonitor
 import com.example.tfgwj.shizuku.ShizukuManager
+import com.example.tfgwj.ui.FloatingBallManager
 import com.example.tfgwj.ui.HelpDialog
 import com.example.tfgwj.ui.TimePickerHelper
+import androidx.activity.viewModels
+import com.example.tfgwj.ui.compose.TaskProgressOverlay
+import com.example.tfgwj.ui.mvi.ReplacingViewModel
+import com.example.tfgwj.ui.theme.TfgwjTheme
 import com.example.tfgwj.utils.*
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
@@ -37,6 +49,7 @@ import com.google.android.material.progressindicator.LinearProgressIndicator
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
@@ -57,9 +70,13 @@ class MainActivity : AppCompatActivity() {
     private lateinit var mainPackManager: MainPackManager
     private lateinit var archiveScanner: ArchiveScanner
     private lateinit var permissionManager: PermissionManager
-    private lateinit var floatingBallManager: com.example.tfgwj.ui.FloatingBallManager
+    private val floatingBallManager: FloatingBallManager by lazy { FloatingBallManager(applicationContext) }
+
+    private val replacingViewModel: ReplacingViewModel by viewModels()
 
     private lateinit var patchAdapter: PatchVersionAdapter
+
+    private val dashboardTaskStatus = MutableStateFlow(TaskStatus.IDLE)
 
     private var selectedMainPackPath: String? = null
     private var isReplacing = false // 防止重复替换任务
@@ -121,7 +138,7 @@ class MainActivity : AppCompatActivity() {
         AppLogger.action("应用启动")
 
         // V10.0.0: 初始化性能监控
-        com.example.tfgwj.performance.PerformanceMonitor.init(this)
+        PerformanceMonitor.init(this)
 
         // 创建通知渠道（用于 WorkManager 前台服务）
         createNotificationChannel()
@@ -132,10 +149,22 @@ class MainActivity : AppCompatActivity() {
         checkAllPermissions()
 
         // 初始化悬浮球管理器
-        floatingBallManager = com.example.tfgwj.ui.FloatingBallManager(applicationContext)
+        floatingBallManager
 
         // 取消之前未完成的替换任务，防止冷启动时自动恢复执行
         androidx.work.WorkManager.getInstance(this).cancelAllWorkByTag("file_replace")
+
+        // 绑定悬浮球状态
+        lifecycleScope.launch {
+            com.example.tfgwj.manager.ReplaceProgressManager.progressState.collectLatest { state ->
+                if (state.total > 0 && state.isReplacing && !floatingBallManager.isShowing()) {
+                    floatingBallManager.setWorkId(currentWorkId ?: "")
+                    floatingBallManager.show()
+                } else if (!state.isReplacing && floatingBallManager.isShowing()) {
+                    floatingBallManager.hide()
+                }
+            }
+        }
 
         // 初始加载
         lifecycleScope.launch {
@@ -246,12 +275,9 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // 权限卡片
-        binding.btnRequestPermission.setOnClickListener {
-            it.performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK)
-            AppLogger.buttonClick("授权权限")
-            requestPermissions()
-        }
+        setupPermissionCardCompose()
+        setupMainDashboardCompose()
+        setupTaskOverlayCompose()
 
         // 主包区域
         val mainPackCard = binding.includeMainPack.root
@@ -309,31 +335,6 @@ class MainActivity : AppCompatActivity() {
             confirmCleanEnvironment()
         }
 
-        // 手动选择模式按钮
-        binding.btnManualMode.setOnClickListener {
-            AppLogger.buttonClick("手动选择模式")
-            com.example.tfgwj.ui.ModeSelectionDialog.show(
-                this,
-                permissionManager,
-                object : com.example.tfgwj.ui.ModeSelectionDialog.Callback {
-                    override fun onModeSelected(mode: PermissionChecker.AccessMode) {
-                        lifecycleScope.launch {
-                            val success = permissionManager.manuallySelectMode(mode)
-                            if (success) {
-                                AppLogger.action("手动选择模式成功", mode.name)
-                                checkEnvironment() // 验证成功后重新扫描环境
-                            } else {
-                                AppLogger.action("手动选择模式失败", mode.name)
-                            }
-                        }
-                    }
-
-                    override fun onRequestShizukuPermission() {
-                        permissionManager.requestShizukuPermission()
-                    }
-                },
-            )
-        }
 
         // 更新主包区域
         val updatePackCard = binding.includeUpdatePack.root
@@ -450,12 +451,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupObservers() {
-        // 观察权限状态变更
-        lifecycleScope.launch {
-            permissionManager.permissionStatus.collectLatest { status ->
-                updatePermissionUI(status)
-            }
-        }
 
         // 替换进度 - 已移除主界面进度显示，现在只在对话框中显示
         // lifecycleScope.launch {
@@ -558,7 +553,12 @@ class MainActivity : AppCompatActivity() {
     private fun checkAllPermissions() {
         lifecycleScope.launch {
             val status = permissionManager.checkAllPermissions()
-            updatePermissionUI(status)
+            dashboardTaskStatus.value =
+                if (status.bestMode != PermissionChecker.AccessMode.NONE) {
+                    TaskStatus.IDLE
+                } else {
+                    TaskStatus.PAUSED
+                }
 
             // 如果已获得存储管理权限，刷新日志到外部存储
             if (status.hasManageStorage) {
@@ -567,59 +567,93 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun updatePermissionUI(status: PermissionManager.PermissionStatus) {
-        // 如果是 Shizuku 服务连接中，添加粗体红色提示
-        val message =
-            if (status.statusMessage == "Shizuku 服务连接中...") {
-                "Shizuku 服务连接中...<br><br><b><font color=\"#FF0000\">如果一直在连接中请重启 Shizuku，授权管理那边关掉咱们的软件的授权，接着重新打开软件重新获取授权即可。</font></b>"
-            } else {
-                status.statusMessage
-            }
-        binding.tvPermissionStatus.text = android.text.Html.fromHtml(message, android.text.Html.FROM_HTML_MODE_LEGACY)
+    private fun setupPermissionCardCompose() {
+        binding.composeViewPermission.apply {
+            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
+            setContent {
+                TfgwjTheme {
+                    val status by permissionManager.permissionStatus.collectAsState()
+                    PermissionCard(
+                        status = status,
+                        onRequestPermission = { requestPermissions() },
+                        onManualSelectMode = {
+                            com.example.tfgwj.ui.ModeSelectionDialog.show(
+                                this@MainActivity,
+                                permissionManager,
+                                object : com.example.tfgwj.ui.ModeSelectionDialog.Callback {
+                                    override fun onModeSelected(mode: PermissionChecker.AccessMode) {
+                                        lifecycleScope.launch {
+                                            val success = permissionManager.manuallySelectMode(mode)
+                                            if (success) {
+                                                AppLogger.action("手动选择模式成功", mode.name)
+                                                checkEnvironment() // 验证成功后重新扫描环境
+                                            } else {
+                                                AppLogger.action("手动选择模式失败", mode.name)
+                                            }
+                                        }
+                                    }
 
-        // 优先检查可用模式
-        val icon =
-            when (status.bestMode) {
-                PermissionChecker.AccessMode.ROOT -> R.drawable.ic_status_success
-                PermissionChecker.AccessMode.NATIVE -> R.drawable.ic_status_success
-                PermissionChecker.AccessMode.SHIZUKU -> R.drawable.ic_status_success
-                else -> if (status.hasManageStorage) R.drawable.ic_status_unknown else R.drawable.ic_status_error
+                                    override fun onRequestShizukuPermission() {
+                                        permissionManager.requestShizukuPermission()
+                                    }
+                                }
+                            )
+                        }
+                    )
+                }
             }
-        binding.ivPermissionStatus.setImageResource(icon)
-
-        // Root 设备或有权限访问的设备不需要显示授权按钮
-        binding.btnRequestPermission.visibility =
-            when {
-                status.hasRoot -> View.GONE // Root 设备不显示授权按钮
-                status.canAccessPrivateDir -> View.GONE // 可以直接访问，不显示授权按钮
-                !status.hasManageStorage -> View.VISIBLE
-                status.hasManageStorage &&
-                    status.availableModes.contains(
-                        PermissionChecker.AccessMode.SHIZUKU,
-                    ) && !status.hasShizukuPermission -> View.VISIBLE
-                // 如果有了全量权限但拒绝了 Shizuku，也不必强求显示授权按钮，让用户尝试“开始替换”即可
-                status.hasManageStorage -> View.GONE
-                else -> View.GONE
-            }
-
-        binding.btnRequestPermission.text =
-            when {
-                !status.hasManageStorage -> "授权存储权限"
-                status.availableModes.contains(PermissionChecker.AccessMode.SHIZUKU) && !status.isShizukuAvailable -> "安装 Shizuku"
-                status.availableModes.contains(PermissionChecker.AccessMode.SHIZUKU) && !status.hasShizukuPermission -> "授权 Shizuku"
-                else -> "授权"
-            }
-
-        // 更新上次选择模式显示
-        val lastModeText =
-            when (status.lastSelectedMode) {
-                PermissionChecker.AccessMode.ROOT -> "上次使用: Root 模式"
-                PermissionChecker.AccessMode.SHIZUKU -> "上次使用: Shizuku 模式"
-                PermissionChecker.AccessMode.NATIVE -> "上次使用: 普通模式"
-                else -> "推荐使用 Omni-Mode 智能检测"
-            }
-        binding.tvLastMode.text = lastModeText
+        }
     }
+
+    private fun setupMainDashboardCompose() {
+        binding.composeViewDashboard.apply {
+            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
+            setContent {
+                TfgwjTheme {
+                    val taskStatus by dashboardTaskStatus.collectAsState()
+                    val progressState by com.example.tfgwj.manager.ReplaceProgressManager.progressState.collectAsState()
+                    val ioStats = PerformanceMonitor.getIOStats().let { stats ->
+                        if (progressState.speed > 0f) {
+                            stats.copy(avgSpeedMBps = progressState.speed.toDouble())
+                        } else {
+                            stats
+                        }
+                    }
+                    MainDashboard(
+                        ioStats = ioStats,
+                        currentStatus = taskStatus,
+                    )
+                }
+            }
+        }
+    }
+
+    private fun setupTaskOverlayCompose() {
+        binding.composeViewTaskOverlay.apply {
+            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
+            setContent {
+                TfgwjTheme {
+                    TaskProgressOverlay(
+                        viewModel = replacingViewModel,
+                        onCancel = {
+                            AppLogger.buttonClick("Compose 取消替换")
+                            androidx.work.WorkManager.getInstance(this@MainActivity)
+                                .cancelAllWorkByTag("file_replace")
+                        }
+                    )
+                }
+            }
+        }
+
+        // 同步 ComposeView 显示状态
+        lifecycleScope.launch {
+            replacingViewModel.uiState.collectLatest { state ->
+                val shouldShow = state.isReplacing || state.phase != "IDLE"
+                binding.composeViewTaskOverlay.visibility = if (shouldShow) View.VISIBLE else View.GONE
+            }
+        }
+    }
+
 
     private fun requestPermissions() {
         lifecycleScope.launch {
@@ -1396,6 +1430,7 @@ class MainActivity : AppCompatActivity() {
             if (status.bestMode != PermissionChecker.AccessMode.NONE) {
                 // 权限已通过物理验证，直接开始
                 isReplacing = true
+                dashboardTaskStatus.value = TaskStatus.RUNNING
                 performStartReplace(path)
                 return@launch
             }
@@ -1407,6 +1442,7 @@ class MainActivity : AppCompatActivity() {
                     .setMessage("当前系统环境下无法自动验证读写权限，是否强制尝试执行替换？\n\n(提示：部分鸿蒙、澎湃或 Android 11 以下系统可能支持直接读写)")
                     .setPositiveButton("强制执行") { _, _ ->
                         isReplacing = true
+                        dashboardTaskStatus.value = TaskStatus.RUNNING
                         performStartReplace(path)
                     }
                     .setNegativeButton("去授权 (Shizuku)") { _, _ ->
@@ -1421,7 +1457,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * 执行真正的替换启动逻辑
+     * 执行真正的替换启动逻辑 (V11 MVI 模式)
      */
     private fun performStartReplace(path: String) {
         lifecycleScope.launch {
@@ -1434,177 +1470,30 @@ class MainActivity : AppCompatActivity() {
                 AppLogger.action("智能优化", cacheResult)
             }
 
-            // 显示替换进度对话框
-            showReplaceProgressDialog(path)
-        }
-    }
-
-    // 替换进度对话框相关变量
-    private var replaceDialog: androidx.appcompat.app.AlertDialog? = null
-    private val logBuilder = StringBuilder()
-    private var logTextView: TextView? = null
-    private var logScrollView: android.widget.ScrollView? = null
-
-    // 重置替换状态
-    private fun resetReplacingState() {
-        isReplacing = false
-    }
-
-    private fun showReplaceProgressDialog(path: String) {
-        // 创建对话框视图
-        val dialogView = layoutInflater.inflate(R.layout.dialog_replace_progress, null)
-        val progressBar = dialogView.findViewById<LinearProgressIndicator>(R.id.progress_bar)
-        val tvPercent = dialogView.findViewById<TextView>(R.id.tv_progress_percent)
-        val tvFileCount = dialogView.findViewById<TextView>(R.id.tv_file_count)
-        val tvCurrentFile = dialogView.findViewById<TextView>(R.id.tv_current_file)
-        val tvSpeed = dialogView.findViewById<TextView>(R.id.tv_speed)
-        val tvEta = dialogView.findViewById<TextView>(R.id.tv_eta)
-        val tvLog = dialogView.findViewById<TextView>(R.id.tv_log)
-        val scrollLog = dialogView.findViewById<android.widget.ScrollView>(R.id.scroll_log)
-        val tvErrors = dialogView.findViewById<TextView>(R.id.tv_errors)
-
-        logTextView = tvLog
-        logScrollView = scrollLog
-        logBuilder.clear()
-
-        // 初始化日志
-        appendLog("📂 源路径: ${java.io.File(path).name}")
-        appendLog("🎯 目标: /storage/emulated/0/Android")
-        appendLog("⏳ 开始检测存储空间...")
-
-        progressBar.isIndeterminate = true
-        tvPercent.text = "检测中"
-        tvFileCount.text = ""
-        tvCurrentFile.text = "正在检测存储空间..."
-
-        // 创建对话框
-        replaceDialog =
-            MaterialAlertDialogBuilder(this)
-                .setTitle("📦 替换到游戏")
-                .setView(dialogView)
-                .setCancelable(false)
-                .setPositiveButton("隐藏到后台") { dialog, _ ->
-                    // 检查悬浮窗权限
-                    if (android.provider.Settings.canDrawOverlays(this@MainActivity)) {
-                        // 隐藏对话框，但保持任务运行
-                        dialog.dismiss()
-                        // 确保悬浮球已显示
-                        if (!floatingBallManager.isShowing()) {
-                            currentWorkId?.let { floatingBallManager.setWorkId(it) }
-                            floatingBallManager.show()
-                        }
-                        AppLogger.action("隐藏到后台", "任务继续在后台运行")
-                    } else {
-                        // 没有权限，提示用户
-                        androidx.appcompat.app.AlertDialog.Builder(this@MainActivity)
-                            .setTitle("需要悬浮窗权限")
-                            .setMessage("为了在后台显示进度，需要授予悬浮窗权限。是否前往设置页面授权？")
-                            .setPositiveButton("去设置") { _, _ ->
-                                val intent =
-                                    android.content.Intent(
-                                        android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                                        android.net.Uri.parse("package:$packageName"),
-                                    )
-                                startActivity(intent)
-                            }
-                            .setNegativeButton("取消", null)
-                            .show()
-                    }
-                }
-                .setNegativeButton("取消") { dialog, _ ->
-                    // 强制停止当前工作任务
-                    currentWorkId?.let { id ->
-                        try {
-                            val uuid = java.util.UUID.fromString(id)
-                            androidx.work.WorkManager.getInstance(this).cancelWorkById(uuid)
-                            AppLogger.action("用户取消替换", "Work ID: $id")
-                        } catch (e: Exception) {
-                            AppLogger.e("MainActivity", "取消任务失败", e)
-                        }
-                    }
-
-                    // 隐藏悬浮球
-                    floatingBallManager.hide()
-
-                    dialog.dismiss()
-                    appendLog("❌ 用户取消操作")
-                    resetReplacingState()
-                }
-                .create()
-
-        replaceDialog?.show()
-
-        // 异步检测存储空间
-        lifecycleScope.launch {
-            val checkResult =
-                StorageChecker.checkStorageFast(
-                    path,
-                    "/storage/emulated/0/Android",
-                )
-
-            AppLogger.d("MainActivity", "存储检测: ${checkResult.message}")
-            appendLog("📊 ${checkResult.message}")
-
-            if (!checkResult.canReplace) {
-                appendLog("❌ 空间不足，无法继续")
-                tvErrors.visibility = View.VISIBLE
-                tvErrors.text = "错误: ${checkResult.message}"
-                progressBar.isIndeterminate = false
-                progressBar.progress = 0
-                tvCurrentFile.text = "操作失败"
-                return@launch
-            }
-
-            appendLog("✅ 空间充足，开始替换...")
-            progressBar.isIndeterminate = false
-
-            // 执行替换
-            performReplaceWithDialog(path, progressBar, tvPercent, tvFileCount, tvCurrentFile, tvErrors, tvSpeed, tvEta)
-        }
-    }
-
-    private fun appendLog(message: String) {
-        val timestamp = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())
-        logBuilder.append("[$timestamp] $message\n")
-        runOnUiThread {
-            logTextView?.text = logBuilder.toString()
-            // 自动滚动到底部
-            logScrollView?.post {
-                logScrollView?.fullScroll(View.FOCUS_DOWN)
-            }
-        }
-    }
-
-    private fun performReplaceWithDialog(
-        path: String,
-        progressBar: LinearProgressIndicator,
-        tvPercent: TextView,
-        tvFileCount: TextView,
-        tvCurrentFile: TextView,
-        tvErrors: TextView,
-        tvSpeed: TextView,
-        tvEta: TextView,
-    ) {
-        AppLogger.d("MainActivity", "🚀 准备启动替换任务")
-
-        // 开启协程获取包名并启动任务
-        lifecycleScope.launch {
+            // V11.0.0: 使用 ReplaceProgressManager 重置状态并触发协程观察
+            // 之前的 showReplaceProgressDialog 已经被 MVI 架构的 setupTaskOverlayCompose 取代
             try {
                 AppLogger.d("MainActivity", "⏳ 正在获取包名...")
-                val packageName = preferencesManager.appPackageName.first()
                 AppLogger.d("MainActivity", "✅ 获取包名成功: $packageName")
 
-                // 默认不使用增量更新
                 val incrementalUpdate = false
 
+                // 检查存储空间
+                val checkResult = StorageChecker.checkStorageFast(path, "/storage/emulated/0/Android")
+                if (!checkResult.canReplace) {
+                    dashboardTaskStatus.value = TaskStatus.FAILED
+                    AppLogger.e("MainActivity", "❌ 空间不足: ${checkResult.message}")
+                    Toast.makeText(this@MainActivity, "错误: ${checkResult.message}", Toast.LENGTH_LONG).show()
+                    resetReplacingState()
+                    return@launch
+                }
+
                 // V8.0.0: 使用 Orchestrator 架构（V2）
-                // 保留 V1 createWorkRequest 作为降级方案（向后兼容）
-                val workRequest =
-                    com.example.tfgwj.worker.FileReplaceWorker.createWorkRequestV2(
-                        path,
-                        packageName,
-                        incrementalUpdate,
-                    )
+                val workRequest = com.example.tfgwj.worker.FileReplaceWorkerV2.createWorkRequestV2(
+                    path,
+                    packageName,
+                    incrementalUpdate,
+                )
 
                 AppLogger.d("MainActivity", "✅ 创建 WorkRequest V2 成功: ${workRequest.id}")
 
@@ -1614,288 +1503,74 @@ class MainActivity : AppCompatActivity() {
                 // 保存当前工作 ID
                 currentWorkId = workRequest.id.toString()
 
-                // 监听进度（V1/V2 共享同一套进度系统）
-                observeReplaceProgress(
-                    workRequest.id,
-                    incrementalUpdate,
-                    progressBar,
-                    tvPercent,
-                    tvFileCount,
-                    tvCurrentFile,
-                    tvErrors,
-                    tvSpeed,
-                    tvEta,
-                )
+                // MVI: 触发任务相关的辅助监控逻辑，主要监听工作状态结束
+                observeWorkManagerState(workRequest.id, packageName)
             } catch (e: Exception) {
+                dashboardTaskStatus.value = TaskStatus.FAILED
                 AppLogger.e("MainActivity", "❌ 启动替换任务失败", e)
-                appendLog("❌ 启动失败: ${e.message}")
-                tvErrors.visibility = View.VISIBLE
-                tvErrors.text = "错误: ${e.message}"
-                progressBar.isIndeterminate = false
-                progressBar.progress = 0
-                tvCurrentFile.text = "操作失败"
+                Toast.makeText(this@MainActivity, "启动失败: ${e.message}", Toast.LENGTH_LONG).show()
+                resetReplacingState()
             }
         }
     }
 
-    private fun observeReplaceProgress(
-        workId: java.util.UUID,
-        incrementalUpdate: Boolean,
-        progressBar: LinearProgressIndicator,
-        tvPercent: TextView,
-        tvFileCount: TextView,
-        tvCurrentFile: TextView,
-        tvErrors: TextView,
-        tvSpeed: TextView,
-        tvEta: TextView,
-    ) {
-        // 设置悬浮球工作的 ID，但不在此处立即显示，
-        // 只有当用户点击“隐藏到后台”时才显示悬浮球
+    private fun observeWorkManagerState(workId: java.util.UUID, packageName: String) {
         floatingBallManager.setWorkId(workId.toString())
 
-        AppLogger.d("MainActivity", "✅ Worker 已入队: $workId")
-        appendLog("🚀 Worker 已启动，正在处理...")
-        if (incrementalUpdate) {
-            appendLog("📦 增量更新模式：只复制变化的文件")
-        }
-
-        var errorCount = 0
-        var lastLoggedFile = ""
-        var startTime: Long = 0
-        var lastProcessed = 0
-        var lastUpdateTime: Long = 0
-        var lastLogTime: Long = 0 // 上次记录日志的时间
-
-        // 监听实时进度 (High Frequency)
-        lifecycleScope.launch {
-            com.example.tfgwj.manager.ReplaceProgressManager.progressState.collectLatest { state ->
-                if (state.total > 0 && state.isReplacing) {
-                    val progress = state.progress
-                    val processed = state.processed
-                    val total = state.total
-                    val currentFile = state.currentFile
-                    val speed = state.speed
-                    val phase = state.phase
-
-                    // 1. 记录/初始化开始时间
-                    if (startTime == 0L) {
-                        startTime = System.currentTimeMillis()
-                        lastUpdateTime = startTime
-                    }
-
-                    // 2. 进度条平滑动画
-                    val oldProgress = progressBar.progress
-                    if (progress > oldProgress) {
-                        val animator = android.animation.ValueAnimator.ofInt(oldProgress, progress)
-                        animator.duration = 300
-                        animator.interpolator = android.view.animation.DecelerateInterpolator()
-                        animator.addUpdateListener { animation ->
-                            val animatedValue = animation.animatedValue as Int
-                            progressBar.progress = animatedValue
-                            tvPercent.text = "$animatedValue%"
-                        }
-                        animator.start()
-                    } else if (progress < oldProgress) {
-                        progressBar.progress = progress
-                        tvPercent.text = "$progress%"
-                    }
-
-                    // 3. 文件计数平滑动画
-                    // 在校验阶段提示已完成的总数，而不是校验的子计数
-                    if (phase == "VERIFYING") {
-                        tvFileCount.text = "$total / $total"
-                    } else if (lastProcessed < processed) {
-                        val countAnimator = android.animation.ValueAnimator.ofInt(lastProcessed, processed)
-                        countAnimator.duration = 200
-                        countAnimator.interpolator = android.view.animation.LinearInterpolator()
-                        countAnimator.addUpdateListener { animation ->
-                            val currentCount = animation.animatedValue as Int
-                            tvFileCount.text = "$currentCount / $total"
-                        }
-                        countAnimator.start()
-                    } else {
-                        tvFileCount.text = "$processed / $total"
-                    }
-
-                    // 4. 当前文件显示 (增加阶段前缀)
-                    if (currentFile.isNotEmpty()) {
-                        val prefix =
-                            when (phase) {
-                                "REPLACING" -> "📄 正在复制: "
-                                "VERIFYING" -> "🔍 正在校验: "
-                                else -> "📦 "
-                            }
-                        tvCurrentFile.text = "$prefix$currentFile"
-                    }
-
-                    // 5. 计算速率与 ETA (每 0.5 秒更新一次)
-                    val currentTime = System.currentTimeMillis()
-                    if (currentTime - lastUpdateTime >= 500) {
-                        if (processed > lastProcessed || phase == "VERIFYING") {
-                            val processedDiff = (processed - lastProcessed).coerceAtLeast(1)
-                            val timeDiff = (currentTime - lastUpdateTime).coerceAtLeast(1) / 1000.0
-                            val currentSpeed = processedDiff / timeDiff
-
-                            if (phase == "VERIFYING") {
-                                tvSpeed.text = "速度: 正在校验..."
-                                tvEta.text = "即将完成"
-                            } else {
-                                tvSpeed.text = "速度: ${String.format("%.0f", currentSpeed)} 文件/秒"
-                                val remaining = total - processed
-                                val etaSeconds = if (currentSpeed > 0) remaining / currentSpeed else 0.0
-                                tvEta.text =
-                                    if (etaSeconds > 60) {
-                                        val minutes = (etaSeconds / 60).toInt()
-                                        val seconds = (etaSeconds % 60).toInt()
-                                        "预计剩余: ${minutes}分${seconds}秒"
-                                    } else {
-                                        "预计剩余: ${etaSeconds.toInt()}秒"
-                                    }
-                            }
-                        }
-                        lastUpdateTime = currentTime
-                    }
-
-                    // 6. 定期记录进度日志 (每 0.5 秒)
-                    if (currentTime - lastLogTime > 500) {
-                        AppLogger.d(TAG, "📊 进度($phase): $progress% ($processed/$total) - ${tvSpeed.text}")
-                        lastLogTime = currentTime
-                    }
-
-                    // 7. 详细文件日志 (流式显示)
-                    if (currentFile.isNotEmpty() && currentFile != lastLoggedFile) {
-                        if (currentFile.startsWith("[失败]")) {
-                            errorCount++
-                            appendLog("❌ $currentFile")
-                            tvErrors.visibility = View.VISIBLE
-                            tvErrors.text = "错误: $errorCount 个文件复制失败"
-                        } else {
-                            // 使用时间节流优化
-                            val now = System.currentTimeMillis()
-                            if (now - lastLogTime >= 100 || processed <= 5 || processed >= total || phase == "VERIFYING") {
-                                val prefix = if (phase == "VERIFYING") "🔍 " else "📄 "
-                                appendLog("$prefix$currentFile")
-                            }
-                        }
-                        lastLoggedFile = currentFile
-                    }
-
-                    lastProcessed = processed
-                }
-            }
-        }
-
-        // 监听 WorkManager 状态 (主要用于检测任务完成/失败/取消)
         val workManager = androidx.work.WorkManager.getInstance(this)
         workManager.getWorkInfoByIdLiveData(workId).observe(this) { workInfo ->
             if (workInfo != null) {
-                // AppLogger.d("MainActivity", "📊 Worker 状态: ${workInfo.state}")
                 when (workInfo.state) {
                     androidx.work.WorkInfo.State.ENQUEUED -> {
                         AppLogger.d("MainActivity", "⏳ Worker 已入队，等待执行")
                     }
                     androidx.work.WorkInfo.State.RUNNING -> {
-                        // WorkManager 的进度现在仅作为辅助，UI 主要由 ReplaceProgressManager 驱动
-                        // 但我们可以记录一下 Worker 确实在运行
-                        // AppLogger.d(TAG, "▶️ Worker 正在运行 (WM 进度: ${workInfo.progress})")
+                        // 运行状态由 ReplaceProgressManager 内部接管
                     }
                     androidx.work.WorkInfo.State.SUCCEEDED -> {
-                        val processed =
-                            workInfo.outputData.getInt(
-                                com.example.tfgwj.worker.FileReplaceWorker.KEY_PROCESSED,
-                                0,
-                            )
-                        // 从 JSON 字符串解析失败文件列表
-                        val failedFilesJson =
-                            workInfo.outputData.getString(
-                                com.example.tfgwj.worker.FileReplaceWorker.KEY_FAILED_FILES,
-                            )
-                        val failedFiles =
-                            try {
-                                if (failedFilesJson != null) {
-                                    val jsonArray = org.json.JSONArray(failedFilesJson)
-                                    (0 until jsonArray.length()).map { jsonArray.getString(it) }
-                                } else {
-                                    emptyList()
-                                }
-                            } catch (e: Exception) {
-                                AppLogger.e("MainActivity", "解析失败文件列表失败", e)
-                                emptyList()
-                            }
+                        dashboardTaskStatus.value = TaskStatus.SUCCESS
+                        val processed = workInfo.outputData.getInt(com.example.tfgwj.worker.FileReplaceWorkerV2.KEY_PROCESSED, 0)
 
-                        AppLogger.action("替换完成", "成功 $processed 个文件")
-
-                        // 检查是否有失败的文件
-                        if (failedFiles.isNotEmpty()) {
-                            appendLog("⚠️ 替换完成！共 $processed 个文件，${failedFiles.size} 个文件失败")
-                            appendLog("失败文件列表:")
-                            failedFiles.forEach { fileName ->
-                                appendLog("  ❌ $fileName")
-                            }
-                            tvErrors.visibility = View.VISIBLE
-                            tvErrors.text = "警告: ${failedFiles.size} 个文件复制失败，详情见日志"
-                        } else {
-                            appendLog("✅ 替换完成！共 $processed 个文件")
+                        val failedFilesJson = workInfo.outputData.getString(com.example.tfgwj.worker.FileReplaceWorkerV2.KEY_FAILED_FILES)
+                        val failedFilesCount = try {
+                            if (failedFilesJson != null) org.json.JSONArray(failedFilesJson).length() else 0
+                        } catch (e: Exception) {
+                            0
                         }
-
-                        progressBar.progress = 100
-                        tvPercent.text = "100%"
-                        tvCurrentFile.text = "✅ 完成"
-
-                        // 验证文件是否真的复制成功
-                        appendLog("🔍 验证替换结果...")
-                        val targetPath = "/storage/emulated/0/Android/data/$packageName"
 
                         val hasRoot = com.example.tfgwj.utils.RootChecker.isRooted()
                         val verifiedFiles = verifyReplacement(packageName, hasRoot)
 
-                        if (verifiedFiles > 0) {
-                            appendLog("✅ 验证成功: 目标位置发现 $verifiedFiles 个文件")
-                            appendLog("   目标路径: $targetPath")
-                        } else {
-                            appendLog("⚠️ 验证警告: 目标位置没有发现文件")
-                            appendLog("   目标路径: $targetPath")
-                        }
-
-                        // 延迟关闭对话框
                         lifecycleScope.launch {
                             kotlinx.coroutines.delay(1500)
-                            replaceDialog?.dismiss()
-                            showSuccessResult(processed, failedFiles.size, verifiedFiles)
+                            showSuccessResult(processed, failedFilesCount, verifiedFiles)
                             resetReplacingState()
                         }
                     }
                     androidx.work.WorkInfo.State.FAILED -> {
                         AppLogger.e("MainActivity", "❌ Worker 失败: ${workInfo.state}")
-                        val errorMsg =
-                            workInfo.outputData.getString(
-                                com.example.tfgwj.worker.FileReplaceWorker.KEY_ERROR_MESSAGE,
-                            ) ?: "替换失败，请查看日志"
-                        AppLogger.e("MainActivity", "❌ 错误信息: $errorMsg")
-
-                        // 尝试获取更多错误信息
-                        val outputData = workInfo.outputData
-                        AppLogger.d("MainActivity", "❌ Worker 输出数据: ${outputData.keyValueMap}")
-
-                        appendLog("❌ 失败: $errorMsg")
-                        tvErrors.visibility = View.VISIBLE
-                        tvErrors.text = errorMsg
-                        tvCurrentFile.text = "❌ 失败"
-
-                        // 更新对话框按钮
-                        replaceDialog?.getButton(AlertDialog.BUTTON_NEGATIVE)?.text = "关闭"
+                        val errorMsg = workInfo.outputData.getString(com.example.tfgwj.worker.FileReplaceWorkerV2.KEY_ERROR_MESSAGE) ?: "替换失败"
+                        Toast.makeText(this@MainActivity, errorMsg, Toast.LENGTH_LONG).show()
                         resetReplacingState()
                     }
                     androidx.work.WorkInfo.State.CANCELLED -> {
                         AppLogger.action("替换已取消")
-                        appendLog("⚠️ 操作已取消")
-                        tvCurrentFile.text = "已取消"
                         resetReplacingState()
                     }
                     else -> {}
                 }
             }
         }
+    }
+
+    private fun resetReplacingState() {
+        com.example.tfgwj.manager.ReplaceProgressManager.reset()
+        dashboardTaskStatus.value = TaskStatus.IDLE
+        currentWorkId = null
+        if (floatingBallManager.isShowing()) {
+            floatingBallManager.hide()
+        }
+        isReplacing = false
     }
 
     private fun showSuccessResult(

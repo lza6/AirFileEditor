@@ -48,6 +48,7 @@ class FileReplaceWorkerV2(
         const val KEY_CURRENT_FILE = "current_file"
         const val KEY_PROCESSED = "processed"
         const val KEY_TOTAL = "total"
+        const val KEY_FAILED_FILES = "failed_files"
         const val KEY_ERROR_MESSAGE = "error_message"
         const val KEY_VERIFIED_FILES = "verified_files"
         const val KEY_MODE = "mode"
@@ -90,10 +91,19 @@ class FileReplaceWorkerV2(
             val targetPackage = inputData.getString(KEY_TARGET_PACKAGE) ?: return@withContext Result.failure()
             val incrementalUpdate = inputData.getBoolean(KEY_INCREMENTAL_UPDATE, false)
 
+            if (!PathConstants.isValidPackageName(targetPackage)) {
+                Log.e(TAG, "❌ 非法包名: $targetPackage")
+                return@withContext Result.failure(workDataOf(KEY_ERROR_MESSAGE to "非法目标包名"))
+            }
+
+            val taskId = "replace_v2_${startTime}"
             Log.d(TAG, "========== V2 文件替换开始 ==========")
             Log.d(TAG, "源路径: $sourcePath")
             Log.d(TAG, "目标包名: $targetPackage")
             Log.d(TAG, "增量更新: $incrementalUpdate")
+
+            // V10: 启动任务性能监控
+            com.example.tfgwj.performance.PerformanceMonitor.startTask(taskId)
 
             // 检查取消状态
             if (isStopped) {
@@ -163,7 +173,7 @@ class FileReplaceWorkerV2(
                     }
 
                 // 处理结果
-                when (result) {
+                val workerResult = when (result) {
                     is OrchestratorResult.Success -> {
                         Log.i(TAG, "✅ V2 替换成功: ${result.processedCount}/${result.totalFiles}")
 
@@ -174,11 +184,12 @@ class FileReplaceWorkerV2(
                             StealthManager.execute(applicationContext)
                         }
 
+                        ReplaceProgressManager.finish()
                         Result.success(
                             workDataOf(
                                 KEY_PROCESSED to result.processedCount,
                                 KEY_TOTAL to result.totalFiles,
-                                KEY_VERIFIED_FILES to result.verifiedCount.toString(),
+                                KEY_VERIFIED_FILES to result.verifiedCount,
                                 KEY_MODE to (result.metadata["mode"] ?: "V2"),
                             ),
                         )
@@ -190,6 +201,15 @@ class FileReplaceWorkerV2(
                         )
                     }
                 }
+
+                // V10: 结束任务性能监控
+                com.example.tfgwj.performance.PerformanceMonitor.endTask(
+                    taskId = taskId,
+                    success = workerResult is Result.Success,
+                    filesProcessed = if (result is OrchestratorResult.Success) result.processedCount else 0
+                )
+
+                workerResult
             } catch (e: Exception) {
                 Log.e(TAG, "❌ V2 执行异常", e)
                 Result.failure(workDataOf(KEY_ERROR_MESSAGE to "执行异常: ${e.message}"))

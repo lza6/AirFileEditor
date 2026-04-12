@@ -12,10 +12,10 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Semaphore
-import kotlinx.coroutines.sync.withPermit
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import rikka.shizuku.Shizuku
+import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 
 /**
@@ -47,22 +47,29 @@ class ShizukuCopyOrchestrator(
     companion object {
         private const val TAG = "ShizukuCopyOrchestrator"
 
-        private const val CMD_MKDIR = "mkdir -p \"%s\""
-        private const val CMD_CP_DIR = "cp -p -v -R \"%s/.\" \"%s/\""
-        private const val CMD_CP_FILE = "cp -p -v \"%s\" \"%s\""
+        private const val CMD_MKDIR = "mkdir -p %s"
+        private const val CMD_CP_DIR = "cp -p -v -R %s %s"
+        private const val CMD_CP_FILE = "cp -p -v %s %s"
     }
 
     private val scope = kotlinx.coroutines.CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var watchdogJob: Job? = null
     private val progressCounter = java.util.concurrent.atomic.AtomicInteger(0)
     private val watchdogActive = java.util.concurrent.atomic.AtomicBoolean(true)
+    private val permitMutex = Mutex()
+    @Volatile
+    private var dynamicPermits: Int = 1
+    @Volatile
+    private var runningTasksCount: Int = 0
 
     private lateinit var fileStatistics: FileStatistics
     private lateinit var progressTracker: ProgressTracker
     private lateinit var verificationManager: VerificationManager
+    private var scheduler: com.example.tfgwj.performance.scheduler.AdaptivePermitScheduler? = null
 
     private var totalFiles = 0
     private var targetPackage = ""
+    private var sourceAndroidDir: File = File("")
 
     override suspend fun execute(
         androidDir: File,
@@ -75,6 +82,7 @@ class ShizukuCopyOrchestrator(
             Log.d(TAG, "🚀 Shizuku 模式启动: ${androidDir.absolutePath} -> $targetPackage")
 
             this@ShizukuCopyOrchestrator.targetPackage = targetPackage
+            this@ShizukuCopyOrchestrator.sourceAndroidDir = androidDir
             this@ShizukuCopyOrchestrator.fileStatistics = FileStatistics(context, shizukuManager)
             this@ShizukuCopyOrchestrator.verificationManager = VerificationManager(context, shizukuManager)
 
@@ -99,9 +107,23 @@ class ShizukuCopyOrchestrator(
                     }
                 progressTracker.initialize(totalFiles)
 
+                // V10: 初始化自适应调度器
+                dynamicPermits = config.shizukuConcurrentPermits.coerceAtLeast(1)
+                scheduler = com.example.tfgwj.performance.scheduler.AdaptivePermitScheduler(
+                    context = context,
+                    basePermits = config.shizukuConcurrentPermits,
+                    minPermits = 1,
+                    maxPermits = 8 // Shizuku 模式并发不宜过高
+                ).apply {
+                    start { newPermits ->
+                        dynamicPermits = newPermits.coerceAtLeast(1)
+                        Log.d(TAG, "Scheduler: Shizuku permits updated to $dynamicPermits")
+                    }
+                }
+
                 // 4. 准备目标环境
                 val targetBase = PathConstants.buildTargetDataPath(targetPackage)
-                executeShizukuCommand(CMD_MKDIR.format(targetBase))
+                executeShizukuCommand(CMD_MKDIR.format(shellEscape(targetBase)))
 
                 // 5. 执行递归复制（带看门狗）
                 progressCallback(5, 0, totalFiles, "开始复制...", 0f)
@@ -140,7 +162,7 @@ class ShizukuCopyOrchestrator(
         return withContext(Dispatchers.IO) {
             try {
                 verificationManager.verify(
-                    File("").apply { /* 需要源目录路径 */ },
+                    sourceAndroidDir,
                     targetPackage,
                     totalFiles,
                     VerificationMode.SHIZUKU,
@@ -156,6 +178,7 @@ class ShizukuCopyOrchestrator(
 
     override fun cleanup() {
         try {
+            scheduler?.stop()
             watchdogActive.set(false)
             watchdogJob?.cancel()
             scope.cancel()
@@ -224,10 +247,9 @@ class ShizukuCopyOrchestrator(
                 }
 
             try {
-                val semaphore = Semaphore(config.shizukuConcurrentPermits)
                 tasks.map { task ->
                     scope.async {
-                        semaphore.withPermit {
+                        processWithAdaptiveLimit {
                             runShizukuCpCommand(task)
                         }
                     }
@@ -240,29 +262,76 @@ class ShizukuCopyOrchestrator(
     }
 
     /**
+     * 根据 scheduler 的 permits 做软并发限制
+     */
+    private suspend fun processWithAdaptiveLimit(action: suspend () -> Unit) {
+        while (true) {
+            val permits = dynamicPermits.coerceAtLeast(1)
+            val acquired = withTimeoutOrNull(1000) {
+                permitMutex.withLock {
+                    if (runningTasksCount < permits) {
+                        runningTasksCount++
+                        true
+                    } else {
+                        false
+                    }
+                }
+            } ?: false
+
+            if (acquired) break
+            delay(50)
+        }
+
+        try {
+            action()
+        } finally {
+            permitMutex.withLock {
+                runningTasksCount = (runningTasksCount - 1).coerceAtLeast(0)
+            }
+        }
+    }
+
+    /**
      * 执行单个 Shizuku cp 命令
      */
     private suspend fun runShizukuCpCommand(task: FileStatistics.CopyTask) {
+        if (!isSafeTargetPath(task.targetDir)) {
+            throw IllegalArgumentException("非法目标路径: ${task.targetDir}")
+        }
+
+        val sourcePath = task.sourceDir.canonicalPath
+        val targetPath = File(task.targetDir).canonicalPath
+        val sourceArg = shellEscape(sourcePath)
+        val targetArg = shellEscape(targetPath)
         val cmd =
             if (task.isDirectory) {
-                CMD_CP_DIR.format(task.sourceDir.absolutePath, task.targetDir)
+                CMD_CP_DIR.format("$sourceArg/.", "$targetArg/")
             } else {
-                CMD_CP_FILE.format(task.sourceDir.absolutePath, task.targetDir)
+                CMD_CP_FILE.format(sourceArg, targetArg)
             }
 
         try {
+            val startTime = System.currentTimeMillis()
             @Suppress("DEPRECATION")
             val process = rikka.shizuku.Shizuku.newProcess(arrayOf("sh", "-c", cmd), null, null)
+
+            // V10: 记录 Binder 调用延迟
+            com.example.tfgwj.performance.PerformanceMonitor.recordIPCLatency(
+                System.currentTimeMillis() - startTime,
+                methodName = "newProcess"
+            )
+
             val reader = process.inputStream.bufferedReader()
             var line: String?
 
             while (reader.readLine().also { line = it } != null) {
-                if (line.isNullOrBlank()) continue
+                val text = line ?: continue
+                if (text.isBlank()) continue
 
                 val current = progressCounter.incrementAndGet()
 
                 // 解析文件名（同 Root 模式）
-                val fileName = extractFileNameFromCpOutput(line)
+                val fileName = extractFileNameFromCpOutput(text)
 
                 progressTracker.updateProgress(
                     processed = current,
@@ -276,6 +345,22 @@ class ShizukuCopyOrchestrator(
             Log.e(TAG, "Shizuku CP 失败: ${task.sourceDir.name}", e)
             throw e
         }
+    }
+
+    /**
+     * 校验目标路径是否在允许目录内
+     */
+    private fun isSafeTargetPath(path: String): Boolean {
+        return try {
+            val normalized = File(path).canonicalPath
+            normalized.startsWith("/storage/emulated/0/Android/data/") || normalized.startsWith("/storage/emulated/0/Android/obb/")
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    private fun shellEscape(value: String): String {
+        return "'" + value.replace("'", "'\"'\"'") + "'"
     }
 
     /**

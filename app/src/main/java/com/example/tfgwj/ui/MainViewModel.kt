@@ -71,7 +71,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         currentFile = state.currentFile,
                         speed = state.speed,
                         phase = state.phase,
-                        isReplacing = state.phase != "IDLE",
+                        isReplacing = state.isReplacing,
                     )
             }
         }

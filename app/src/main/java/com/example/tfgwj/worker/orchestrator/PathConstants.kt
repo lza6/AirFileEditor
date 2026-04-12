@@ -21,6 +21,14 @@ object PathConstants {
     // 目标路径模板
     private val TARGET_BASE_TEMPLATE = "$STORAGE_EMULATED_0/$ANDROID_DIR/$DATA_DIR/%s"
     private val TARGET_OBB_TEMPLATE = "$STORAGE_EMULATED_0/$ANDROID_DIR/$OBB_DIR/%s"
+    private val PACKAGE_NAME_PATTERN = Regex("^[a-zA-Z][a-zA-Z0-9_]*(\\.[a-zA-Z0-9_]+)+$")
+
+    /**
+     * 校验包名是否合法
+     */
+    fun isValidPackageName(packageName: String): Boolean {
+        return PACKAGE_NAME_PATTERN.matches(packageName)
+    }
 
     /**
      * 构建目标应用数据目录路径
@@ -28,6 +36,7 @@ object PathConstants {
      * @return 完整路径如 /storage/emulated/0/Android/data/com.example.app
      */
     fun buildTargetDataPath(packageName: String): String {
+        require(isValidPackageName(packageName)) { "无效包名: $packageName" }
         return TARGET_BASE_TEMPLATE.format(packageName)
     }
 
@@ -37,6 +46,7 @@ object PathConstants {
      * @return 完整路径如 /storage/emulated/0/Android/obb/com.example.app
      */
     fun buildTargetObbPath(packageName: String): String {
+        require(isValidPackageName(packageName)) { "无效包名: $packageName" }
         return TARGET_OBB_TEMPLATE.format(packageName)
     }
 
@@ -53,7 +63,12 @@ object PathConstants {
         isObb: Boolean = false,
     ): String {
         val base = if (isObb) buildTargetObbPath(packageName) else buildTargetDataPath(packageName)
-        return listOf(base, subPath).joinToString("/")
+        val safeSubPath = normalizeSubPath(subPath)
+        return if (safeSubPath.isEmpty()) {
+            base
+        } else {
+            "$base/$safeSubPath"
+        }
     }
 
     /**
@@ -79,9 +94,19 @@ object PathConstants {
         androidDir: java.io.File,
         filePath: String,
     ): String {
-        val fullPath = java.io.File(filePath).absolutePath
-        val prefix = "${androidDir.absolutePath}/"
-        return fullPath.removePrefix(prefix)
+        return try {
+            val rootPath = androidDir.canonicalPath.replace('\\', '/').trimEnd('/')
+            val fullPath = java.io.File(filePath).canonicalPath.replace('\\', '/')
+            val prefix = "$rootPath/"
+
+            if (!fullPath.startsWith(prefix)) {
+                ""
+            } else {
+                fullPath.removePrefix(prefix)
+            }
+        } catch (e: Exception) {
+            ""
+        }
     }
 
     /**
@@ -91,5 +116,16 @@ object PathConstants {
         val hasData = java.io.File(dir, DATA_DIR).exists()
         val hasObb = java.io.File(dir, OBB_DIR).exists()
         return hasData || hasObb
+    }
+
+    /**
+     * 归一化子路径并阻断路径穿越
+     */
+    private fun normalizeSubPath(subPath: String): String {
+        val normalized = subPath.replace('\\', '/').trim().trimStart('/')
+        if (normalized.isEmpty()) return ""
+
+        require(normalized.split('/').none { it == "." || it == ".." }) { "非法子路径: $subPath" }
+        return normalized
     }
 }

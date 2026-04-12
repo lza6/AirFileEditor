@@ -293,6 +293,61 @@ object PerformanceMonitor {
         }.toString().trim()
     }
 
+    // 实时性能快照
+    private val lastIOWriteTime = AtomicLong(0)
+    private val lastIPCTime = AtomicLong(0)
+
+    /**
+     * 记录 IO 写入详细延迟 (V10)
+     */
+    fun recordIOWriteLatency(
+        durationMs: Long,
+        writeSize: Long = 0,
+    ) {
+        lastIOWriteTime.set(System.currentTimeMillis())
+        MetricCollector.recordIO(
+            name = MetricNames.IO_WRITE_LATENCY,
+            value = durationMs.toDouble(),
+            unit = MetricUnits.MILLISECONDS,
+            tags = if (writeSize > 0) mapOf("size" to writeSize.toString()) else emptyMap(),
+        )
+
+        // 如果写入延迟过高 (> 500ms)，触发预警记录
+        if (durationMs > 500) {
+            Log.w(TAG, "High IO Wait detected: ${durationMs}ms for ${writeSize} bytes")
+        }
+    }
+
+    /**
+     * 记录 IPC (Shizuku) 详细延迟 (V10)
+     */
+    fun recordIPCLatency(
+        durationMs: Long,
+        transferSize: Long = 0,
+        methodName: String = "unknown",
+    ) {
+        lastIPCTime.set(System.currentTimeMillis())
+        MetricCollector.recordIPC(
+            name = MetricNames.IPC_BINDER_LATENCY,
+            value = durationMs.toDouble(),
+            unit = MetricUnits.MILLISECONDS,
+            tags = mapOf("method" to methodName),
+        )
+
+        if (transferSize > 0) {
+            MetricCollector.recordIPC(
+                name = MetricNames.IPC_TRANSFER_SIZE,
+                value = transferSize.toDouble(),
+                unit = "B",
+                tags = mapOf("method" to methodName),
+            )
+        }
+
+        if (durationMs > 100) {
+            Log.w(TAG, "High IPC Latency: ${durationMs}ms in $methodName")
+        }
+    }
+
     /**
      * 重置统计信息
      */

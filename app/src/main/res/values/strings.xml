@@ -47,7 +47,7 @@
     <string name="close">关闭</string>
     <string name="replace_result">替换结果</string>
     <string name="replace_success">替换成功！共替换 %d 个文件</string>
-    <string name="replace_completed">替换完成！成功: %d, 失败: %d</string>
+    <string name="replace_completed" formatted="false">替换完成！成功: %d, 失败: %d</string>
     <string name="replace_failed">替换失败</string>
     
     <!-- 解压 -->

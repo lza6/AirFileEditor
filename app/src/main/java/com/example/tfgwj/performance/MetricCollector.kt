@@ -187,6 +187,26 @@ object MetricCollector {
     }
 
     /**
+     * 便捷方法：记录 IPC 指标
+     */
+    fun recordIPC(
+        name: String,
+        value: Double,
+        unit: String,
+        tags: Map<String, String> = emptyMap(),
+    ) {
+        record(
+            PerformanceMetric(
+                category = MetricCategory.IPC,
+                name = name,
+                value = value,
+                unit = unit,
+                tags = tags,
+            ),
+        )
+    }
+
+    /**
      * 获取实时指标流（用于 Dashboard）
      */
     fun getMetricFlow(): Flow<PerformanceMetric> = metricChannel.receiveAsFlow()

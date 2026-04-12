@@ -132,13 +132,18 @@ object IoOptimizer {
         source: File,
         target: File,
     ): Boolean {
-        val startTime = System.currentTimeMillis()
         val size = source.length()
-        var usedMmap = true
+        // V10: 针对极小文件 (< 32KB)，跳过 mmap 这种昂贵的系统调用，直接使用 Buffer 读写
+        if (size > 0 && size < 32 * 1024) {
+            return fastCopySmallFile(source, target)
+        }
+
+        val startTime = System.currentTimeMillis()
 
         return try {
-            if (!target.parentFile?.exists()!!) {
-                target.parentFile?.mkdirs()
+            val parent = target.parentFile
+            if (parent != null && !parent.exists()) {
+                parent.mkdirs()
             }
 
             if (size <= 0) return false
@@ -168,8 +173,13 @@ object IoOptimizer {
                             inBuffer = inChannel.map(FileChannel.MapMode.READ_ONLY, position, currentChunk)
                             outBuffer = outChannel.map(FileChannel.MapMode.READ_WRITE, position, currentChunk)
 
+                            val writeStartTime = System.currentTimeMillis()
                             outBuffer.put(inBuffer)
+                            val writeDuration = System.currentTimeMillis() - writeStartTime
                             position += currentChunk
+
+                            // V10: 记录物理写入延迟
+                            PerformanceMonitor.recordIOWriteLatency(writeDuration, currentChunk)
                         } finally {
                             unmap(inBuffer)
                             unmap(outBuffer)
@@ -193,7 +203,6 @@ object IoOptimizer {
             true
         } catch (e: Exception) {
             Log.e(TAG, "FastCopy (mmap) 失败: ${source.name}, 尝试 NIO Fallback", e)
-            usedMmap = false
 
             // Fallback to NIO transferTo
             try {
@@ -222,6 +231,48 @@ object IoOptimizer {
                 Log.e(TAG, "NIO Fallback 亦失败: ${source.name}", fallbackE)
                 false
             }
+        }
+    }
+
+    /**
+     * V10: 针对小文件的优化复制
+     * 避免 mmap 的页表映射开销和 context switch
+     */
+    private fun fastCopySmallFile(source: File, target: File): Boolean {
+        val startTime = System.currentTimeMillis()
+        val size = source.length()
+        return try {
+            val parent = target.parentFile
+            if (parent != null && !parent.exists()) {
+                parent.mkdirs()
+            }
+
+            val buffer = acquireBuffer()
+            try {
+                FileInputStream(source).use { ins ->
+                    FileOutputStream(target).use { out ->
+                        var bytesRead: Int
+                        while (ins.read(buffer).also { bytesRead = it } != -1) {
+                            out.write(buffer, 0, bytesRead)
+                        }
+                    }
+                }
+            } finally {
+                releaseBuffer(buffer)
+            }
+
+            target.setLastModified(source.lastModified())
+            val durationMs = System.currentTimeMillis() - startTime
+            PerformanceMonitor.recordIOCopy(
+                bytesCopied = size,
+                durationMs = durationMs,
+                usedMmap = false,
+                wasIncrementalSkip = false
+            )
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "Small file copy failed: ${source.name}", e)
+            false
         }
     }
 

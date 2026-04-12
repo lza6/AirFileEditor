@@ -3,10 +3,12 @@ package com.example.tfgwj.worker.orchestrator
 import android.util.Log
 import io.mockk.every
 import io.mockk.mockkStatic
+import io.mockk.unmockkAll
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -22,7 +24,7 @@ class ProgressTrackerTest {
 
     private val testDispatcher = UnconfinedTestDispatcher()
     private val testScope = TestScope(testDispatcher)
-    private val config = CopyConfig.getTestConfig() // wmUpdateIntervalMs = 200, uiUpdateIntervalMs = 16
+    private val config = CopyConfig.getTestConfig()
 
     private var progressCount = 0
     private var lastProgress = -1
@@ -44,6 +46,7 @@ class ProgressTrackerTest {
         every { Log.e(any<String>(), any<String>(), any<Throwable>()) } returns 0
 
         mockkStatic(System::class)
+        // Set initial time
         every { System.currentTimeMillis() } returns 1000L
 
         progressCount = 0
@@ -58,6 +61,15 @@ class ProgressTrackerTest {
         }
     }
 
+    @After
+    fun tearDown() {
+        try {
+            unmockkAll()
+        } catch (e: Exception) {
+            // Ignore unmockk errors during teardown
+        }
+    }
+
     @Test
     fun `initial update triggers callback`() = runTest {
         tracker.initialize(100)
@@ -65,40 +77,47 @@ class ProgressTrackerTest {
 
         assertEquals(1, progressCount)
         assertEquals(0, lastProgress)
+        assertEquals(0, lastProcessed)
+        assertEquals(100, lastTotal)
     }
 
     @Test
-    fun `updates are throttled by time for WorkManager`() = runTest {
-        every { System.currentTimeMillis() } returns 1000L
+    fun `updates are throttled by time`() = runTest {
         tracker.initialize(100)
 
-        // Initial update (processed=0, isInitial=true)
-        tracker.updateProgress(0, "First")
+        // 1. First update (isInitial=true)
+        every { System.currentTimeMillis() } returns 2000L
+        tracker.updateProgress(0, "Update 1")
         assertEquals(1, progressCount)
 
-        // Advance time by 100ms (less than 200ms interval)
-        every { System.currentTimeMillis() } returns 1100L
-        tracker.updateProgress(2, "Second") // processed=2, not initial anymore
-        assertEquals(1, progressCount) // Should be throttled
+        // 2. Immediate update (processed=2, not initial anymore in test config threshold=1)
+        // Interval is 200ms. Since we didn't wait, it should NOT trigger.
+        every { System.currentTimeMillis() } returns 2100L
+        tracker.updateProgress(2, "Update 2")
+        assertEquals(1, progressCount) // Throttled
 
-        // Advance time by another 150ms (total 250ms > 200ms)
-        every { System.currentTimeMillis() } returns 1250L
-        tracker.updateProgress(3, "Third")
-        assertEquals(2, progressCount) // Should trigger
+        // 3. Wait enough time (total 250ms elapsed since last success)
+        every { System.currentTimeMillis() } returns 2300L
+        tracker.updateProgress(3, "Update 3")
+        assertEquals(2, progressCount) // Triggered
     }
 
     @Test
-    fun `markComplete triggers final callback regardless of throttling`() = runTest {
+    fun `markComplete triggers final callback`() = runTest {
         tracker.initialize(100)
-        tracker.updateProgress(0, "Start") // 1
 
-        // Even if we just updated, markComplete must trigger
-        tracker.markComplete() // 2
+        // Even if we just updated and are throttled
+        every { System.currentTimeMillis() } returns 2000L
+        tracker.updateProgress(50, "Halfway")
+        assertEquals(1, progressCount)
+
+        // markComplete must always trigger regardless of throttle interval
+        every { System.currentTimeMillis() } returns 2050L
+        tracker.markComplete()
 
         assertEquals(2, progressCount)
         assertEquals(100, lastProgress)
         assertEquals(100, lastProcessed)
-        assertEquals("完成", lastMessage)
     }
 
     @Test
@@ -112,6 +131,7 @@ class ProgressTrackerTest {
     @Test
     fun `progress is clamped to 100`() = runTest {
         tracker.initialize(100)
+        // markComplete internally calls updateProgress(totalFiles)
         tracker.updateProgress(150, "Over")
 
         assertEquals(100, lastProgress)

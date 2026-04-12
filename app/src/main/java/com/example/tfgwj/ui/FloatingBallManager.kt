@@ -19,7 +19,7 @@ import androidx.work.WorkManager
 import com.example.tfgwj.R
 import com.example.tfgwj.utils.AppLogger
 import com.example.tfgwj.utils.PauseControl
-import com.example.tfgwj.worker.FileReplaceWorker
+import com.example.tfgwj.worker.FileReplaceWorkerV2
 import com.google.android.material.progressindicator.CircularProgressIndicator
 import com.google.android.material.progressindicator.LinearProgressIndicator
 import kotlinx.coroutines.CoroutineScope
@@ -313,21 +313,21 @@ class FloatingBallManager(private val context: Context) {
             // 处理最终状态
             updateProgress(
                 progress = 100,
-                processed = workInfo.progress.getInt(FileReplaceWorker.KEY_PROCESSED, 0),
-                total = workInfo.progress.getInt(FileReplaceWorker.KEY_TOTAL, 0),
+                processed = workInfo.progress.getInt(FileReplaceWorkerV2.KEY_PROCESSED, 0),
+                total = workInfo.progress.getInt(FileReplaceWorkerV2.KEY_TOTAL, 0),
                 currentFile = "完成",
-                mode = workInfo.progress.getString(FileReplaceWorker.KEY_MODE) ?: "",
+                mode = workInfo.progress.getString(FileReplaceWorkerV2.KEY_MODE) ?: "",
                 speed = 0f,
                 phase = "COMPLETED",
             )
             return
         }
 
-        val progress = workInfo.progress.getInt(FileReplaceWorker.KEY_PROGRESS, 0)
-        val processed = workInfo.progress.getInt(FileReplaceWorker.KEY_PROCESSED, 0)
-        val total = workInfo.progress.getInt(FileReplaceWorker.KEY_TOTAL, 0)
-        val currentFile = workInfo.progress.getString(FileReplaceWorker.KEY_CURRENT_FILE) ?: ""
-        val mode = workInfo.progress.getString(FileReplaceWorker.KEY_MODE) ?: ""
+        val progress = workInfo.progress.getInt(FileReplaceWorkerV2.KEY_PROGRESS, 0)
+        val processed = workInfo.progress.getInt(FileReplaceWorkerV2.KEY_PROCESSED, 0)
+        val total = workInfo.progress.getInt(FileReplaceWorkerV2.KEY_TOTAL, 0)
+        val currentFile = workInfo.progress.getString(FileReplaceWorkerV2.KEY_CURRENT_FILE) ?: ""
+        val mode = workInfo.progress.getString(FileReplaceWorkerV2.KEY_MODE) ?: ""
         val speed = workInfo.progress.getFloat("speed", 0f)
 
         updateProgress(progress, processed, total, currentFile, mode, speed)

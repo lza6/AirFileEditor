@@ -10,6 +10,7 @@ import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import com.example.tfgwj.BuildConfig
 import com.example.tfgwj.IFileOperationService
+import com.example.tfgwj.performance.PerformanceMonitor
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -322,11 +323,14 @@ class ShizukuManager private constructor(private val context: Context) {
      * 创建目录
      */
     fun createDirectory(path: String): Boolean {
+        val startTime = System.currentTimeMillis()
         return try {
-            fileOperationService?.createDirectory(path) ?: run {
+            val result = fileOperationService?.createDirectory(path) ?: run {
                 Log.w(TAG, "UserService 未连接")
                 false
             }
+            com.example.tfgwj.performance.PerformanceMonitor.recordIPCLatency(System.currentTimeMillis() - startTime, methodName = "createDirectory")
+            result
         } catch (e: Exception) {
             Log.e(TAG, "创建目录失败: $path", e)
             false
@@ -337,11 +341,14 @@ class ShizukuManager private constructor(private val context: Context) {
      * 删除文件或目录
      */
     fun deleteFile(path: String): Boolean {
+        val startTime = System.currentTimeMillis()
         return try {
-            fileOperationService?.deleteFile(path) ?: run {
+            val result = fileOperationService?.deleteFile(path) ?: run {
                 Log.w(TAG, "UserService 未连接")
                 false
             }
+            com.example.tfgwj.performance.PerformanceMonitor.recordIPCLatency(System.currentTimeMillis() - startTime, methodName = "deleteFile")
+            result
         } catch (e: Exception) {
             Log.e(TAG, "删除失败: $path", e)
             false
@@ -355,11 +362,14 @@ class ShizukuManager private constructor(private val context: Context) {
         source: String,
         target: String,
     ): Boolean {
+        val startTime = System.currentTimeMillis()
         return try {
-            fileOperationService?.copyFile(source, target) ?: run {
+            val result = fileOperationService?.copyFile(source, target) ?: run {
                 Log.w(TAG, "UserService 未连接")
                 false
             }
+            com.example.tfgwj.performance.PerformanceMonitor.recordIPCLatency(System.currentTimeMillis() - startTime, methodName = "copyFile")
+            result
         } catch (e: Exception) {
             Log.e(TAG, "复制文件失败", e)
             false
@@ -373,11 +383,14 @@ class ShizukuManager private constructor(private val context: Context) {
         source: String,
         target: String,
     ): Boolean {
+        val startTime = System.currentTimeMillis()
         return try {
-            fileOperationService?.copyDirectory(source, target) ?: run {
+            val result = fileOperationService?.copyDirectory(source, target) ?: run {
                 Log.w(TAG, "UserService 未连接")
                 false
             }
+            com.example.tfgwj.performance.PerformanceMonitor.recordIPCLatency(System.currentTimeMillis() - startTime, methodName = "copyDirectory")
+            result
         } catch (e: Exception) {
             Log.e(TAG, "复制目录失败", e)
             false

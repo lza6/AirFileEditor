@@ -74,7 +74,6 @@ class VerificationManager(
         targetPackage: String,
         totalFiles: Int,
     ): Int {
-        val targetBase = PathConstants.buildTargetDataPath(targetPackage)
         val sourceFiles = getSourceFilesChunked(androidDir, VERIFY_BATCH_SIZE)
         val verifiedTotal = java.util.concurrent.atomic.AtomicInteger(0)
 
@@ -84,12 +83,12 @@ class VerificationManager(
             // 构建目标路径列表
             val targetPaths =
                 batch.mapNotNull { srcFile ->
-                    buildTargetPath(srcFile, androidDir, targetBase, targetPackage)
+                    buildTargetPath(srcFile, androidDir, targetPackage)
                 }
 
             if (targetPaths.isNotEmpty()) {
                 // 批量 stat 命令
-                val cmd = CMD_STAT_FILES.format(targetPaths.joinToString(" "))
+                val cmd = CMD_STAT_FILES.format(targetPaths.joinToString(" ") { shellEscape(it.first) })
 
                 try {
                     val output = RootChecker.executeRootCommand(cmd)
@@ -123,7 +122,6 @@ class VerificationManager(
         targetPackage: String,
         totalFiles: Int,
     ): Int {
-        val targetBase = PathConstants.buildTargetDataPath(targetPackage)
         val sourceFiles = getSourceFilesChunked(androidDir, VERIFY_BATCH_SIZE)
         val verifiedTotal = java.util.concurrent.atomic.AtomicInteger(0)
 
@@ -132,11 +130,11 @@ class VerificationManager(
         sourceFiles.forEach { batch ->
             val targetPaths =
                 batch.mapNotNull { srcFile ->
-                    buildTargetPath(srcFile, androidDir, targetBase, targetPackage)
+                    buildTargetPath(srcFile, androidDir, targetPackage)
                 }
 
             if (targetPaths.isNotEmpty()) {
-                val cmd = CMD_STAT_FILES.format(targetPaths.joinToString(" "))
+                val cmd = CMD_STAT_FILES.format(targetPaths.joinToString(" ") { shellEscape(it.first) })
 
                 try {
                     val output = shizukuManager?.executeCommandWithOutput(cmd)
@@ -189,7 +187,7 @@ class VerificationManager(
                         batch.map { srcFile ->
                             async(Dispatchers.IO) {
                                 semaphore.withPermit {
-                                    val targetInfo = buildTargetPath(srcFile, androidDir, targetBase, targetPackage)
+                                    val targetInfo = buildTargetPath(srcFile, androidDir, targetPackage)
                                     if (targetInfo != null) {
                                         val targetFile = File(targetInfo.first)
                                         if (targetFile.exists() && targetFile.length() == srcFile.length()) {
@@ -227,7 +225,6 @@ class VerificationManager(
     private fun buildTargetPath(
         srcFile: File,
         androidDir: File,
-        targetBase: String,
         targetPackage: String,
     ): Pair<String, Long>? {
         val relativePath = PathConstants.calculateRelativePath(androidDir, srcFile.absolutePath)
@@ -240,7 +237,25 @@ class VerificationManager(
                 isObb = relativePath.startsWith("obb/"),
             )
 
+        if (!isSafeTargetPath(targetPath)) {
+            Log.w(TAG, "跳过非法目标路径: $targetPath")
+            return null
+        }
+
         return Pair(targetPath, srcFile.length())
+    }
+
+    private fun isSafeTargetPath(path: String): Boolean {
+        return try {
+            val normalized = File(path).canonicalPath
+            normalized.startsWith("/storage/emulated/0/Android/data/") || normalized.startsWith("/storage/emulated/0/Android/obb/")
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    private fun shellEscape(value: String): String {
+        return "'" + value.replace("'", "'\"'\"'") + "'"
     }
 
     /**

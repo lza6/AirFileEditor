@@ -30,6 +30,7 @@ enum class MetricCategory {
     BATTERY, // 电量消耗
     THERMAL, // 设备温度
     TASK, // 任务执行
+    IPC, // 跨进程通讯
 }
 
 /**
@@ -42,6 +43,11 @@ object MetricNames {
     const val IO_MMAP_FALLBACK_RATE = "io_mmap_fallback_rate" // mmap 回退率 (%)
     const val IO_INCREMENTAL_HIT_RATE = "io_incremental_hit_rate" // 增量更新命中率 (%)
     const val IO_CONCURRENT_UTILIZATION = "io_concurrent_util" // 并发利用率 (%)
+    const val IO_WRITE_LATENCY = "io_write_latency" // 写入延迟 (ms)
+
+    // IPC 指标 (Shizuku)
+    const val IPC_BINDER_LATENCY = "ipc_binder_latency" // Binder 延迟 (ms)
+    const val IPC_TRANSFER_SIZE = "ipc_transfer_size" // 传输字节数 (B)
 
     // 内存指标
     const val MEMORY_USED = "memory_used" // 已用内存 (MB)

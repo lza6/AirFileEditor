@@ -32,24 +32,22 @@ class IoOptimizerTest {
         every { Log.d(any<String>(), any<String>()) } returns 0
         every { Log.v(any<String>(), any<String>()) } returns 0
         every { Log.w(any<String>(), any<String>()) } returns 0
+        every { Log.i(any<String>(), any<String>()) } returns 0
+        every { Log.e(any<String>(), any<String>()) } returns 0
         every { Log.e(any<String>(), any<String>(), any<Throwable>()) } returns 0
 
-        // Mock objects to avoid real logic
         mockkObject(PerformanceMonitor)
         every { PerformanceMonitor.recordIOCopy(any<Long>(), any<Long>(), any<Boolean>(), any<Boolean>()) } returns Unit
+        every { PerformanceMonitor.recordIOWriteLatency(any<Long>(), any<Long>()) } returns Unit
 
         mockkObject(MetricCollector)
         every { MetricCollector.recordIO(any<String>(), any<Double>(), any<String>(), any<Map<String, String>>()) } returns Unit
-
-        // Mock StorageTypeDetector instead of IoOptimizer
-        mockkObject(StorageTypeDetector)
-        every { StorageTypeDetector.getOptimalBufferSize(any()) } returns 1024 * 1024
     }
 
     @Test
     fun `fastCopy copies file correctly`() {
-        val source = tempFolder.newFile("src.bin")
-        val target = File(tempFolder.root, "dest.bin")
+        val source = tempFolder.newFile("src_${System.nanoTime()}.bin")
+        val target = File(tempFolder.root, "dest_${System.nanoTime()}.bin")
         val content = "hello nio mmap copy".toByteArray()
         source.writeBytes(content)
 
@@ -63,21 +61,21 @@ class IoOptimizerTest {
 
     @Test
     fun `needsUpdate returns true when target missing`() {
-        val source = tempFolder.newFile("src_new.bin")
-        val target = File(tempFolder.root, "not_exist.bin")
+        val source = tempFolder.newFile("src_new_${System.nanoTime()}.bin")
+        val target = File(tempFolder.root, "not_exist_${System.nanoTime()}.bin")
 
         assertTrue(IoOptimizer.needsUpdate(source, target))
     }
 
     @Test
     fun `needsUpdate returns false when size and time match`() {
-        val source = tempFolder.newFile("src_match.bin")
-        val target = tempFolder.newFile("dest_match.bin")
+        val source = tempFolder.newFile("src_match_${System.nanoTime()}.bin")
+        val target = tempFolder.newFile("dest_match_${System.nanoTime()}.bin")
         val content = "match".toByteArray()
         source.writeBytes(content)
         target.writeBytes(content)
 
-        val time = 123456789L
+        val time = System.currentTimeMillis() / 1000 * 1000 // Strip millis to avoid precision issues on some FS
         source.setLastModified(time)
         target.setLastModified(time)
 
@@ -107,7 +105,6 @@ class IoOptimizerTest {
         IoOptimizer.releaseBuffer(buffer)
 
         val buffer2 = IoOptimizer.acquireBuffer()
-        // In this simple object pool, it should return the same instance if single threaded
         assertSame(buffer, buffer2)
     }
 }

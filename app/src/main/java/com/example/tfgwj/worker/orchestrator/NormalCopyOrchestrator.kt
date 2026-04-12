@@ -8,9 +8,11 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Semaphore
-import kotlinx.coroutines.sync.withPermit
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 
 /**
@@ -48,9 +50,16 @@ class NormalCopyOrchestrator(
     private val progressCounter = java.util.concurrent.atomic.AtomicInteger(0)
     private val totalBytesProcessed = java.util.concurrent.atomic.AtomicLong(0)
     private val ioRateCalculator = IoRateCalculator()
+    private val permitMutex = Mutex()
+    private val progressSpeedMutex = Mutex()
+    @Volatile
+    private var dynamicPermits: Int = 1
+    @Volatile
+    private var runningTasksCount: Int = 0
 
     private lateinit var fileStatistics: FileStatistics
     private lateinit var progressTracker: ProgressTracker
+    private var scheduler: com.example.tfgwj.performance.scheduler.AdaptivePermitScheduler? = null
 
     private var totalFiles = 0
     private var targetPackage = ""
@@ -89,6 +98,18 @@ class NormalCopyOrchestrator(
                         progressCallback(p, processed, total, msg, speed)
                     }
                 progressTracker.initialize(totalFiles)
+
+                // V10: 初始化自适应调度器
+                dynamicPermits = config.nativeConcurrentPermits.coerceAtLeast(1)
+                scheduler = com.example.tfgwj.performance.scheduler.AdaptivePermitScheduler(
+                    context = context,
+                    basePermits = config.nativeConcurrentPermits,
+                ).apply {
+                    start { newPermits ->
+                        dynamicPermits = newPermits.coerceAtLeast(1)
+                        Log.d(TAG, "Scheduler: permits updated to $dynamicPermits")
+                    }
+                }
 
                 // 3. 准备目标环境
                 val targetBase = PathConstants.buildTargetDataPath(targetPackage)
@@ -133,6 +154,7 @@ class NormalCopyOrchestrator(
 
     override fun cleanup() {
         try {
+            scheduler?.stop()
             scope.cancel()
         } catch (e: Exception) {
             Log.w(TAG, "清理资源失败", e)
@@ -148,69 +170,127 @@ class NormalCopyOrchestrator(
     ): Int =
         withContext(Dispatchers.IO) {
             val fileSequence = fileStatistics.getFileSequence(androidDir)
-            val batches = fileStatistics.batchFiles(fileSequence, config.fileBatchSize)
 
-            Log.d(TAG, "并发复制: 总文件数=$totalFiles, 批次数=${batches.size}, 并发度=${config.nativeConcurrentPermits}")
+            // V10: 针对小文件进行聚合处理
+            // 1. 将文件流分为 "大文件" 和 "小文件队列"
+            val (smallFiles, largeFiles) = fileSequence.partition { it.length() < 1024 } // < 1KB 视为极小文件
+
+            Log.d(TAG, "并发复制: 总文件数=$totalFiles, 小文件=${smallFiles.size}, 大文件=${largeFiles.size}")
 
             val successCount = java.util.concurrent.atomic.AtomicInteger(0)
-            val semaphore = Semaphore(config.nativeConcurrentPermits)
 
-            batches.map { batch ->
+            // 2. 处理大文件批次
+            val largeBatches = fileStatistics.batchFiles(largeFiles.asSequence(), config.fileBatchSize)
+            largeBatches.map { batch ->
                 scope.launch {
-                    batch.forEach { sourceFile ->
-                        semaphore.withPermit {
-                            try {
-                                // 计算目标路径
-                                val relativePath = PathConstants.calculateRelativePath(androidDir, sourceFile.absolutePath)
-                                val targetPath =
-                                    PathConstants.buildTargetFilePath(
-                                        packageName = targetPackage,
-                                        subPath = relativePath,
-                                        isObb = relativePath.startsWith("obb/"),
-                                    )
-                                val targetFile = File(targetPath)
+                    processFileBatch(batch, androidDir, successCount)
+                }
+            }.joinAll()
 
-                                // 确保父目录存在
-                                if (!targetFile.parentFile?.exists()!!) {
-                                    synchronized(this@NormalCopyOrchestrator) {
-                                        targetFile.parentFile?.mkdirs()
-                                    }
-                                }
-
-                                // 增量检测 + Zero-Copy
-                                if (IoOptimizer.needsUpdate(sourceFile, targetFile)) {
-                                    val success = IoOptimizer.fastCopy(sourceFile, targetFile)
-                                    if (success) {
-                                        val bytes = sourceFile.length()
-                                        totalBytesProcessed.addAndGet(bytes)
-                                        val currentSpeed = ioRateCalculator.update(totalBytesProcessed.get())
-
-                                        successCount.incrementAndGet()
-                                        val processed = progressCounter.incrementAndGet()
-
-                                        // 更新进度（每10个文件或关键节点）
-                                        if (processed % 10 == 0 || processed >= totalFiles) {
-                                            progressTracker.updateProgress(
-                                                processed = processed,
-                                                message = sourceFile.name,
-                                                phase = "REPLACING",
-                                            )
-                                        }
-                                    }
-                                } else {
-                                    // 不需要更新也计入进度
-                                    progressCounter.incrementAndGet()
-                                }
-                            } catch (e: Exception) {
-                                Log.e(TAG, "复制失败: ${sourceFile.absolutePath}", e)
-                            }
-                        }
-                    }
+            // 3. 处理小文件批次（聚合写入）
+            val smallBatches = fileStatistics.batchFiles(smallFiles.asSequence(), 100) // 每100个小文件一组
+            smallBatches.map { batch ->
+                scope.launch {
+                    processFileBatch(batch, androidDir, successCount)
                 }
             }.joinAll()
 
             successCount.get()
         }
+
+    /**
+     * 处理单个文件批次
+     */
+    private suspend fun processFileBatch(
+        batch: List<File>,
+        androidDir: File,
+        successCount: java.util.concurrent.atomic.AtomicInteger,
+    ) {
+        batch.forEach { sourceFile ->
+            try {
+                processWithAdaptiveLimit {
+                    // 计算目标路径
+                    val relativePath = PathConstants.calculateRelativePath(androidDir, sourceFile.absolutePath)
+                    val targetPath =
+                        PathConstants.buildTargetFilePath(
+                            packageName = targetPackage,
+                            subPath = relativePath,
+                            isObb = relativePath.startsWith("obb/"),
+                        )
+                    val targetFile = File(targetPath)
+
+                    // 确保父目录存在
+                    val parent = targetFile.parentFile
+                    if (parent != null && !parent.exists()) {
+                        synchronized(this@NormalCopyOrchestrator) {
+                            if (!parent.exists()) {
+                                parent.mkdirs()
+                            }
+                        }
+                    }
+
+                    // 增量检测 + Zero-Copy
+                    if (IoOptimizer.needsUpdate(sourceFile, targetFile)) {
+                        val success = IoOptimizer.fastCopy(sourceFile, targetFile)
+                        if (success) {
+                            val bytes = sourceFile.length()
+                            totalBytesProcessed.addAndGet(bytes)
+                            progressSpeedMutex.withLock {
+                                ioRateCalculator.update(totalBytesProcessed.get())
+                            }
+
+                            successCount.incrementAndGet()
+                            val processed = progressCounter.incrementAndGet()
+
+                            // 更新进度（每10个文件或关键节点）
+                            if (processed % 10 == 0 || processed >= totalFiles) {
+                                progressTracker.updateProgress(
+                                    processed = processed,
+                                    message = sourceFile.name,
+                                    phase = "REPLACING",
+                                )
+                            }
+                        }
+                    } else {
+                        // 不需要更新也计入进度
+                        progressCounter.incrementAndGet()
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "复制失败: ${sourceFile.absolutePath}", e)
+            }
+        }
+    }
+
+    /**
+     * 根据 scheduler 的 permits 做软并发限制，避免动态替换 Semaphore 引发竞态
+     */
+    private suspend fun processWithAdaptiveLimit(action: suspend () -> Unit) {
+        while (true) {
+            val permits = dynamicPermits.coerceAtLeast(1)
+            val acquired = withTimeoutOrNull(1000) {
+                permitMutex.withLock {
+                    if (runningTasksCount < permits) {
+                        runningTasksCount++
+                        true
+                    } else {
+                        false
+                    }
+                }
+            } ?: false
+
+            if (acquired) break
+            delay(50) // 等待许可释放
+        }
+
+        try {
+            action()
+        } finally {
+            permitMutex.withLock {
+                runningTasksCount = (runningTasksCount - 1).coerceAtLeast(0)
+            }
+        }
+    }
 
     /**
      * IO 速率计算器（简化版）

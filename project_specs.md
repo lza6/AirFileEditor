@@ -156,12 +156,36 @@ IoOptimizer (IO 优化)
   - ✅ 更新 project_specs.md 记录架构演进
   - ✅ 无需删除 V1 代码，确保向后兼容
 
+### V10.0.0 (已完成 ✅ - Performance Engine & APM)
+- ✅ **极致性能引擎**:
+  - ✅ **自适应并发调度**: 引入 `AdaptivePermitScheduler`，基于 CPU 负载、内存压力及 IO 速度实时调整并发度。
+  - ✅ **小文件聚合优化**: 针对极小文件（<1KB）分流处理，减少系统调用开销。
+  - ✅ **动态并发软限制**: 采用 `permitMutex` + `runningTasksCount` 机制，彻底解决 Semaphore 实例替换导致的竞态风险。
+- ✅ **APM 性能监控**:
+  - ✅ **细粒度指标采集**: 实现 IO 写入物理延迟（IO Wait）与 Shizuku Binder 调用时延（IPC Latency）的精准记录。
+  - ✅ **性能诊断系统**: 提供基于多维度指标的自动化优化建议。
+- ✅ **全架构适配**: Root/Native/Shizuku 模式全面实装自适应并发与 APM 监控。
+- ✅ **V11 预备工作**: 
+  - ✅ Compose UI 组件骨架（Atomic Design: Atoms/Molecules/Organisms）
+  - ✅ MVI 架构基础（ReplacingIntent/State/ViewModel）
+  - ✅ 为 MainActivity 重构铺平道路
+
 ### V9.0.0 (已完成 - Quality Foundation)
 - ✅ 测试基础设施：Jacoco/Detekt/Ktlint 全量配置
 - ✅ 核心单元测试：SpeedCalculator, ProgressTracker, FileHasher, IoOptimizer
 - ✅ 质量门禁：Detekt Baseline + Ktlint Auto-format
 - ✅ CI/CD：GitHub Actions 自动化流水线
 - ✅ 覆盖率验证：Jacoco 80% 目标建立
+
+## 8. 未来演进愿景 (V10 - V15)
+详细计划见 [`plans/ULTIMATE_EVOLUTION_GUIDE.md`](plans/ULTIMATE_EVOLUTION_GUIDE.md)
+
+- **V10 (APM & Performance)**: 极致 IO 监控与 Zero-Copy 2.0。
+- **V11 (Jetpack Compose)**: UI 全面现代化重构，彻底解决 MainActivity 冗余。
+- **V12 (DDD & Modularization)**: 领域驱动设计，多模块解耦。
+- **V13 (Advanced Stealth)**: 隐匿性增强，防范厂商侦测。
+- **V14 (AI Agent Integration)**: 集成端侧大模型，实现自然语言管理文件。
+- **V15 (Universal Core)**: 跨平台核心库 (KMP)，支持除 Android 外的更多系统管理。
 
 ### 难点 1: Android 11+ 的分区存储限制
 

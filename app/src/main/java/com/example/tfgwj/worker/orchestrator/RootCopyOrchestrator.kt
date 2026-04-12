@@ -12,9 +12,10 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Semaphore
-import kotlinx.coroutines.sync.withPermit
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 
 /**
@@ -45,22 +46,29 @@ class RootCopyOrchestrator(
         private const val TAG = "RootCopyOrchestrator"
 
         // Shell 命令模板
-        private const val CMD_MKDIR = "mkdir -p \"%s\""
-        private const val CMD_CP_DIR = "cp -p -v -R \"%s/.\" \"%s/\""
-        private const val CMD_CP_FILE = "cp -p -v \"%s\" \"%s\""
+        private const val CMD_MKDIR = "mkdir -p %s"
+        private const val CMD_CP_DIR = "cp -p -v -R %s %s"
+        private const val CMD_CP_FILE = "cp -p -v %s %s"
     }
 
     private val scope = kotlinx.coroutines.CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var watchdogJob: Job? = null
     private val progressCounter = java.util.concurrent.atomic.AtomicInteger(0)
     private val watchdogActive = java.util.concurrent.atomic.AtomicBoolean(true)
+    private val permitMutex = Mutex()
+    @Volatile
+    private var dynamicPermits: Int = 1
+    @Volatile
+    private var runningTasksCount: Int = 0
 
     private lateinit var fileStatistics: FileStatistics
     private lateinit var progressTracker: ProgressTracker
     private lateinit var verificationManager: VerificationManager
+    private var scheduler: com.example.tfgwj.performance.scheduler.AdaptivePermitScheduler? = null
 
     private var totalFiles = 0
     private var targetPackage = ""
+    private var sourceAndroidDir: File = File("")
 
     override suspend fun execute(
         androidDir: File,
@@ -73,6 +81,7 @@ class RootCopyOrchestrator(
             Log.d(TAG, "🚀 Root 模式启动: ${androidDir.absolutePath} -> $targetPackage")
 
             this@RootCopyOrchestrator.targetPackage = targetPackage
+            this@RootCopyOrchestrator.sourceAndroidDir = androidDir
             this@RootCopyOrchestrator.fileStatistics = FileStatistics(context)
             this@RootCopyOrchestrator.verificationManager = VerificationManager(context)
 
@@ -94,9 +103,23 @@ class RootCopyOrchestrator(
                     }
                 progressTracker.initialize(totalFiles)
 
+                // V10: 初始化自适应调度器
+                dynamicPermits = config.rootConcurrentPermits.coerceAtLeast(1)
+                scheduler = com.example.tfgwj.performance.scheduler.AdaptivePermitScheduler(
+                    context = context,
+                    basePermits = config.rootConcurrentPermits,
+                    minPermits = 1,
+                    maxPermits = 4 // Root 模式 Shell 竞争更严重，限制最大并发
+                ).apply {
+                    start { newPermits ->
+                        dynamicPermits = newPermits.coerceAtLeast(1)
+                        Log.d(TAG, "Scheduler: Root permits updated to $dynamicPermits")
+                    }
+                }
+
                 // 3. 准备目标环境
                 val targetBase = PathConstants.buildTargetDataPath(targetPackage)
-                executeRootCommand(CMD_MKDIR.format(targetBase))
+                executeRootCommand(CMD_MKDIR.format(shellEscape(targetBase)))
 
                 // 4. 执行递归复制（带看门狗）
                 progressCallback(5, 0, totalFiles, "开始复制...", 0f)
@@ -135,7 +158,7 @@ class RootCopyOrchestrator(
         return withContext(Dispatchers.IO) {
             try {
                 verificationManager.verify(
-                    androidDir = File(PathConstants.buildTargetDataPath(targetPackage)),
+                    androidDir = sourceAndroidDir,
                     targetPackage = targetPackage,
                     totalFiles = totalFiles,
                     mode = VerificationMode.ROOT,
@@ -151,6 +174,7 @@ class RootCopyOrchestrator(
 
     override fun cleanup() {
         try {
+            scheduler?.stop()
             watchdogActive.set(false)
             watchdogJob?.cancel()
             scope.cancel()
@@ -204,10 +228,9 @@ class RootCopyOrchestrator(
 
             try {
                 // 并行执行 cp 命令
-                val semaphore = Semaphore(config.rootConcurrentPermits)
                 tasks.map { task ->
                     scope.async {
-                        semaphore.withPermit {
+                        processWithAdaptiveLimit {
                             runCpCommand(task)
                         }
                     }
@@ -220,14 +243,52 @@ class RootCopyOrchestrator(
     }
 
     /**
+     * 根据 scheduler 的 permits 做软并发限制
+     */
+    private suspend fun processWithAdaptiveLimit(action: suspend () -> Unit) {
+        while (true) {
+            val permits = dynamicPermits.coerceAtLeast(1)
+            val acquired = withTimeoutOrNull(1000) {
+                permitMutex.withLock {
+                    if (runningTasksCount < permits) {
+                        runningTasksCount++
+                        true
+                    } else {
+                        false
+                    }
+                }
+            } ?: false
+
+            if (acquired) break
+            delay(50)
+        }
+
+        try {
+            action()
+        } finally {
+            permitMutex.withLock {
+                runningTasksCount = (runningTasksCount - 1).coerceAtLeast(0)
+            }
+        }
+    }
+
+    /**
      * 执行单个 cp 命令
      */
     private suspend fun runCpCommand(task: FileStatistics.CopyTask) {
+        if (!isSafeTargetPath(task.targetDir)) {
+            throw IllegalArgumentException("非法目标路径: ${task.targetDir}")
+        }
+
+        val sourcePath = task.sourceDir.canonicalPath
+        val targetPath = File(task.targetDir).canonicalPath
+        val sourceArg = shellEscape(sourcePath)
+        val targetArg = shellEscape(targetPath)
         val cmd =
             if (task.isDirectory) {
-                CMD_CP_DIR.format(task.sourceDir.absolutePath, task.targetDir)
+                CMD_CP_DIR.format("$sourceArg/.", "$targetArg/")
             } else {
-                CMD_CP_FILE.format(task.sourceDir.absolutePath, task.targetDir)
+                CMD_CP_FILE.format(sourceArg, targetArg)
             }
 
         Log.v(TAG, "执行 CP: ${task.sourceDir.name} -> $task.targetDir")
@@ -265,6 +326,22 @@ class RootCopyOrchestrator(
             Log.e(TAG, "CP 执行失败: ${task.sourceDir.name}", e)
             throw e
         }
+    }
+
+    /**
+     * 校验目标路径是否在允许目录内
+     */
+    private fun isSafeTargetPath(path: String): Boolean {
+        return try {
+            val normalized = File(path).canonicalPath
+            normalized.startsWith("/storage/emulated/0/Android/data/") || normalized.startsWith("/storage/emulated/0/Android/obb/")
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    private fun shellEscape(value: String): String {
+        return "'" + value.replace("'", "'\"'\"'") + "'"
     }
 
     /**

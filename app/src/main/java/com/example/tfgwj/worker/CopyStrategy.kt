@@ -65,11 +65,11 @@ abstract class CopyStrategy(
     ) {
         fun toWorkData(): Data =
             workDataOf(
-                FileReplaceWorker.KEY_PROCESSED to processedCount,
-                FileReplaceWorker.KEY_TOTAL to totalCount,
-                FileReplaceWorker.KEY_VERIFIED_FILES to verifiedCount.toString(),
-                FileReplaceWorker.KEY_MODE to "COPY_STRATEGY",
-                FileReplaceWorker.KEY_ERROR_MESSAGE to (errorMessage ?: ""),
+                FileReplaceWorkerV2.KEY_PROCESSED to processedCount,
+                FileReplaceWorkerV2.KEY_TOTAL to totalCount,
+                FileReplaceWorkerV2.KEY_VERIFIED_FILES to verifiedCount.toString(),
+                FileReplaceWorkerV2.KEY_MODE to "COPY_STRATEGY",
+                FileReplaceWorkerV2.KEY_ERROR_MESSAGE to (errorMessage ?: ""),
             )
 
         companion object {
