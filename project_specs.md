@@ -156,11 +156,12 @@ IoOptimizer (IO 优化)
   - ✅ 更新 project_specs.md 记录架构演进
   - ✅ 无需删除 V1 代码，确保向后兼容
 
-### 后续待办 (V9.0.0 路线图)
-- [ ] 单元测试覆盖：ProgressTracker 节流验证
-- [ ] 单元测试覆盖：Orchestrator 端到端测试
-- [ ] 性能基准测试：对比 V1 vs V2 性能差异
-- [ ] 考虑迁移到 Kotlin Multiplatform (KMP) 架构
+### V9.0.0 (已完成 - Quality Foundation)
+- ✅ 测试基础设施：Jacoco/Detekt/Ktlint 全量配置
+- ✅ 核心单元测试：SpeedCalculator, ProgressTracker, FileHasher, IoOptimizer
+- ✅ 质量门禁：Detekt Baseline + Ktlint Auto-format
+- ✅ CI/CD：GitHub Actions 自动化流水线
+- ✅ 覆盖率验证：Jacoco 80% 目标建立
 
 ### 难点 1: Android 11+ 的分区存储限制
 
