@@ -278,8 +278,10 @@ class MainActivity : AppCompatActivity() {
         setupPermissionCardCompose()
         setupMainDashboardCompose()
         setupTaskOverlayCompose()
+        setupMainPackCardCompose()
+        setupPatchVersionCardCompose()
 
-        // 主包区域
+        // 主包区域 (Legacy - 保持引用以免编译失败)
         val mainPackCard = binding.includeMainPack.root
 
         // 应用信息点击 - 切换应用
@@ -401,6 +403,7 @@ class MainActivity : AppCompatActivity() {
     private fun updateLogDisplay() {
         try {
             val logs = AppLogger.getRecentLogs(50) // 显示最近 50 条日志
+            val logSize = AppLogger.getLogSize()
             val newContent =
                 if (logs.isEmpty()) {
                     "等待日志输出..."
@@ -408,13 +411,16 @@ class MainActivity : AppCompatActivity() {
                     logs.joinToString("\n")
                 }
 
+            // 同步更新 ViewModel
+            replacingViewModel.updateLogContent(newContent, logSize)
+
             // 只有当日志内容变化时才更新，避免频繁布局
             if (newContent != lastLogContent) {
                 lastLogContent = newContent
                 binding.tvLogContent.text = newContent
 
                 // 更新日志大小显示
-                binding.tvLogSize.text = AppLogger.getLogSize()
+                binding.tvLogSize.text = logSize
 
                 // 只在用户已经在底部时才自动滚动
                 binding.tvLogContent.post {
@@ -451,6 +457,18 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupObservers() {
+        // 同步时间锁定状态到 ViewModel
+        lifecycleScope.launch {
+            preferencesManager.lockedTimeEnabled.collectLatest { enabled ->
+                if (enabled) {
+                    preferencesManager.lockedTime.collectLatest { time ->
+                        replacingViewModel.handleIntent(com.example.tfgwj.ui.mvi.ReplacingIntent.LockFileTime(time))
+                    }
+                } else {
+                    replacingViewModel.handleIntent(com.example.tfgwj.ui.mvi.ReplacingIntent.UnlockFileTime)
+                }
+            }
+        }
 
         // 替换进度 - 已移除主界面进度显示，现在只在对话框中显示
         // lifecycleScope.launch {
@@ -573,6 +591,9 @@ class MainActivity : AppCompatActivity() {
             setContent {
                 TfgwjTheme {
                     val status by permissionManager.permissionStatus.collectAsState()
+                    // 同步权限状态到 ViewModel
+                    replacingViewModel.updatePermissions(status.hasManageStorage, status.hasShizukuPermission)
+
                     PermissionCard(
                         status = status,
                         onRequestPermission = { requestPermissions() },
@@ -656,8 +677,52 @@ class MainActivity : AppCompatActivity() {
         // 同步 ComposeView 显示状态
         lifecycleScope.launch {
             replacingViewModel.uiState.collectLatest { state ->
-                val shouldShow = state.isReplacing || state.phase != "IDLE"
+                val shouldShow = state.isReplacing || state.phase != com.example.tfgwj.ui.mvi.TaskPhase.IDLE
                 binding.composeViewTaskOverlay.visibility = if (shouldShow) View.VISIBLE else View.GONE
+            }
+        }
+    }
+
+    private fun setupMainPackCardCompose() {
+        binding.composeViewMainPack.apply {
+            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
+            setContent {
+                TfgwjTheme {
+                    val state by replacingViewModel.uiState.collectAsState()
+                    com.example.tfgwj.ui.components.organisms.MainPackCard(
+                        state = state,
+                        onAppInfoClick = { showAppSelectorDialog() },
+                        onCheckEnvironment = { checkEnvironment(forceRefresh = true) },
+                        onSelectMainPack = { selectMainPackFolder() },
+                        onRandomizeTime = { randomizeFileTime() },
+                        onStartTimePicker = { showTimePickerDialog() },
+                        onLockTime = { lockCurrentTime() },
+                        onApplyLockedTime = { applyLockedTime() },
+                        onStartReplace = { startReplaceToGame() },
+                        onLaunchGame = { launchGame() },
+                        onCleanEnvironment = { confirmCleanEnvironment() }
+                    )
+                }
+            }
+        }
+    }
+
+    private fun setupPatchVersionCardCompose() {
+        binding.composeViewUpdatePack.apply {
+            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
+            setContent {
+                TfgwjTheme {
+                    val state by replacingViewModel.uiState.collectAsState()
+                    com.example.tfgwj.ui.components.organisms.PatchVersionCard(
+                        state = state,
+                        onSelectPatch = { version ->
+                            replacingViewModel.handleIntent(com.example.tfgwj.ui.mvi.ReplacingIntent.SelectPatch(version))
+                        },
+                        onScanArchives = { scanArchives() },
+                        onRefreshPatches = { loadPatchVersions() },
+                        onExtractAndUpdate = { selectUpdateArchive() }
+                    )
+                }
             }
         }
     }
@@ -814,6 +879,7 @@ class MainActivity : AppCompatActivity() {
         // 如果已经选择了主包（通过恢复或手动选择），不再重复扫描覆盖
         if (selectedMainPackPath != null) return
 
+        replacingViewModel.handleIntent(com.example.tfgwj.ui.mvi.ReplacingIntent.ScanMainPacks)
         lifecycleScope.launch {
             mainPackManager.scanMainPacks()
 
@@ -842,6 +908,7 @@ class MainActivity : AppCompatActivity() {
             val fileTime = FileTimeModifier.getFileTime(pack.path)
             if (fileTime != null) {
                 timeText.text = FileTimeModifier.formatTime(fileTime)
+                replacingViewModel.handleIntent(com.example.tfgwj.ui.mvi.ReplacingIntent.LockFileTime(fileTime))
             }
 
             // 更新当前文件时间显示
@@ -849,9 +916,18 @@ class MainActivity : AppCompatActivity() {
             if (fileTime != null) {
                 currentTimeText.text = "当前时间: ${FileTimeModifier.formatTime(fileTime)}"
             }
+
+            // 同步更新 ViewModel
+            replacingViewModel.updateMainPackInfo(
+                path = pack.path,
+                appName = pack.name,
+                icon = null,
+                targetPackage = "" // 稍后更新
+            )
         } else {
             selectedText.text = "未选择主包"
             infoLayout.visibility = View.GONE
+            replacingViewModel.updateMainPackInfo(null, null, null, "")
         }
     }
 
@@ -876,6 +952,7 @@ class MainActivity : AppCompatActivity() {
                             val currentTimeText = mainPackCard.findViewById<TextView>(R.id.tv_current_file_time)
                             currentTimeText.text = "当前时间: $timeStr"
                             mainPackCard.findViewById<TextView>(R.id.tv_main_pack_time)?.text = timeStr
+                            replacingViewModel.handleIntent(com.example.tfgwj.ui.mvi.ReplacingIntent.LockFileTime(fileTime))
                         }
 
                         // 显示大小信息
@@ -883,6 +960,14 @@ class MainActivity : AppCompatActivity() {
                         val infoLayout = mainPackCard.findViewById<View>(R.id.layout_main_pack_info)
                         sizeText.text = formatSize(getDirectorySize(file))
                         infoLayout.visibility = View.VISIBLE
+
+                        // 同步更新 ViewModel
+                        replacingViewModel.updateMainPackInfo(
+                            path = path,
+                            appName = file.name,
+                            icon = null,
+                            targetPackage = "" // 稍后更新
+                        )
 
                         Log.d(TAG, "已恢复上次选择的主包: $path")
                     }
@@ -914,7 +999,21 @@ class MainActivity : AppCompatActivity() {
             val scanLayout = updateCard.findViewById<View>(R.id.layout_scan_status)
             scanLayout.visibility = View.VISIBLE
 
-            patchManager.scanPatchVersions()
+            // 同步更新 ViewModel 扫描状态
+            replacingViewModel.handleIntent(com.example.tfgwj.ui.mvi.ReplacingIntent.RefreshPatches)
+
+            val patches = patchManager.scanPatchVersions()
+
+            // 同步更新 ViewModel 列表
+            val mviPatches = patches.map {
+                com.example.tfgwj.ui.mvi.PatchVersion(
+                    version = it.version,
+                    path = it.path,
+                    size = it.size,
+                    fileCount = it.fileCount
+                )
+            }
+            replacingViewModel.updatePatchVersions(mviPatches)
 
             scanLayout.visibility = View.GONE
         }
@@ -932,6 +1031,18 @@ class MainActivity : AppCompatActivity() {
 
         if (path != null) {
             selectedMainPackPath = path
+            // 同步更新 ViewModel
+            val file = File(path)
+            replacingViewModel.updateMainPackInfo(
+                path = path,
+                appName = file.name,
+                icon = null,
+                targetPackage = "com.tencent.tmgp.pubgmhd" // 默认包名
+            )
+            val fileTime = FileTimeModifier.getFileTime(path)
+            if (fileTime != null) {
+                replacingViewModel.handleIntent(com.example.tfgwj.ui.mvi.ReplacingIntent.LockFileTime(fileTime))
+            }
             Log.d(TAG, "设置 selectedMainPackPath: $path")
 
             val mainPackCard = binding.includeMainPack.root
@@ -1184,6 +1295,9 @@ class MainActivity : AppCompatActivity() {
             // 更新显示
             mainPackCard.findViewById<TextView>(R.id.tv_current_file_time).text = "当前时间: $timeStr"
             mainPackCard.findViewById<TextView>(R.id.tv_main_pack_time).text = timeStr
+
+            // 同步 ViewModel
+            replacingViewModel.handleIntent(com.example.tfgwj.ui.mvi.ReplacingIntent.LockFileTime(time))
         }
     }
 
@@ -1270,6 +1384,7 @@ class MainActivity : AppCompatActivity() {
                 // 已锁定，执行解锁操作
                 preferencesManager.unlockTime()
                 lockedTime = null
+                replacingViewModel.handleIntent(com.example.tfgwj.ui.mvi.ReplacingIntent.UnlockFileTime)
                 Toast.makeText(this@MainActivity, "🔓 已解锁时间", Toast.LENGTH_SHORT).show()
                 AppLogger.action("解锁时间")
                 updateLockButtonState(false)
@@ -1283,6 +1398,7 @@ class MainActivity : AppCompatActivity() {
 
                 preferencesManager.lockTime(currentTime)
                 lockedTime = currentTime
+                replacingViewModel.handleIntent(com.example.tfgwj.ui.mvi.ReplacingIntent.LockFileTime(currentTime))
 
                 val timeStr = FileTimeModifier.formatTime(currentTime)
                 Toast.makeText(this@MainActivity, "✓ 已锁定时间: $timeStr", Toast.LENGTH_SHORT).show()
@@ -1711,6 +1827,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun scanArchives() {
+        replacingViewModel.handleIntent(com.example.tfgwj.ui.mvi.ReplacingIntent.ScanArchives)
         lifecycleScope.launch {
             // 显示扫描进度对话框
             showArchiveScanDialog { archives ->
@@ -2672,6 +2789,7 @@ class MainActivity : AppCompatActivity() {
      * 3. 更新 UI 显示验证结果
      */
     private fun checkEnvironment(forceRefresh: Boolean = false) {
+        replacingViewModel.updateEnvironmentStatus(com.example.tfgwj.ui.mvi.EnvironmentStatus.Checking)
         lifecycleScope.launch {
             val mainPackCard = binding.includeMainPack.root
             val statusText = mainPackCard.findViewById<TextView>(R.id.tv_env_status)
@@ -2705,20 +2823,24 @@ class MainActivity : AppCompatActivity() {
                     PermissionChecker.AccessMode.ROOT -> {
                         statusText.text = "✅ Root"
                         statusText.setTextColor(getColor(R.color.success_color))
+                        replacingViewModel.updateEnvironmentStatus(com.example.tfgwj.ui.mvi.EnvironmentStatus.Valid)
                     }
                     PermissionChecker.AccessMode.NATIVE -> {
                         statusText.text = if (Build.VERSION.SDK_INT < 30) "✅ 正常" else "✅ 原生"
                         statusText.setTextColor(getColor(R.color.success_color))
+                        replacingViewModel.updateEnvironmentStatus(com.example.tfgwj.ui.mvi.EnvironmentStatus.Valid)
                     }
                     PermissionChecker.AccessMode.SHIZUKU -> {
                         statusText.text = "✅ Shizuku"
                         statusText.setTextColor(getColor(R.color.success_color))
+                        replacingViewModel.updateEnvironmentStatus(com.example.tfgwj.ui.mvi.EnvironmentStatus.Valid)
                     }
                     PermissionChecker.AccessMode.NONE -> {
                         // 如果没有识别到最佳模式，但支持 Shizuku，引导授权
                         if (Build.VERSION.SDK_INT >= 30 && !status.hasShizukuPermission) {
                             statusText.text = "⏳ 等待权限"
                             statusText.setTextColor(getColor(R.color.warning_color))
+                            replacingViewModel.updateEnvironmentStatus(com.example.tfgwj.ui.mvi.EnvironmentStatus.Checking)
 
                             if (status.isShizukuAvailable) {
                                 if (shizukuManager.isAuthorized.value && !shizukuManager.isServiceConnected.value) {
@@ -2733,18 +2855,21 @@ class MainActivity : AppCompatActivity() {
                         } else {
                             statusText.text = "⚠️ 需授权"
                             statusText.setTextColor(getColor(R.color.error_color))
+                            replacingViewModel.updateEnvironmentStatus(com.example.tfgwj.ui.mvi.EnvironmentStatus.Invalid)
                         }
                     }
                 }
 
                 if (status.bestMode != PermissionChecker.AccessMode.NONE) {
                     AppLogger.action("环境验证成功", "最佳模式: ${status.bestMode}")
+                    replacingViewModel.updateEnvironmentStatus(com.example.tfgwj.ui.mvi.EnvironmentStatus.Valid)
                 }
             } catch (e: Exception) {
                 statusText.text = "❌ 异常"
                 statusText.setTextColor(getColor(R.color.error_color))
                 detailText.text = "检测失败: ${e.message}"
                 AppLogger.e("MainActivity", "环境验证异常", e)
+                replacingViewModel.updateEnvironmentStatus(com.example.tfgwj.ui.mvi.EnvironmentStatus.Invalid)
             } finally {
                 if (statusText.text != "⏳ 等待权限" && statusText.text != "⏳ 连接中") {
                     progressBar.visibility = View.GONE

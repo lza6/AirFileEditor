@@ -52,15 +52,31 @@
                         android:layout_height="wrap_content"
                         android:layout_marginBottom="16dp" />
 
-                    <!-- 主包区域卡片 -->
+                    <!-- 主包区域卡片 (迁移至 Compose) -->
+                    <androidx.compose.ui.platform.ComposeView
+                        android:id="@+id/compose_view_main_pack"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="16dp" />
+
+                    <!-- 更新主包区域卡片 (迁移至 Compose) -->
+                    <androidx.compose.ui.platform.ComposeView
+                        android:id="@+id/compose_view_update_pack"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="16dp" />
+
+                    <!-- 主包区域卡片 (Legacy - 待移除) -->
                     <include
                         android:id="@+id/include_main_pack"
-                        layout="@layout/card_main_pack" />
+                        layout="@layout/card_main_pack"
+                        android:visibility="gone" />
 
-                    <!-- 更新主包区域卡片 -->
+                    <!-- 更新主包区域卡片 (Legacy - 待移除) -->
                     <include
                         android:id="@+id/include_update_pack"
-                        layout="@layout/card_update_pack" />
+                        layout="@layout/card_update_pack"
+                        android:visibility="gone" />
 
                     <!-- 进度卡片 (已弃用，待完全移除) -->
                     <com.google.android.material.card.MaterialCardView
