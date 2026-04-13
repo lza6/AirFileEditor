@@ -156,6 +156,23 @@ IoOptimizer (IO 优化)
   - ✅ 更新 project_specs.md 记录架构演进
   - ✅ 无需删除 V1 代码，确保向后兼容
 
+### V11.0.0 (进行中 - Compose UI Revolution)
+- 🔄 **MVI 架构基础**:
+  - ✅ ReplacingIntent: 20+ 种用户意图覆盖
+  - ✅ ReplacingState: 统一状态模型 + TaskPhase 枚举
+  - ✅ ReplacingViewModel: 完整状态管理
+  - ✅ ReplacingViewModelTest: 20 个单元测试
+- 🔄 **Hybrid Compose 集成**:
+  - ✅ TaskProgressOverlay 连接 MVI
+  - ✅ MainDashboard 数据流连接
+  - ⏳ 主包区域迁移（includeMainPack）
+  - ⏳ 更新包区域迁移（includeUpdatePack）
+- ⏳ **Compose 组件完善**:
+  - ✅ Atomic Design 骨架（Atoms/Molecules/Organisms）
+  - ⏳ 主包选择器组件
+  - ⏳ 小包列表组件（RecyclerView → LazyColumn）
+  - ⏳ 日志卡片组件
+
 ### V10.0.0 (已完成 ✅ - Performance Engine & APM)
 - ✅ **极致性能引擎**:
   - ✅ **自适应并发调度**: 引入 `AdaptivePermitScheduler`，基于 CPU 负载、内存压力及 IO 速度实时调整并发度。

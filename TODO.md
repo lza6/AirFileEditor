@@ -1,17 +1,27 @@
-# V10.0.0 极致性能引擎 - 已完成 ✅
+# V11.0.0 Compose UI 革命重构 - 进行中 🚀
 
 ## ✅ 已完成
-- [x] **APM 监控体系**: 实现 IO Wait 和 IPC Latency 细粒度监控。
-- [x] **自适应调度器**: `AdaptivePermitScheduler` 动态并发控制。
-- [x] **IO 路径优化**: 针对极小文件分流处理，减少系统调用开销。
-- [x] **并发架构加固**: 解决动态调整并发时的锁竞态风险。
-- [x] **全模式实装**: Root/Shizuku/Native 模式同步升级 V10 逻辑。
-- [x] **单元测试**: AdaptivePermitSchedulerTest 完整覆盖。
-- [x] **V11 预备**: Compose UI 组件骨架（Atomic Design）+ MVI 架构。
+- [x] **MVI 架构完善**:
+  - [x] ReplacingIntent 扩展：20+ 种用户意图覆盖
+  - [x] ReplacingState 完善：统一全应用状态模型
+  - [x] ReplacingViewModel 增强：完整状态管理逻辑
+  - [x] ReplacingViewModelTest：20 个单元测试验证
+- [x] **Hybrid Compose 集成**:
+  - [x] 组件命名冲突修复
+  - [x] TaskProgressOverlay 连接 MVI 状态
+  - [x] MainDashboard 连接 ViewModel 数据流
+- [x] **代码骨架准备**:
+  - [x] Compose UI 组件（Atomic Design: Atoms/Molecules/Organisms）
+  - [x] MVI 架构基础（Intent/State/ViewModel）
 
-## ⏳ V11 待办
-- [ ] 性能仪表盘 (Compose 实现)
-- [ ] MainActivity 完全重构为 Compose
+## ⏳ 进行中
+- [ ] MainActivity 主包区域迁移（includeMainPack）
+- [ ] MainActivity 更新包区域迁移（includeUpdatePack）
+- [ ] 进度对话框统一组件化
+
+## ⏳ 待办
+- [ ] 性能仪表盘完整实现
+- [ ] LogConsole 实时日志集成
 - [ ] 自动化压力测试脚本
 
 ---
