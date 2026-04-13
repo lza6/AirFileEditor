@@ -16,8 +16,9 @@ import com.example.tfgwj.ui.components.atoms.StatusBadge
 import com.example.tfgwj.ui.components.atoms.TaskStatus
 
 /**
- * 文件进度卡片
+ * 文件进度卡片 (V11 Compose 组件版)
  * 展示当前文件的复制进度、速度、状态等
+ * 注意：此版本用于独立组件树，与 ui/compose/Molecules.kt 中的版本不同
  */
 @Composable
 fun FileProgressCard(

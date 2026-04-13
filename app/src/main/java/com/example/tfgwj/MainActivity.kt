@@ -610,7 +610,7 @@ class MainActivity : AppCompatActivity() {
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
             setContent {
                 TfgwjTheme {
-                    val taskStatus by dashboardTaskStatus.collectAsState()
+                    val uiState by replacingViewModel.uiState.collectAsState()
                     val progressState by com.example.tfgwj.manager.ReplaceProgressManager.progressState.collectAsState()
                     val ioStats = PerformanceMonitor.getIOStats().let { stats ->
                         if (progressState.speed > 0f) {
@@ -618,6 +618,14 @@ class MainActivity : AppCompatActivity() {
                         } else {
                             stats
                         }
+                    }
+                    // 将 MVI 状态转换为 TaskStatus
+                    val taskStatus = when {
+                        uiState.isReplacing -> com.example.tfgwj.ui.components.atoms.TaskStatus.RUNNING
+                        uiState.errorMessage != null -> com.example.tfgwj.ui.components.atoms.TaskStatus.FAILED
+                        uiState.phase == com.example.tfgwj.ui.mvi.TaskPhase.COMPLETED -> com.example.tfgwj.ui.components.atoms.TaskStatus.SUCCESS
+                        uiState.isPaused -> com.example.tfgwj.ui.components.atoms.TaskStatus.PAUSED
+                        else -> com.example.tfgwj.ui.components.atoms.TaskStatus.IDLE
                     }
                     MainDashboard(
                         ioStats = ioStats,

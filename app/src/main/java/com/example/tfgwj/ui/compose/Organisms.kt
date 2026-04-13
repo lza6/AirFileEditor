@@ -9,6 +9,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.tfgwj.ui.mvi.ReplacingViewModel
+import com.example.tfgwj.ui.mvi.TaskPhase
 
 /**
  * V11.0.0 任务进行中的全屏 Overlay 组件
@@ -21,7 +22,7 @@ fun TaskProgressOverlay(
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
-    if (uiState.isReplacing || uiState.phase != "IDLE") {
+    if (uiState.isReplacing || uiState.phase != TaskPhase.IDLE) {
         Surface(
             modifier = modifier.fillMaxSize(),
             color = MaterialTheme.colorScheme.background.copy(alpha = 0.95f)
@@ -47,7 +48,7 @@ fun TaskProgressOverlay(
                         totalCount = uiState.totalFiles,
                         progress = uiState.progress / 100f,
                         speedMBps = uiState.speedMBps,
-                        phase = uiState.phase,
+                        phase = uiState.phase.name,
                         isReplacing = uiState.isReplacing,
                         onCancel = onCancel
                     )
