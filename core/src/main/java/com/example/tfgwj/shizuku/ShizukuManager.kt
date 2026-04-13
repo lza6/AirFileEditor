@@ -8,7 +8,7 @@ import android.os.IBinder
 import android.util.Log
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
-import com.example.tfgwj.BuildConfig
+import com.example.tfgwj.core.BuildConfig
 import com.example.tfgwj.IFileOperationService
 import com.example.tfgwj.performance.PerformanceMonitor
 import kotlinx.coroutines.cancel
@@ -123,12 +123,12 @@ class ShizukuManager private constructor(private val context: Context) {
     // UserService 参数
     private val userServiceArgs =
         UserServiceArgs(
-            ComponentName(BuildConfig.APPLICATION_ID, FileOperationService::class.java.name),
+            ComponentName("com.example.tfgwj", FileOperationService::class.java.name),
         )
             .daemon(false)
             .processNameSuffix("file_operation")
             .debuggable(BuildConfig.DEBUG)
-            .version(BuildConfig.VERSION_CODE)
+            .version(1)
 
     init {
         // 注册监听器

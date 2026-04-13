@@ -38,300 +38,40 @@
                     android:orientation="vertical"
                     android:padding="16dp">
 
-                    <!-- 权限状态卡片 (已迁移至 Compose) -->
+                    <!-- 权限状态卡片 (Compose) -->
                     <androidx.compose.ui.platform.ComposeView
                         android:id="@+id/compose_view_permission"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginBottom="16dp" />
 
-                    <!-- 系统状态看板卡片 (已迁移至 Compose) -->
+                    <!-- 系统状态看板卡片 (Compose) -->
                     <androidx.compose.ui.platform.ComposeView
                         android:id="@+id/compose_view_dashboard"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginBottom="16dp" />
 
-                    <!-- 主包区域卡片 (迁移至 Compose) -->
+                    <!-- 主包区域卡片 (Compose) -->
                     <androidx.compose.ui.platform.ComposeView
                         android:id="@+id/compose_view_main_pack"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginBottom="16dp" />
 
-                    <!-- 更新主包区域卡片 (迁移至 Compose) -->
+                    <!-- 更新主包区域卡片 (Compose) -->
                     <androidx.compose.ui.platform.ComposeView
                         android:id="@+id/compose_view_update_pack"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginBottom="16dp" />
 
-                    <!-- 主包区域卡片 (Legacy - 待移除) -->
-                    <include
-                        android:id="@+id/include_main_pack"
-                        layout="@layout/card_main_pack"
-                        android:visibility="gone" />
-
-                    <!-- 更新主包区域卡片 (Legacy - 待移除) -->
-                    <include
-                        android:id="@+id/include_update_pack"
-                        layout="@layout/card_update_pack"
-                        android:visibility="gone" />
-
-                    <!-- 进度卡片 (已弃用，待完全移除) -->
-                    <com.google.android.material.card.MaterialCardView
-                        android:id="@+id/card_progress"
+                    <!-- 实时日志卡片 (Compose) -->
+                    <androidx.compose.ui.platform.ComposeView
+                        android:id="@+id/compose_view_log_console"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginBottom="16dp"
-                        android:visibility="gone"
-                        app:cardCornerRadius="12dp"
-                        app:cardElevation="4dp">
-
-                        <LinearLayout
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:orientation="vertical"
-                            android:padding="16dp">
-
-                            <TextView
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:text="替换进度"
-                                android:textColor="@color/text_primary"
-                                android:textSize="16sp"
-                                android:textStyle="bold" />
-
-                            <com.google.android.material.progressindicator.LinearProgressIndicator
-                                android:id="@+id/progress_bar"
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:layout_marginTop="12dp"
-                                android:indeterminate="false"
-                                app:trackCornerRadius="4dp" />
-
-                            <LinearLayout
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:layout_marginTop="8dp"
-                                android:orientation="horizontal">
-
-                                <TextView
-                                    android:id="@+id/tv_progress_percentage"
-                                    android:layout_width="0dp"
-                                    android:layout_height="wrap_content"
-                                    android:layout_weight="1"
-                                    android:text="0%"
-                                    android:textColor="@color/text_primary"
-                                    android:textSize="14sp" />
-
-                                <TextView
-                                    android:id="@+id/tv_file_count"
-                                    android:layout_width="0dp"
-                                    android:layout_height="wrap_content"
-                                    android:layout_weight="1"
-                                    android:gravity="end"
-                                    android:text="0/0"
-                                    android:textColor="@color/text_secondary"
-                                    android:textSize="14sp" />
-
-                            </LinearLayout>
-
-                            <LinearLayout
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:layout_marginTop="8dp"
-                                android:orientation="horizontal">
-
-                                <TextView
-                                    android:id="@+id/tv_success_count"
-                                    android:layout_width="0dp"
-                                    android:layout_height="wrap_content"
-                                    android:layout_weight="1"
-                                    android:text="成功: 0"
-                                    android:textColor="@color/success_color"
-                                    android:textSize="14sp" />
-
-                                <TextView
-                                    android:id="@+id/tv_failed_count"
-                                    android:layout_width="0dp"
-                                    android:layout_height="wrap_content"
-                                    android:layout_weight="1"
-                                    android:gravity="end"
-                                    android:text="失败: 0"
-                                    android:textColor="@color/error_color"
-                                    android:textSize="14sp" />
-
-                            </LinearLayout>
-
-                            <com.google.android.material.button.MaterialButton
-                                android:id="@+id/btn_cancel_replace"
-                                style="@style/Widget.Material3.Button.OutlinedButton"
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:layout_marginTop="12dp"
-                                android:text="取消"
-                                app:cornerRadius="8dp" />
-
-                        </LinearLayout>
-
-                    </com.google.android.material.card.MaterialCardView>
-
-                    <!-- 结果卡片 -->
-                    <com.google.android.material.card.MaterialCardView
-                        android:id="@+id/card_result"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginBottom="16dp"
-                        android:visibility="gone"
-                        app:cardCornerRadius="12dp"
-                        app:cardElevation="4dp">
-
-                        <LinearLayout
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:orientation="vertical"
-                            android:padding="16dp">
-
-                            <TextView
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:text="替换结果"
-                                android:textColor="@color/text_primary"
-                                android:textSize="16sp"
-                                android:textStyle="bold" />
-
-                            <TextView
-                                android:id="@+id/tv_result_summary"
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:layout_marginTop="8dp"
-                                android:textColor="@color/text_secondary"
-                                android:textSize="14sp" />
-
-                            <TextView
-                                android:id="@+id/tv_error_details"
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:layout_marginTop="8dp"
-                                android:background="@drawable/error_background"
-                                android:padding="12dp"
-                                android:textColor="@color/error_color"
-                                android:textSize="12sp"
-                                android:visibility="gone" />
-
-                            <LinearLayout
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:layout_marginTop="12dp"
-                                android:orientation="horizontal">
-
-                                <com.google.android.material.button.MaterialButton
-                                    android:id="@+id/btn_retry"
-                                    style="@style/Widget.Material3.Button"
-                                    android:layout_width="0dp"
-                                    android:layout_height="wrap_content"
-                                    android:layout_marginEnd="8dp"
-                                    android:layout_weight="1"
-                                    android:text="🔄 重试"
-                                    android:visibility="gone"
-                                    app:cornerRadius="8dp" />
-
-                                <com.google.android.material.button.MaterialButton
-                                    android:id="@+id/btn_close_result"
-                                    style="@style/Widget.Material3.Button.OutlinedButton"
-                                    android:layout_width="0dp"
-                                    android:layout_height="wrap_content"
-                                    android:layout_weight="1"
-                                    android:text="关闭"
-                                    app:cornerRadius="8dp" />
-
-                            </LinearLayout>
-
-                        </LinearLayout>
-
-                    </com.google.android.material.card.MaterialCardView>
-
-                    <!-- 实时日志卡片 -->
-                    <com.google.android.material.card.MaterialCardView
-                        android:id="@+id/card_logs"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginBottom="16dp"
-                        app:cardCornerRadius="12dp"
-                        app:cardElevation="4dp">
-
-                        <LinearLayout
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:orientation="vertical"
-                            android:padding="16dp">
-
-                            <LinearLayout
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:gravity="center_vertical"
-                                android:orientation="horizontal">
-
-                                <TextView
-                                    android:layout_width="0dp"
-                                    android:layout_height="wrap_content"
-                                    android:layout_weight="1"
-                                    android:text="📋 实时日志"
-                                    android:textColor="@color/text_primary"
-                                    android:textSize="16sp"
-                                    android:textStyle="bold" />
-
-                                <TextView
-                                    android:id="@+id/tv_log_size"
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:layout_marginEnd="8dp"
-                                    android:text="0 B"
-                                    android:textColor="@color/text_secondary"
-                                    android:textSize="12sp" />
-
-                                <com.google.android.material.button.MaterialButton
-                                    android:id="@+id/btn_copy_logs"
-                                    style="@style/Widget.Material3.Button.IconButton"
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:contentDescription="复制日志"
-                                    app:icon="@drawable/ic_copy"
-                                    app:iconSize="20dp"
-                                    app:iconTint="@color/primary_color" />
-
-                            </LinearLayout>
-
-                            <ScrollView
-                                android:id="@+id/scroll_log_content"
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:maxHeight="300dp"
-                                android:layout_marginTop="8dp"
-                                android:background="@drawable/border_background"
-                                android:padding="8dp"
-                                android:focusable="false"
-                                android:focusableInTouchMode="false">
-
-                                <TextView
-                                    android:id="@+id/tv_log_content"
-                                    android:layout_width="match_parent"
-                                    android:layout_height="wrap_content"
-                                    android:minLines="10"
-                                    android:focusable="false"
-                                    android:focusableInTouchMode="false"
-                                    android:fontFamily="monospace"
-                                    android:text="等待日志输出..."
-                                    android:textColor="@color/text_secondary"
-                                    android:textSize="11sp"
-                                    android:textIsSelectable="true" />
-
-                            </ScrollView>
-
-                        </LinearLayout>
-
-                    </com.google.android.material.card.MaterialCardView>
+                        android:layout_marginBottom="16dp" />
 
                 </LinearLayout>
 
@@ -339,12 +79,11 @@
 
         </LinearLayout>
 
-        <!-- V11.0.0 MVI 任务进度层 (Compose) -->
+        <!-- V11.0.0 MVI 任务进度层 (Compose Overlay) -->
         <androidx.compose.ui.platform.ComposeView
             android:id="@+id/compose_view_task_overlay"
             android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:visibility="gone" />
+            android:layout_height="match_parent" />
 
     </FrameLayout>
 

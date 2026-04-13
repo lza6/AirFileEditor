@@ -28,4 +28,7 @@ dependencyResolutionManagement {
 
 rootProject.name = "tfgwj"
 include(":app")
+include(":domain")
+include(":data")
+include(":core")
  

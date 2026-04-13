@@ -22,7 +22,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.tfgwj.ui.mvi.EnvironmentStatus
+import com.example.tfgwj.domain.model.EnvironmentStatus
 import com.example.tfgwj.ui.mvi.ReplacingState
 
 /**
@@ -346,20 +346,20 @@ private fun EnvironmentCheckSection(
             Spacer(modifier = Modifier.weight(1f))
 
             when (environmentStatus) {
-                EnvironmentStatus.Unknown -> {
+                EnvironmentStatus.UNKNOWN -> {
                     Text(
                         text = "未检测",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                EnvironmentStatus.Checking -> {
+                EnvironmentStatus.CHECKING -> {
                     CircularProgressIndicator(
                         modifier = Modifier.size(20.dp),
                         strokeWidth = 2.dp
                     )
                 }
-                EnvironmentStatus.Valid -> {
+                EnvironmentStatus.VALID -> {
                     Icon(
                         imageVector = Icons.Default.CheckCircle,
                         contentDescription = null,
@@ -373,7 +373,7 @@ private fun EnvironmentCheckSection(
                         modifier = Modifier.padding(start = 4.dp)
                     )
                 }
-                EnvironmentStatus.Invalid -> {
+                EnvironmentStatus.INVALID -> {
                     Icon(
                         imageVector = Icons.Default.Error,
                         contentDescription = null,

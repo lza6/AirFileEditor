@@ -1,7 +1,7 @@
 package com.example.tfgwj.utils
 
 import android.util.Log
-import com.example.tfgwj.BuildConfig
+import com.example.tfgwj.core.BuildConfig
 import okhttp3.Cache
 import okhttp3.ConnectionPool
 import okhttp3.Interceptor
@@ -120,7 +120,7 @@ object NetworkClient {
             .url(url)
             .apply {
                 // Add common headers
-                header("User-Agent", "tfgwj/${BuildConfig.VERSION_NAME}")
+                header("User-Agent", "tfgwj")
                 header("Accept", "application/json, text/plain, */*")
 
                 // Add ETag for conditional requests (cache efficiency)
@@ -138,7 +138,7 @@ object NetworkClient {
     ): Request.Builder {
         return Request.Builder()
             .url(url)
-            .header("User-Agent", "tfgwj/${BuildConfig.VERSION_NAME}")
+            .header("User-Agent", "tfgwj")
             .apply {
                 if (rangeStart > 0) {
                     header("Range", "bytes=$rangeStart-")

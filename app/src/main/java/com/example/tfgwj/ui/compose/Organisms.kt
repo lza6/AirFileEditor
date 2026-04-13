@@ -8,8 +8,8 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.example.tfgwj.domain.model.TaskPhase
 import com.example.tfgwj.ui.mvi.ReplacingViewModel
-import com.example.tfgwj.ui.mvi.TaskPhase
 
 /**
  * V11.0.0 任务进行中的全屏 Overlay 组件

@@ -71,13 +71,22 @@ object SecurityConfig {
      */
     fun verifyAppSignature(context: Context): Boolean {
         return try {
-            val packageInfo =
-                context.packageManager.getPackageInfo(
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+                val packageInfo = context.packageManager.getPackageInfo(
                     context.packageName,
-                    android.content.pm.PackageManager.GET_SIGNATURES,
+                    android.content.pm.PackageManager.GET_SIGNING_CERTIFICATES
                 )
-            val signatures = packageInfo.signatures
-            signatures != null && signatures.isNotEmpty()
+                packageInfo.signingInfo != null
+            } else {
+                @Suppress("DEPRECATION")
+                val packageInfo = context.packageManager.getPackageInfo(
+                    context.packageName,
+                    android.content.pm.PackageManager.GET_SIGNATURES
+                )
+                @Suppress("DEPRECATION")
+                val signatures = packageInfo.signatures
+                signatures != null && signatures.isNotEmpty()
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to verify app signature", e)
             false

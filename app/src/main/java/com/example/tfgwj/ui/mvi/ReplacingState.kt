@@ -1,5 +1,8 @@
 package com.example.tfgwj.ui.mvi
 
+import com.example.tfgwj.domain.model.AccessMode
+import com.example.tfgwj.domain.model.EnvironmentStatus
+import com.example.tfgwj.domain.model.TaskPhase
 import com.example.tfgwj.utils.PermissionChecker
 
 /**
@@ -28,7 +31,7 @@ data class ReplacingState(
     val currentMode: PermissionChecker.AccessMode = PermissionChecker.AccessMode.NONE,
     val hasStoragePermission: Boolean = false,
     val hasShizukuPermission: Boolean = false,
-    val environmentStatus: EnvironmentStatus = EnvironmentStatus.Unknown,
+    val environmentStatus: EnvironmentStatus = EnvironmentStatus.UNKNOWN,
 
     // 主包状态
     val selectedMainPackPath: String? = null,
@@ -55,14 +58,6 @@ data class ReplacingState(
     val updateVersion: String? = null,
     val updateDownloadProgress: Int = 0
 )
-
-enum class TaskPhase {
-    IDLE, PREPARING, REPLACING, VERIFYING, COMPLETED, FAILURE
-}
-
-enum class EnvironmentStatus {
-    Unknown, Checking, Valid, Invalid
-}
 
 data class PatchVersion(
     val version: String,

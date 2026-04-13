@@ -6,10 +6,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Description
-import androidx.compose.material.icons.filled.FolderZip
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -121,7 +118,7 @@ fun PatchVersionCard(
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(8.dp)
                 ) {
-                    Icon(Icons.Default.Search, contentAlignment = null, modifier = Modifier.size(16.dp))
+                    Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(4.dp))
                     Text("扫描压缩包", fontSize = 12.sp)
                 }
@@ -131,7 +128,7 @@ fun PatchVersionCard(
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(8.dp)
                 ) {
-                    Icon(Icons.Default.Refresh, contentAlignment = null, modifier = Modifier.size(16.dp))
+                    Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(4.dp))
                     Text("刷新列表", fontSize = 12.sp)
                 }
@@ -145,7 +142,7 @@ fun PatchVersionCard(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(8.dp)
             ) {
-                Icon(Icons.Default.FolderZip, contentAlignment = null, modifier = Modifier.size(18.dp))
+                Icon(Icons.Default.FolderZip, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(4.dp))
                 Text("📦 解压并更新")
             }

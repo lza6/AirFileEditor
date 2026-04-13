@@ -1,0 +1,106 @@
+WARNING: We recommend using a newer Android Gradle plugin to use compileSdk = 36
+
+This Android Gradle plugin (8.7.3) was tested up to compileSdk = 35.
+
+You are strongly encouraged to update your project to use a newer
+Android Gradle plugin that has been tested with compileSdk = 36.
+
+If you are already using the latest version of the Android Gradle plugin,
+you may need to wait until a newer version with support for compileSdk = 36 is available.
+
+For more information refer to the compatibility table:
+https://d.android.com/r/tools/api-level-support
+
+To suppress this warning, add/update
+    android.suppressUnsupportedCompileSdk=36
+to this project's gradle.properties.
+> Task :app:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preDebugBuild UP-TO-DATE
+> Task :app:compileDebugAidl UP-TO-DATE
+> Task :app:dataBindingMergeDependencyArtifactsDebug UP-TO-DATE
+> Task :app:generateDebugResValues UP-TO-DATE
+> Task :app:generateDebugResources UP-TO-DATE
+> Task :app:mergeDebugResources UP-TO-DATE
+> Task :app:packageDebugResources UP-TO-DATE
+> Task :app:parseDebugLocalResources UP-TO-DATE
+> Task :app:dataBindingGenBaseClassesDebug UP-TO-DATE
+> Task :app:dataBindingTriggerDebug UP-TO-DATE
+> Task :app:generateDebugBuildConfig UP-TO-DATE
+> Task :app:checkDebugAarMetadata UP-TO-DATE
+> Task :app:mapDebugSourceSetPaths UP-TO-DATE
+> Task :app:createDebugCompatibleScreenManifests UP-TO-DATE
+> Task :app:extractDeepLinksDebug UP-TO-DATE
+> Task :app:processDebugMainManifest UP-TO-DATE
+> Task :app:processDebugManifest UP-TO-DATE
+> Task :app:processDebugManifestForPackage UP-TO-DATE
+> Task :app:processDebugResources UP-TO-DATE
+
+> Task :app:compileDebugKotlin FAILED
+e: file:///C:/Users/Administrator.DESKTOP-EGNE9ND/AndroidStudioProjects/tfgwj/app/src/main/java/com/example/tfgwj/MainActivity.kt:275:36 Unresolved reference 'copyLogsToClipboard'.
+e: file:///C:/Users/Administrator.DESKTOP-EGNE9ND/AndroidStudioProjects/tfgwj/app/src/main/java/com/example/tfgwj/MainActivity.kt:436:53 No value passed for parameter 'action'.
+e: file:///C:/Users/Administrator.DESKTOP-EGNE9ND/AndroidStudioProjects/tfgwj/app/src/main/java/com/example/tfgwj/MainActivity.kt:436:63 Argument type mismatch: actual type is 'kotlin.Function0<kotlin.Unit>', but 'kotlin.Function3<kotlin.Int, kotlin.Int, kotlin.String, kotlin.Unit>?' was expected.
+e: file:///C:/Users/Administrator.DESKTOP-EGNE9ND/AndroidStudioProjects/tfgwj/app/src/main/java/com/example/tfgwj/MainActivity.kt:436:93 Unresolved reference 'it'.
+e: file:///C:/Users/Administrator.DESKTOP-EGNE9ND/AndroidStudioProjects/tfgwj/app/src/main/java/com/example/tfgwj/MainActivity.kt:436:110 Unresolved reference 'it'.
+e: file:///C:/Users/Administrator.DESKTOP-EGNE9ND/AndroidStudioProjects/tfgwj/app/src/main/java/com/example/tfgwj/MainActivity.kt:436:142 Unresolved reference 'it'.
+e: file:///C:/Users/Administrator.DESKTOP-EGNE9ND/AndroidStudioProjects/tfgwj/app/src/main/java/com/example/tfgwj/MainActivity.kt:436:159 Unresolved reference 'it'.
+e: file:///C:/Users/Administrator.DESKTOP-EGNE9ND/AndroidStudioProjects/tfgwj/app/src/main/java/com/example/tfgwj/data/repository/ConfigRepositoryImpl.kt:13:14 Unresolved reference 'inject'.
+e: file:///C:/Users/Administrator.DESKTOP-EGNE9ND/AndroidStudioProjects/tfgwj/app/src/main/java/com/example/tfgwj/data/repository/ConfigRepositoryImpl.kt:19:2 Unresolved reference 'Singleton'.
+e: file:///C:/Users/Administrator.DESKTOP-EGNE9ND/AndroidStudioProjects/tfgwj/app/src/main/java/com/example/tfgwj/data/repository/ConfigRepositoryImpl.kt:20:1 Class 'ConfigRepositoryImpl' is not abstract and does not implement abstract member 'getFileTime'.
+e: file:///C:/Users/Administrator.DESKTOP-EGNE9ND/AndroidStudioProjects/tfgwj/app/src/main/java/com/example/tfgwj/data/repository/ConfigRepositoryImpl.kt:88:30 Unresolved reference 'version'.
+e: file:///C:/Users/Administrator.DESKTOP-EGNE9ND/AndroidStudioProjects/tfgwj/app/src/main/java/com/example/tfgwj/data/repository/ConfigRepositoryImpl.kt:90:27 Unresolved reference 'size'.
+e: file:///C:/Users/Administrator.DESKTOP-EGNE9ND/AndroidStudioProjects/tfgwj/app/src/main/java/com/example/tfgwj/data/repository/ConfigRepositoryImpl.kt:130:5 'getFileTime' overrides nothing.
+e: file:///C:/Users/Administrator.DESKTOP-EGNE9ND/AndroidStudioProjects/tfgwj/app/src/main/java/com/example/tfgwj/data/repository/ConfigRepositoryImpl.kt:130:5 Conflicting overloads:
+fun getFileTime(path: String): Long?
+suspend fun getFileTime(path: String): Long?
+e: file:///C:/Users/Administrator.DESKTOP-EGNE9ND/AndroidStudioProjects/tfgwj/app/src/main/java/com/example/tfgwj/domain/usecase/ManageFileTimeUseCase.kt:15:58 Suspend function 'suspend fun getFileTime(path: String): Long?' should be called only from a coroutine or another suspend function.
+e: file:///C:/Users/Administrator.DESKTOP-EGNE9ND/AndroidStudioProjects/tfgwj/app/src/main/java/com/example/tfgwj/domain/usecase/ReplaceFileUseCase.kt:4:14 Unresolved reference 'inject'.
+e: file:///C:/Users/Administrator.DESKTOP-EGNE9ND/AndroidStudioProjects/tfgwj/app/src/main/java/com/example/tfgwj/ui/components/organisms/MainPackCard.kt:25:33 Unresolved reference 'EnvironmentStatus'.
+e: file:///C:/Users/Administrator.DESKTOP-EGNE9ND/AndroidStudioProjects/tfgwj/app/src/main/java/com/example/tfgwj/ui/components/organisms/MainPackCard.kt:331:24 Unresolved reference 'EnvironmentStatus'.
+e: file:///C:/Users/Administrator.DESKTOP-EGNE9ND/AndroidStudioProjects/tfgwj/app/src/main/java/com/example/tfgwj/ui/components/organisms/MainPackCard.kt:349:17 Unresolved reference 'EnvironmentStatus'.
+e: file:///C:/Users/Administrator.DESKTOP-EGNE9ND/AndroidStudioProjects/tfgwj/app/src/main/java/com/example/tfgwj/ui/components/organisms/MainPackCard.kt:356:17 Unresolved reference 'EnvironmentStatus'.
+e: file:///C:/Users/Administrator.DESKTOP-EGNE9ND/AndroidStudioProjects/tfgwj/app/src/main/java/com/example/tfgwj/ui/components/organisms/MainPackCard.kt:362:17 Unresolved reference 'EnvironmentStatus'.
+e: file:///C:/Users/Administrator.DESKTOP-EGNE9ND/AndroidStudioProjects/tfgwj/app/src/main/java/com/example/tfgwj/ui/components/organisms/MainPackCard.kt:376:17 Unresolved reference 'EnvironmentStatus'.
+e: file:///C:/Users/Administrator.DESKTOP-EGNE9ND/AndroidStudioProjects/tfgwj/app/src/main/java/com/example/tfgwj/ui/components/organisms/PatchVersionCard.kt:124:21 None of the following candidates is applicable:
+fun Icon(bitmap: ImageBitmap, contentDescription: String?, modifier: Modifier = ..., tint: Color = ...): Unit
+fun Icon(painter: Painter, tint: ColorProducer?, contentDescription: String?, modifier: Modifier = ...): Unit
+fun Icon(painter: Painter, contentDescription: String?, modifier: Modifier = ..., tint: Color = ...): Unit
+fun Icon(imageVector: ImageVector, contentDescription: String?, modifier: Modifier = ..., tint: Color = ...): Unit
+e: file:///C:/Users/Administrator.DESKTOP-EGNE9ND/AndroidStudioProjects/tfgwj/app/src/main/java/com/example/tfgwj/ui/components/organisms/PatchVersionCard.kt:134:21 None of the following candidates is applicable:
+fun Icon(bitmap: ImageBitmap, contentDescription: String?, modifier: Modifier = ..., tint: Color = ...): Unit
+fun Icon(painter: Painter, tint: ColorProducer?, contentDescription: String?, modifier: Modifier = ...): Unit
+fun Icon(painter: Painter, contentDescription: String?, modifier: Modifier = ..., tint: Color = ...): Unit
+fun Icon(imageVector: ImageVector, contentDescription: String?, modifier: Modifier = ..., tint: Color = ...): Unit
+e: file:///C:/Users/Administrator.DESKTOP-EGNE9ND/AndroidStudioProjects/tfgwj/app/src/main/java/com/example/tfgwj/ui/components/organisms/PatchVersionCard.kt:148:17 None of the following candidates is applicable:
+fun Icon(bitmap: ImageBitmap, contentDescription: String?, modifier: Modifier = ..., tint: Color = ...): Unit
+fun Icon(painter: Painter, tint: ColorProducer?, contentDescription: String?, modifier: Modifier = ...): Unit
+fun Icon(painter: Painter, contentDescription: String?, modifier: Modifier = ..., tint: Color = ...): Unit
+fun Icon(imageVector: ImageVector, contentDescription: String?, modifier: Modifier = ..., tint: Color = ...): Unit
+e: file:///C:/Users/Administrator.DESKTOP-EGNE9ND/AndroidStudioProjects/tfgwj/app/src/main/java/com/example/tfgwj/ui/components/organisms/PatchVersionCard.kt:204:49 Unresolved reference 'CheckCircle'.
+e: file:///C:/Users/Administrator.DESKTOP-EGNE9ND/AndroidStudioProjects/tfgwj/app/src/main/java/com/example/tfgwj/ui/compose/Organisms.kt:12:33 Unresolved reference 'TaskPhase'.
+e: file:///C:/Users/Administrator.DESKTOP-EGNE9ND/AndroidStudioProjects/tfgwj/app/src/main/java/com/example/tfgwj/ui/compose/Organisms.kt:25:49 Unresolved reference 'TaskPhase'.
+e: file:///C:/Users/Administrator.DESKTOP-EGNE9ND/AndroidStudioProjects/tfgwj/app/src/main/java/com/example/tfgwj/ui/mvi/ReplacingViewModel.kt:125:66 Unresolved reference 'EnvironmentStatus'.
+
+[Incubating] Problems report is available at: file:///C:/Users/Administrator.DESKTOP-EGNE9ND/AndroidStudioProjects/tfgwj/build/reports/problems/problems-report.html
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':app:compileDebugKotlin'.
+> A failure occurred while executing org.jetbrains.kotlin.compilerRunner.GradleCompilerRunnerWithWorkers$GradleKotlinCompilerWorkAction
+   > Compilation error. See log for more details
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to generate a Build Scan (Powered by Develocity).
+> Get more help at https://help.gradle.org.
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 10.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/9.1.0/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD FAILED in 25s
+19 actionable tasks: 1 executed, 18 up-to-date
