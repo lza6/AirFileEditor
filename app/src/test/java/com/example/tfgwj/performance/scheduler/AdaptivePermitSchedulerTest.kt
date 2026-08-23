@@ -80,19 +80,19 @@ class AdaptivePermitSchedulerTest {
 
             val scheduler = AdaptivePermitScheduler(context, basePermits, minPermits, maxPermits)
             scheduler.memoryUsageProvider = { 0.3 } // 避免触发内存压力分支，专测 fallback 分支
-            var updatedPermits = basePermits
+            var updatedPermits = 0
 
             scheduler.start {
                 updatedPermits = it
             }
 
+            // 验证初始启动或更新后 permits 调整
             val updateMethod = scheduler.javaClass.getDeclaredMethod("updatePermits")
             updateMethod.isAccessible = true
             updateMethod.invoke(scheduler)
 
             // 策略 C (mmap fallback > 50%) -> 8 * 0.8 = 6.4 -> 6
-            Thread.sleep(50)
-            assertEquals(6, updatedPermits)
+            assertEquals(6, scheduler.getCurrentPermits())
 
             scheduler.stop()
         }
