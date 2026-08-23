@@ -2,6 +2,7 @@ package com.example.tfgwj.worker
 
 import android.content.Context
 import android.util.Log
+import com.example.tfgwj.domain.model.TaskPhase
 import com.example.tfgwj.manager.ReplaceProgressManager
 import com.example.tfgwj.shizuku.ShizukuManager
 import kotlinx.coroutines.Dispatchers
@@ -129,7 +130,7 @@ class ShizukuCopyStrategy(
                             processed = currentCount,
                             total = totalFiles,
                             currentFile = "进行中... ($currentCount/$totalFiles)",
-                            phase = "REPLACING",
+                            phase = TaskPhase.REPLACING,
                         )
                     } catch (e: Exception) {
                         Log.w(TAG, "状态更新跳过: ${e.message}")
@@ -182,7 +183,7 @@ class ShizukuCopyStrategy(
 
                 val p = if (totalFiles > 0) (current.toFloat() / totalFiles * 95).toInt().coerceIn(0, 95) else 0
 
-                callback?.onProgress(p, current, totalFiles, fileName, phase = "REPLACING")
+                callback?.onProgress(p, current, totalFiles, fileName, phase = TaskPhase.REPLACING)
             }
 
             process.waitFor()

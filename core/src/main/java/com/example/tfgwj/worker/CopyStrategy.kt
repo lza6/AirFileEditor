@@ -3,6 +3,7 @@ package com.example.tfgwj.worker
 import android.content.Context
 import androidx.work.Data
 import androidx.work.workDataOf
+import com.example.tfgwj.domain.model.TaskPhase
 import java.io.File
 
 /**
@@ -31,7 +32,7 @@ abstract class CopyStrategy(
             total: Int,
             currentFile: String,
             speed: Float = 0f,
-            phase: String = "REPLACING",
+            phase: TaskPhase = TaskPhase.REPLACING,
         )
     }
 

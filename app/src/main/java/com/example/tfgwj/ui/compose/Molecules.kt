@@ -12,6 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.tfgwj.domain.model.TaskPhase
 import com.example.tfgwj.ui.components.atoms.IoSpeedText
 import com.example.tfgwj.ui.components.atoms.StatusBadge
 
@@ -25,7 +26,7 @@ fun FileProgressCard(
     totalCount: Int,
     progress: Float,
     speedMBps: Float,
-    phase: String,
+    phase: TaskPhase,
     isReplacing: Boolean,
     onCancel: () -> Unit,
     modifier: Modifier = Modifier
@@ -50,7 +51,7 @@ fun FileProgressCard(
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
-                    StatusBadge(text = phase)
+                    StatusBadge(text = phase.name)
                 }
 
                 if (isReplacing) {

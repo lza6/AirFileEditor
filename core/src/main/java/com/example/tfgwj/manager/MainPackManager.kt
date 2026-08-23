@@ -56,9 +56,9 @@ class MainPackManager private constructor() {
      * 扫描听风改文件目录下的主包
      * 判断依据：包含 Android/data/.../files 目录
      *
-     * @param packageName 应用包名（默认为和平精英）
+     * @param packageName 当前选定的目标应用包名
      */
-    suspend fun scanMainPacks(packageName: String = PermissionChecker.PUBG_PACKAGE_NAME): List<MainPackInfo> =
+    suspend fun scanMainPacks(packageName: String): List<MainPackInfo> =
         withContext(Dispatchers.IO) {
             if (_isScanning.value) return@withContext _mainPacks.value
 
@@ -95,11 +95,11 @@ class MainPackManager private constructor() {
      * 分析主包目录
      *
      * @param dir 主包目录
-     * @param packageName 应用包名（默认为和平精英）
+     * @param packageName 当前选定的目标应用包名
      */
     private fun analyzeMainPack(
         dir: File,
-        packageName: String = PermissionChecker.PUBG_PACKAGE_NAME,
+        packageName: String,
     ): MainPackInfo? {
         return try {
             // 查找 Android 目录（支持嵌套路径，如 /主包名字/主包名字/Android）
@@ -226,13 +226,18 @@ class MainPackManager private constructor() {
      * 获取主包的 Config 目录路径
      *
      * @param pack 主包信息
-     * @param packageName 应用包名（默认为和平精英）
+     * @param packageName 当前选定的目标应用包名
      */
     fun getConfigPath(
         pack: MainPackInfo,
-        packageName: String = PermissionChecker.PUBG_PACKAGE_NAME,
+        packageName: String,
+    ): String = getConfigPath(pack.path, packageName)
+
+    fun getConfigPath(
+        packPath: String,
+        packageName: String,
     ): String {
-        val androidDir = findAndroidDirectory(File(pack.path))
+        val androidDir = findAndroidDirectory(File(packPath))
         if (androidDir != null) {
             val configPath = PermissionChecker.getAppConfigPath(packageName)
             // 将 configPath 中的绝对路径替换为相对于 androidDir 的路径
@@ -245,7 +250,7 @@ class MainPackManager private constructor() {
             return "${androidDir.absolutePath}/data/$relativeConfigPath"
         }
         // 降级方案：直接使用 pack.path
-        return "${pack.path}/Android/data/$packageName/files/"
+        return "$packPath/Android/data/$packageName/files/"
     }
 
     /**

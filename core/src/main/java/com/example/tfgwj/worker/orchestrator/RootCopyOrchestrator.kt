@@ -2,7 +2,9 @@ package com.example.tfgwj.worker.orchestrator
 
 import android.content.Context
 import android.util.Log
+import com.example.tfgwj.domain.model.TaskPhase
 import com.example.tfgwj.utils.RootChecker
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
@@ -17,6 +19,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Root 模式复制编排器
@@ -56,6 +59,7 @@ class RootCopyOrchestrator(
     private val progressCounter = java.util.concurrent.atomic.AtomicInteger(0)
     private val watchdogActive = java.util.concurrent.atomic.AtomicBoolean(true)
     private val permitMutex = Mutex()
+    private val activeProcesses = ConcurrentHashMap.newKeySet<Process>()
     @Volatile
     private var dynamicPermits: Int = 1
     @Volatile
@@ -128,6 +132,9 @@ class RootCopyOrchestrator(
                 // 5. 验证结果
                 progressCallback(config.progressPhaseVerifyingStart, totalFiles, totalFiles, "正在验证...", 0f)
                 val verifiedCount = verificationManager.verify(androidDir, targetPackage, totalFiles, VerificationMode.ROOT)
+                if (verifiedCount != totalFiles) {
+                    return@withContext OrchestratorResult.Failure("Root 复制验证失败: $verifiedCount/$totalFiles")
+                }
 
                 // 6. 完成
                 progressTracker.markComplete()
@@ -145,6 +152,8 @@ class RootCopyOrchestrator(
                             "duration" to duration.toString(),
                         ),
                 )
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Log.e(TAG, "❌ Root 模式失败", e)
                 OrchestratorResult.Failure("Root 复制失败: ${e.message}", e)
@@ -177,6 +186,11 @@ class RootCopyOrchestrator(
             scheduler?.stop()
             watchdogActive.set(false)
             watchdogJob?.cancel()
+            activeProcesses.forEach { process ->
+                runCatching { process.destroy() }
+                if (process.isAlive) runCatching { process.destroyForcibly() }
+            }
+            activeProcesses.clear()
             scope.cancel()
         } catch (e: Exception) {
             Log.w(TAG, "清理资源失败", e)
@@ -217,7 +231,7 @@ class RootCopyOrchestrator(
                             progressTracker.updateProgress(
                                 processed = current,
                                 message = if (current == 0) "等待输出..." else "正在处理 $current 个文件",
-                                phase = "REPLACING",
+                                phase = TaskPhase.REPLACING,
                             )
                         } catch (e: Exception) {
                             Log.w(TAG, "看门狗更新跳过: ${e.message}")
@@ -298,29 +312,31 @@ class RootCopyOrchestrator(
                 ProcessBuilder("su", "-c", cmd)
                     .redirectErrorStream(true)
                     .start()
+            activeProcesses.add(process)
 
-            val reader = process.inputStream.bufferedReader()
-            var line: String?
+            try {
+                process.inputStream.bufferedReader().use { reader ->
+                    var line: String?
+                    while (reader.readLine().also { line = it } != null) {
+                        if (line.isNullOrEmpty()) continue
 
-            while (reader.readLine().also { line = it } != null) {
-                if (line.isNullOrEmpty()) continue
+                        val current = progressCounter.incrementAndGet()
+                        val fileName = extractFileNameFromCpOutput(line)
 
-                // cp -v 输出解析
-                val current = progressCounter.incrementAndGet()
+                        progressTracker.updateProgress(
+                            processed = current,
+                            message = fileName,
+                            phase = TaskPhase.REPLACING,
+                        )
+                    }
+                }
 
-                // 解析文件名（简化版，参考原实现）
-                val fileName = extractFileNameFromCpOutput(line)
-
-                progressTracker.updateProgress(
-                    processed = current,
-                    message = fileName,
-                    phase = "REPLACING",
-                )
-            }
-
-            val exitCode = process.waitFor()
-            if (exitCode != 0) {
-                Log.w(TAG, "CP 命令退出码非零: $exitCode")
+                val exitCode = process.waitFor()
+                if (exitCode != 0) {
+                    throw IllegalStateException("CP 命令退出码: $exitCode")
+                }
+            } finally {
+                activeProcesses.remove(process)
             }
         } catch (e: Exception) {
             Log.e(TAG, "CP 执行失败: ${task.sourceDir.name}", e)

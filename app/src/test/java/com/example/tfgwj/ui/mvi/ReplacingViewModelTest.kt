@@ -8,6 +8,8 @@ import com.example.tfgwj.domain.usecase.CheckEnvironmentUseCase
 import com.example.tfgwj.domain.usecase.ManageFileTimeUseCase
 import com.example.tfgwj.domain.usecase.ManagePatchUseCase
 import com.example.tfgwj.domain.usecase.ReplaceFileUseCase
+import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -42,6 +44,8 @@ class ReplacingViewModelTest {
     @Before
     fun setup() {
         Dispatchers.setMain(testDispatcher)
+        coEvery { repository.cancelReplace() } returns Result.success(Unit)
+        coEvery { repository.dismissReplaceResult() } returns Result.success(Unit)
         viewModel = ReplacingViewModel(
             replaceFileUseCase,
             checkEnvironmentUseCase,
@@ -100,11 +104,66 @@ class ReplacingViewModelTest {
 
     @Test
     fun `RetryReplace clears error`() {
-        // RetryReplace intent implementation in ViewModel actually doesn't clear error directly yet
-        // but we can test the intent handling
         viewModel.handleIntent(ReplacingIntent.RetryReplace)
 
         val state = viewModel.uiState.value
+        assertEquals("没有可重试的替换任务", state.errorMessage)
+        assertEquals(TaskPhase.FAILURE, state.phase)
+    }
+
+    @Test
+    fun `CancelReplace delegates to repository and resets task state`() {
+        viewModel.handleIntent(ReplacingIntent.CancelReplace)
+
+        val state = viewModel.uiState.value
+        coVerify(exactly = 1) { repository.cancelReplace() }
+        assertFalse(state.isReplacing)
+        assertEquals(TaskPhase.CANCELLED, state.phase)
+        assertNull(state.errorMessage)
+    }
+
+    @Test
+    fun `CancelReplace on repository failure surfaces error`() {
+        coEvery { repository.cancelReplace() } returns Result.failure(Exception("取消失败"))
+
+        viewModel.handleIntent(ReplacingIntent.CancelReplace)
+
+        val state = viewModel.uiState.value
+        assertFalse(state.isReplacing)
+        assertEquals(TaskPhase.FAILURE, state.phase)
+        assertEquals("取消失败", state.errorMessage)
+    }
+
+    @Test
+    fun `StartReplace while replacing is ignored`() {
+        viewModel.handleIntent(ReplacingIntent.StartReplace("/test/path", "com.test.package"))
+        viewModel.handleIntent(ReplacingIntent.StartReplace("/other/path", "com.other.package"))
+
+        coVerify(exactly = 1) { repository.getTaskProgress() }
+        val state = viewModel.uiState.value
+        assertTrue(state.isReplacing)
+    }
+
+    @Test
+    fun `RetryReplace after previous StartReplace relaunches`() {
+        viewModel.handleIntent(ReplacingIntent.StartReplace("/test/path", "com.test.package"))
+        viewModel.handleIntent(ReplacingIntent.CancelReplace)
+
+        viewModel.handleIntent(ReplacingIntent.RetryReplace)
+
+        val state = viewModel.uiState.value
+        assertTrue(state.isReplacing)
+        assertNull(state.errorMessage)
+    }
+
+    @Test
+    fun `DismissTaskResult delegates to repository and clears failure state`() {
+        viewModel.handleIntent(ReplacingIntent.DismissTaskResult)
+
+        val state = viewModel.uiState.value
+        coVerify(exactly = 1) { repository.dismissReplaceResult() }
+        assertFalse(state.isReplacing)
+        assertEquals(TaskPhase.IDLE, state.phase)
         assertNull(state.errorMessage)
     }
 

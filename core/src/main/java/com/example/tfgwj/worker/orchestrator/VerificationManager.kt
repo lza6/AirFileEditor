@@ -227,15 +227,13 @@ class VerificationManager(
         androidDir: File,
         targetPackage: String,
     ): Pair<String, Long>? {
-        val relativePath = PathConstants.calculateRelativePath(androidDir, srcFile.absolutePath)
-        if (relativePath.isEmpty()) return null
-
         val targetPath =
-            PathConstants.buildTargetFilePath(
-                packageName = targetPackage,
-                subPath = relativePath,
-                isObb = relativePath.startsWith("obb/"),
-            )
+            runCatching {
+                PathConstants.resolveTargetFile(androidDir, srcFile, targetPackage).path
+            }.getOrElse { error ->
+                Log.w(TAG, "跳过无法映射的源文件: ${srcFile.absolutePath}", error)
+                return null
+            }
 
         if (!isSafeTargetPath(targetPath)) {
             Log.w(TAG, "跳过非法目标路径: $targetPath")

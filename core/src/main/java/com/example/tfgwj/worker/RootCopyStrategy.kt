@@ -2,6 +2,7 @@ package com.example.tfgwj.worker
 
 import android.content.Context
 import android.util.Log
+import com.example.tfgwj.domain.model.TaskPhase
 import com.example.tfgwj.manager.ReplaceProgressManager
 import com.example.tfgwj.utils.RootChecker
 import kotlinx.coroutines.Dispatchers
@@ -57,7 +58,7 @@ class RootCopyStrategy(
             ReplaceProgressManager.startMeasure()
 
             // Scan source files
-            callback?.onProgress(0, 0, 0, "正在扫描源文件...", phase = "SCANNING")
+            callback?.onProgress(0, 0, 0, "正在扫描源文件...", phase = TaskPhase.PREPARING)
             val scanStart = System.currentTimeMillis()
             val totalFiles = countFilesRoot(sourceDir)
             Log.d(TAG, "扫描耗时: ${System.currentTimeMillis() - scanStart}ms, 扫描到 $totalFiles 个文件")
@@ -73,7 +74,7 @@ class RootCopyStrategy(
             executeRootRecursiveCopy(sourceDir, targetPackage, totalFiles, callback)
 
             // Verify results
-            callback?.onProgress(90, totalFiles, totalFiles, "验证替换进度...", phase = "VERIFYING")
+            callback?.onProgress(90, totalFiles, totalFiles, "验证替换进度...", phase = TaskPhase.VERIFYING)
             val verifiedCount = verifyFilesParallel(sourceDir, targetPackage, totalFiles)
 
             // Mark complete
@@ -122,7 +123,7 @@ class RootCopyStrategy(
                             processed = currentCount,
                             total = totalFiles,
                             currentFile = if (currentCount == 0) "等待输出流..." else "正在处理第 $currentCount 个文件",
-                            phase = "REPLACING",
+                            phase = TaskPhase.REPLACING,
                         )
                     } catch (e: Exception) {
                         Log.w(TAG, "看门狗更新跳过: ${e.message}")
@@ -184,7 +185,7 @@ class RootCopyStrategy(
 
                 val p = if (totalFiles > 0) (current.toFloat() / totalFiles * 95).toInt().coerceIn(0, 95) else 0
 
-                callback?.onProgress(p, current, totalFiles, fileName, phase = "REPLACING")
+                callback?.onProgress(p, current, totalFiles, fileName, phase = TaskPhase.REPLACING)
             }
 
             process.waitFor()
@@ -289,7 +290,7 @@ class RootCopyStrategy(
                         val current = verifiedTotal.get()
                         if (current % 100 == 0 || current >= totalFiles) {
                             val p = 90 + (current.toFloat() / totalFiles * 10).toInt().coerceIn(0, 10)
-                            callback?.onProgress(p, totalFiles, totalFiles, "正在校验: $current/$totalFiles", phase = "VERIFYING")
+                            callback?.onProgress(p, totalFiles, totalFiles, "正在校验: $current/$totalFiles", phase = TaskPhase.VERIFYING)
                         }
                     }
                 }

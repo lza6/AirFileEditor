@@ -26,9 +26,10 @@ class ReplacingViewModel(
 
     private val _uiState = MutableStateFlow(ReplacingState())
     val uiState: StateFlow<ReplacingState> = _uiState.asStateFlow()
+    private var lastReplaceIntent: ReplacingIntent.StartReplace? = null
 
     init {
-        // 1. 订阅任务进度
+        // 1. 订阅任务进度 — 直接使用 TaskPhase 枚举，消除字符串转换
         viewModelScope.launch {
             repository.getTaskProgress().collect { progress ->
                 _uiState.update { it.copy(
@@ -37,8 +38,8 @@ class ReplacingViewModel(
                     progress = progress.progress,
                     speedMBps = progress.speed,
                     currentFileName = progress.currentFile,
-                    phase = TaskPhase.valueOf(progress.phase.name),
-                    isReplacing = progress.isReplacing
+                    phase = progress.phase,
+                    errorMessage = progress.errorMessage,
                 )}
             }
         }
@@ -58,17 +59,39 @@ class ReplacingViewModel(
     fun handleIntent(intent: ReplacingIntent) {
         when (intent) {
             is ReplacingIntent.StartReplace -> {
-                viewModelScope.launch {
-                    _uiState.update { it.copy(isReplacing = true, errorMessage = null) }
-                    replaceFileUseCase(intent.sourcePath, intent.targetPackage)
-                        .onFailure { setError(it.message ?: "替换任务启动失败") }
-                }
+                if (_uiState.value.isReplacing) return
+                lastReplaceIntent = intent
+                launchReplace(intent)
             }
             is ReplacingIntent.CancelReplace -> {
-                _uiState.update { it.copy(isReplacing = false, phase = TaskPhase.IDLE) }
+                viewModelScope.launch {
+                    repository.cancelReplace()
+                        .onSuccess {
+                            _uiState.update {
+                                it.copy(isPaused = false, phase = TaskPhase.CANCELLED, errorMessage = null)
+                            }
+                        }
+                        .onFailure { setError(it.message ?: "取消任务失败") }
+                }
             }
             is ReplacingIntent.RetryReplace -> {
-                _uiState.update { it.copy(errorMessage = null, phase = TaskPhase.IDLE) }
+                val previousIntent = lastReplaceIntent
+                if (previousIntent == null) {
+                    setError("没有可重试的替换任务")
+                } else {
+                    launchReplace(previousIntent)
+                }
+            }
+            is ReplacingIntent.DismissTaskResult -> {
+                viewModelScope.launch {
+                    repository.dismissReplaceResult()
+                        .onSuccess {
+                            _uiState.update {
+                                it.copy(isPaused = false, phase = TaskPhase.IDLE, errorMessage = null)
+                            }
+                        }
+                        .onFailure { setError(it.message ?: "清理任务状态失败") }
+                }
             }
             is ReplacingIntent.PauseReplace -> {
                 _uiState.update { it.copy(isPaused = true) }
@@ -123,7 +146,7 @@ class ReplacingViewModel(
         _uiState.update { it.copy(hasStoragePermission = hasStorage, hasShizukuPermission = hasShizuku) }
     }
 
-    // 更新主包信息
+    // 更新主包信息（targetPackage 为空表示"未选择应用"，禁止静默兜底）
     fun updateMainPackInfo(path: String?, appName: String?, icon: Any?, targetPackage: String) {
         val time = path?.let { manageFileTimeUseCase.getCurrentTime(it) }
         _uiState.update { it.copy(
@@ -148,6 +171,14 @@ class ReplacingViewModel(
     }
 
     private fun setError(message: String) {
-        _uiState.update { it.copy(errorMessage = message, isReplacing = false) }
+        _uiState.update { it.copy(errorMessage = message, phase = TaskPhase.FAILURE) }
+    }
+
+    private fun launchReplace(intent: ReplacingIntent.StartReplace) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isPaused = false, phase = TaskPhase.PREPARING, errorMessage = null) }
+            replaceFileUseCase(intent.sourcePath, intent.targetPackage)
+                .onFailure { setError(it.message ?: "替换任务启动失败") }
+        }
     }
 }

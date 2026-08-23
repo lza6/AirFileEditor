@@ -8,6 +8,9 @@ import com.example.tfgwj.utils.PermissionChecker
 /**
  * V11.0.0 完整应用状态模型
  * 整合 MainActivity 所有状态
+ *
+ * V13 收口：isReplacing 改为基于 phase 的计算属性，
+ * 消除与 ReplaceProgressManager.isReplacing 的歧义。
  */
 data class ReplacingState(
     // 替换任务状态
@@ -17,7 +20,6 @@ data class ReplacingState(
     val speedMBps: Float = 0f,
     val currentFileName: String = "",
     val phase: TaskPhase = TaskPhase.IDLE,
-    val isReplacing: Boolean = false,
     val isPaused: Boolean = false,
     val errorMessage: String? = null,
 
@@ -57,7 +59,15 @@ data class ReplacingState(
     val hasUpdate: Boolean = false,
     val updateVersion: String? = null,
     val updateDownloadProgress: Int = 0
-)
+) {
+    /** 是否处于运行中，基于 phase 计算 */
+    val isReplacing: Boolean
+        get() = phase == TaskPhase.PREPARING || phase == TaskPhase.REPLACING || phase == TaskPhase.VERIFYING
+
+    /** 是否为终态（可关闭 Overlay） */
+    val isTerminal: Boolean
+        get() = phase == TaskPhase.COMPLETED || phase == TaskPhase.FAILURE || phase == TaskPhase.CANCELLED
+}
 
 data class PatchVersion(
     val version: String,

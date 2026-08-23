@@ -1,6 +1,7 @@
 package com.example.tfgwj.worker.orchestrator
 
 import android.util.Log
+import com.example.tfgwj.domain.model.TaskPhase
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -25,7 +26,7 @@ import kotlinx.coroutines.launch
 class ProgressTracker(
     private val config: CopyConfig,
     private val scope: CoroutineScope,
-    private val onProgressUpdate: (progress: Int, processed: Int, total: Int, message: String, speed: Float, phase: String) -> Unit,
+    private val onProgressUpdate: (progress: Int, processed: Int, total: Int, message: String, speed: Float, phase: TaskPhase) -> Unit,
 ) {
     companion object {
         private const val TAG = "ProgressTracker"
@@ -49,7 +50,7 @@ class ProgressTracker(
 
     // 当前阶段
     @Volatile
-    private var currentPhase: String = "REPLACING"
+    private var currentPhase: TaskPhase = TaskPhase.REPLACING
 
     // 统计信息
     private var totalFiles = 0
@@ -74,7 +75,7 @@ class ProgressTracker(
     fun updateProgress(
         processed: Int,
         message: String,
-        phase: String = "REPLACING",
+        phase: TaskPhase = TaskPhase.REPLACING,
     ) {
         currentPhase = phase
         val currentTime = System.currentTimeMillis()

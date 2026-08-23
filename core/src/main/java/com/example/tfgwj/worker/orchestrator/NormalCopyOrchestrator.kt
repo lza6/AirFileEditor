@@ -2,12 +2,15 @@ package com.example.tfgwj.worker.orchestrator
 
 import android.content.Context
 import android.util.Log
+import com.example.tfgwj.domain.model.TaskPhase
 import com.example.tfgwj.utils.IoOptimizer
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.joinAll
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
@@ -59,6 +62,7 @@ class NormalCopyOrchestrator(
 
     private lateinit var fileStatistics: FileStatistics
     private lateinit var progressTracker: ProgressTracker
+    private lateinit var verificationManager: VerificationManager
     private var scheduler: com.example.tfgwj.performance.scheduler.AdaptivePermitScheduler? = null
 
     private var totalFiles = 0
@@ -76,6 +80,7 @@ class NormalCopyOrchestrator(
 
             this@NormalCopyOrchestrator.targetPackage = targetPackage
             this@NormalCopyOrchestrator.fileStatistics = FileStatistics(context)
+            this@NormalCopyOrchestrator.verificationManager = VerificationManager(context)
 
             try {
                 // 1. 统计文件总数
@@ -119,7 +124,18 @@ class NormalCopyOrchestrator(
                 progressCallback(5, 0, totalFiles, "开始复制...", 0f)
                 val successCount = executeConcurrentCopy(androidDir, targetBase)
 
-                // 5. Native 模式无需验证（直接复制）
+                // 5. 复制完成后验证实际目标树，避免把部分复制误报为成功。
+                progressCallback(config.progressPhaseVerifyingStart, successCount, totalFiles, "正在验证...", 0f)
+                val verifiedCount = verificationManager.verify(
+                    androidDir,
+                    targetPackage,
+                    totalFiles,
+                    VerificationMode.NATIVE,
+                )
+                if (verifiedCount != totalFiles) {
+                    return@withContext OrchestratorResult.Failure("Native 复制验证失败: $verifiedCount/$totalFiles")
+                }
+
                 progressTracker.markComplete()
 
                 val duration = System.currentTimeMillis() - startTime
@@ -128,7 +144,7 @@ class NormalCopyOrchestrator(
                 OrchestratorResult.Success(
                     processedCount = successCount,
                     totalFiles = totalFiles,
-                    verifiedCount = successCount, // 复制成功即验证通过
+                    verifiedCount = verifiedCount,
                     metadata =
                         mapOf(
                             "mode" to "NATIVE",
@@ -136,6 +152,8 @@ class NormalCopyOrchestrator(
                             "totalBytes" to totalBytesProcessed.toString(),
                         ),
                 )
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Log.e(TAG, "❌ Native 模式失败", e)
                 OrchestratorResult.Failure("Native 复制失败: ${e.message}", e)
@@ -180,20 +198,18 @@ class NormalCopyOrchestrator(
             val successCount = java.util.concurrent.atomic.AtomicInteger(0)
 
             // 2. 处理大文件批次
-            val largeBatches = fileStatistics.batchFiles(largeFiles.asSequence(), config.fileBatchSize)
-            largeBatches.map { batch ->
-                scope.launch {
-                    processFileBatch(batch, androidDir, successCount)
-                }
-            }.joinAll()
+            coroutineScope {
+                val largeBatches = fileStatistics.batchFiles(largeFiles.asSequence(), config.fileBatchSize)
+                largeBatches.map { batch ->
+                    async { processFileBatch(batch, androidDir, successCount) }
+                }.awaitAll()
 
-            // 3. 处理小文件批次（聚合写入）
-            val smallBatches = fileStatistics.batchFiles(smallFiles.asSequence(), 100) // 每100个小文件一组
-            smallBatches.map { batch ->
-                scope.launch {
-                    processFileBatch(batch, androidDir, successCount)
-                }
-            }.joinAll()
+                // 3. 处理小文件批次（聚合写入）
+                val smallBatches = fileStatistics.batchFiles(smallFiles.asSequence(), 100)
+                smallBatches.map { batch ->
+                    async { processFileBatch(batch, androidDir, successCount) }
+                }.awaitAll()
+            }
 
             successCount.get()
         }
@@ -209,15 +225,8 @@ class NormalCopyOrchestrator(
         batch.forEach { sourceFile ->
             try {
                 processWithAdaptiveLimit {
-                    // 计算目标路径
-                    val relativePath = PathConstants.calculateRelativePath(androidDir, sourceFile.absolutePath)
-                    val targetPath =
-                        PathConstants.buildTargetFilePath(
-                            packageName = targetPackage,
-                            subPath = relativePath,
-                            isObb = relativePath.startsWith("obb/"),
-                        )
-                    val targetFile = File(targetPath)
+                    // 仅保留源包目录内的相对内容，始终写入当前选定的目标包。
+                    val targetFile = PathConstants.resolveTargetFile(androidDir, sourceFile, targetPackage)
 
                     // 确保父目录存在
                     val parent = targetFile.parentFile
@@ -247,17 +256,30 @@ class NormalCopyOrchestrator(
                                 progressTracker.updateProgress(
                                     processed = processed,
                                     message = sourceFile.name,
-                                    phase = "REPLACING",
+                                    phase = TaskPhase.REPLACING,
                                 )
                             }
+                        } else {
+                            throw IllegalStateException("复制失败: ${sourceFile.absolutePath}")
                         }
                     } else {
-                        // 不需要更新也计入进度
-                        progressCounter.incrementAndGet()
+                        // 已经一致的文件也是本次完整结果的一部分。
+                        successCount.incrementAndGet()
+                        val processed = progressCounter.incrementAndGet()
+                        if (processed % 10 == 0 || processed >= totalFiles) {
+                            progressTracker.updateProgress(
+                                processed = processed,
+                                message = sourceFile.name,
+                                phase = TaskPhase.REPLACING,
+                            )
+                        }
                     }
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Log.e(TAG, "复制失败: ${sourceFile.absolutePath}", e)
+                throw e
             }
         }
     }

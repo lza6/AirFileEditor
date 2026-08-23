@@ -14,6 +14,47 @@ import kotlin.system.exitProcess
 class FileOperationService : IFileOperationService.Stub() {
     companion object {
         private const val TAG = "FileOperationService"
+
+        // 命令白名单（fail-closed）：仅允许文件操作/诊断类命令
+        private val ALLOWED_COMMANDS =
+            setOf(
+                "ls",
+                "pidof",
+                "stat",
+                "find",
+                "sync",
+                "mkdir",
+                "cp",
+                "touch",
+                "mv",
+                "rm",
+                "pm",
+                "am",
+            )
+
+        // 允许操作的根目录（canonical 前缀）
+        private val ALLOWED_PATH_ROOTS =
+            listOf(
+                "/storage/emulated/0/Android/data/",
+                "/storage/emulated/0/Android/obb/",
+            )
+
+        fun isAllowedCommand(command: String): Boolean {
+            val firstToken = command.trim().split(Regex("\\s+")).firstOrNull() ?: return false
+            return firstToken in ALLOWED_COMMANDS
+        }
+
+        fun isAllowedPath(path: String): Boolean {
+            return try {
+                val canonical = File(path).canonicalPath.replace('\\', '/')
+                // Windows 测试环境 canonical 可能带盘符前缀（如 "C:/storage/..."），
+                // 归一化后仍按白名单根匹配；Android 真机上无盘符，行为不变。
+                val withoutDrive = canonical.substringAfter(':')
+                ALLOWED_PATH_ROOTS.any { canonical.startsWith(it) || withoutDrive.startsWith(it) }
+            } catch (e: Exception) {
+                false
+            }
+        }
     }
 
     // 复制状态数据类
@@ -44,9 +85,13 @@ class FileOperationService : IFileOperationService.Stub() {
     }
 
     /**
-     * 创建目录
+     * 创建目录（路径必须在允许根目录下）
      */
     override fun createDirectory(path: String): Boolean {
+        if (!isAllowedPath(path)) {
+            Log.w(TAG, "createDirectory 越界拒绝: $path")
+            return false
+        }
         return try {
             val dir = File(path)
             if (!dir.exists()) {
@@ -61,9 +106,13 @@ class FileOperationService : IFileOperationService.Stub() {
     }
 
     /**
-     * 删除文件或目录
+     * 删除文件或目录（路径必须在允许根目录下）
      */
     override fun deleteFile(path: String): Boolean {
+        if (!isAllowedPath(path)) {
+            Log.w(TAG, "deleteFile 越界拒绝: $path")
+            return false
+        }
         return try {
             val file = File(path)
             if (file.isDirectory) {
@@ -94,6 +143,10 @@ class FileOperationService : IFileOperationService.Stub() {
         sourcePath: String,
         targetPath: String,
     ): Boolean {
+        if (!isAllowedPath(targetPath)) {
+            Log.w(TAG, "copyFile 目标越界拒绝: $targetPath")
+            return false
+        }
         // 先确保目标目录存在
         val targetFile = File(targetPath)
         val parentDir = targetFile.parent
@@ -131,6 +184,10 @@ class FileOperationService : IFileOperationService.Stub() {
         sourcePath: String,
         targetPath: String,
     ): Boolean {
+        if (!isAllowedPath(targetPath)) {
+            Log.w(TAG, "copyDirectory 目标越界拒绝: $targetPath")
+            return false
+        }
         // 确保目标父目录存在 (mkdir -p)
         val targetFile = File(targetPath)
         val parentDir = targetFile.parent
@@ -156,9 +213,14 @@ class FileOperationService : IFileOperationService.Stub() {
     }
 
     /**
-     * 执行 shell 命令
+     * 内部命令执行（带白名单校验）。
+     * 此方法为内部方法，不通过 AIDL 暴露。fail-closed 白名单仍然生效。
      */
-    override fun executeCommand(command: String): Int {
+    internal fun executeCommand(command: String): Int {
+        if (!isAllowedCommand(command)) {
+            Log.w(TAG, "命令白名单拒绝: $command")
+            return -1
+        }
         return try {
             val process = Runtime.getRuntime().exec(arrayOf("sh", "-c", command))
             process.waitFor()
@@ -169,9 +231,14 @@ class FileOperationService : IFileOperationService.Stub() {
     }
 
     /**
-     * 执行命令并返回输出
+     * 内部命令执行并返回输出（带白名单校验）。
+     * 此方法为内部方法，不通过 AIDL 暴露。
      */
-    override fun executeCommandWithOutput(command: String): String {
+    internal fun executeCommandWithOutput(command: String): String {
+        if (!isAllowedCommand(command)) {
+            Log.w(TAG, "命令白名单拒绝: $command")
+            return ""
+        }
         return try {
             val process = Runtime.getRuntime().exec(arrayOf("sh", "-c", command))
             val output = process.inputStream.bufferedReader().readText()
@@ -184,17 +251,31 @@ class FileOperationService : IFileOperationService.Stub() {
     }
 
     /**
-     * 停止应用
+     * 停止应用（包名必须合法）
      */
     override fun stopApp(packageName: String): Boolean {
-        return executeCommand("am force-stop $packageName") == 0
+        if (!packageName.matches(Regex("^[a-zA-Z][a-zA-Z0-9_]*(\\.[a-zA-Z0-9_]+)+$"))) {
+            Log.w(TAG, "stopApp 非法包名拒绝: $packageName")
+            return false
+        }
+        return try {
+            val process = Runtime.getRuntime().exec(arrayOf("sh", "-c", "am force-stop \"$packageName\""))
+            process.waitFor() == 0
+        } catch (e: Exception) {
+            Log.e(TAG, "stopApp 失败: $packageName", e)
+            false
+        }
     }
 
     /**
-     * 检查应用是否运行
+     * 检查应用是否运行（包名必须合法）
      */
     override fun isAppRunning(packageName: String): Boolean {
-        val output = executeCommandWithOutput("pidof $packageName")
+        if (!packageName.matches(Regex("^[a-zA-Z][a-zA-Z0-9_]*(\\.[a-zA-Z0-9_]+)+$"))) {
+            Log.w(TAG, "isAppRunning 非法包名拒绝: $packageName")
+            return false
+        }
+        val output = executeCommandWithOutput("pidof \"$packageName\"")
         return output.trim().isNotEmpty()
     }
 

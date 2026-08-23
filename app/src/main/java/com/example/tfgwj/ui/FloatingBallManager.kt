@@ -19,6 +19,7 @@ import androidx.work.WorkManager
 import com.example.tfgwj.R
 import com.example.tfgwj.utils.AppLogger
 import com.example.tfgwj.utils.PauseControl
+import com.example.tfgwj.domain.model.TaskPhase
 import com.example.tfgwj.worker.FileReplaceWorkerV2
 import com.google.android.material.progressindicator.CircularProgressIndicator
 import com.google.android.material.progressindicator.LinearProgressIndicator
@@ -230,7 +231,7 @@ class FloatingBallManager(private val context: Context) {
         currentFile: String,
         mode: String,
         speed: Float,
-        phase: String = "REPLACING",
+        phase: TaskPhase = TaskPhase.REPLACING,
     ) {
         if (progress % 10 == 0 || progress == 100) {
             AppLogger.d("FloatingBallManager", "📈 更新进度: $progress%, 速度: $speed MB/s, 文件: $currentFile")
@@ -318,7 +319,7 @@ class FloatingBallManager(private val context: Context) {
                 currentFile = "完成",
                 mode = workInfo.progress.getString(FileReplaceWorkerV2.KEY_MODE) ?: "",
                 speed = 0f,
-                phase = "COMPLETED",
+                phase = TaskPhase.COMPLETED,
             )
             return
         }

@@ -2,6 +2,7 @@ package com.example.tfgwj.worker
 
 import android.content.Context
 import android.util.Log
+import com.example.tfgwj.domain.model.TaskPhase
 import com.example.tfgwj.manager.ReplaceProgressManager
 import com.example.tfgwj.utils.IoOptimizer
 import com.example.tfgwj.utils.IoRateCalculator
@@ -116,7 +117,7 @@ class NormalCopyStrategy(
                                             total = totalFiles,
                                             currentFile = file.name,
                                             speed = speed,
-                                            phase = "REPLACING",
+                                            phase = TaskPhase.REPLACING,
                                         )
                                     }
                                 }

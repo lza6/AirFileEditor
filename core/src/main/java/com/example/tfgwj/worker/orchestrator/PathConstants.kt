@@ -110,6 +110,37 @@ object PathConstants {
     }
 
     /**
+     * 将主包中 Android/data 或 Android/obb 下的一个源文件映射到选定目标应用。
+     *
+     * 源包名只用于定位原始目录，不会泄漏到目标路径中；例如
+     * `Android/data/com.source/files/a` 会映射为
+     * `/storage/emulated/0/Android/data/com.target/files/a`。
+     */
+    fun resolveTargetFile(
+        androidDir: java.io.File,
+        sourceFile: java.io.File,
+        targetPackage: String,
+    ): java.io.File {
+        require(isValidPackageName(targetPackage)) { "无效包名: $targetPackage" }
+
+        val relativePath = calculateRelativePath(androidDir, sourceFile.absolutePath)
+        val parts = relativePath.split('/').filter { it.isNotEmpty() }
+        require(parts.size >= 3) { "源文件不在应用 data 或 obb 包目录内: ${sourceFile.absolutePath}" }
+
+        val base =
+            when (parts.first()) {
+                DATA_DIR -> buildTargetDataPath(targetPackage)
+                OBB_DIR -> buildTargetObbPath(targetPackage)
+                else -> throw IllegalArgumentException("未知 Android 存储类型: ${parts.first()}")
+            }
+        // 用字符串拼接而非 java.io.File(base, child) —— 后者在 Windows 上会引入
+        // 反斜杠分隔符，导致测试与 Android 真机行为不一致。
+        val relativeToPackage = parts.drop(2).joinToString("/")
+        val normalizedSub = normalizeSubPath(relativeToPackage)
+        return java.io.File(if (normalizedSub.isEmpty()) base else "$base/$normalizedSub")
+    }
+
+    /**
      * 验证路径是否为有效 Android 数据目录
      */
     fun isValidAndroidDir(dir: java.io.File): Boolean {

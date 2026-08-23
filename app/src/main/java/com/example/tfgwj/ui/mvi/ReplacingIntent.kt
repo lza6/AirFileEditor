@@ -11,6 +11,7 @@ sealed class ReplacingIntent {
     data class StartReplace(val sourcePath: String, val targetPackage: String) : ReplacingIntent()
     object CancelReplace : ReplacingIntent()
     object RetryReplace : ReplacingIntent()
+    object DismissTaskResult : ReplacingIntent()
     object PauseReplace : ReplacingIntent()
     object ResumeReplace : ReplacingIntent()
 

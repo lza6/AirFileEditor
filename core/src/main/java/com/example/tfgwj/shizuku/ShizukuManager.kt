@@ -432,31 +432,29 @@ class ShizukuManager private constructor(private val context: Context) {
     }
 
     /**
-     * 执行命令
+     * 执行命令（本进程内直接执行，使用 Runtime.exec）
      */
     fun executeCommand(command: String): Int {
         return try {
-            fileOperationService?.executeCommand(command) ?: run {
-                Log.w(TAG, "UserService 未连接")
-                -1
-            }
+            val process = Runtime.getRuntime().exec(arrayOf("sh", "-c", command))
+            process.waitFor()
         } catch (e: Exception) {
-            Log.e(TAG, "执行命令失败", e)
+            Log.e(TAG, "执行命令失败: $command", e)
             -1
         }
     }
 
     /**
-     * 执行命令并获取输出
+     * 执行命令并获取输出（本进程内直接执行，使用 Runtime.exec）
      */
     fun executeCommandWithOutput(command: String): String {
         return try {
-            fileOperationService?.executeCommandWithOutput(command) ?: run {
-                Log.w(TAG, "UserService 未连接")
-                ""
-            }
+            val process = Runtime.getRuntime().exec(arrayOf("sh", "-c", command))
+            val output = process.inputStream.bufferedReader().readText()
+            process.waitFor()
+            output
         } catch (e: Exception) {
-            Log.e(TAG, "执行命令失败", e)
+            Log.e(TAG, "执行命令失败: $command", e)
             ""
         }
     }

@@ -1,4 +1,4 @@
-# Project Specifications: tfgwj (听风改文件) V9.0.0 (Quality Foundation)
+# Project Specifications: tfgwj (听风改文件) V13.0.0 (安全与任务闭环)
 
 ## 1. 项目愿景 (Vision)
 打造业界领先的 Android 文件自动化管理工具，专注于高效、安全、无痛的 `/Android/data` 目录文件替换与优化。
@@ -102,6 +102,60 @@ IoOptimizer (IO 优化)
 
 ## 6. 版本历史
 
+### V13.0.0 (已完成 - 安全与任务闭环)
+- ✅ **状态机统一**: ReplaceProgressManager 使用 TaskPhase 枚举替代字符串 phase，消除歧义，终态包含 COMPLETED/FAILURE/CANCELLED
+- ✅ **目标身份模型**: 新增 TargetApp/TargetLocation 领域模型，带包名校验，消除空包名兜底与默认包名回退
+- ✅ **解压安全契约**: ArchiveEntryValidator 统一条目校验，所有解压器（ArchiveManager/ExtractManager/UniversalExtractor）共享安全契约，拒绝路径穿越
+- ✅ **AIDL 白名单**: 删除 executeCommand 公共入口，命令白名单 fail-closed，路径白名单限制操作范围
+- ✅ **测试门禁**: ReplaceProgressManagerTest 覆盖 11 个状态机用例，ArchiveEntryValidatorTest 覆盖安全契约
+- ✅ **UI 终态反馈**: TaskProgressOverlay 支持成功/失败/取消三种终态可关闭，失败可重试，终态提供摘要卡片
+
+### V12.0.0 (已完成 - Clean Architecture & DDD)
+- ✅ **Domain 层建立**: 定义核心实体 (AccessMode, TaskPhase, PermissionStatus)，抽象 ConfigRepository 仓储接口，提取核心业务用例
+- ✅ **Data 层实现**: ConfigRepositoryImpl 封装 Manager 逻辑，统一任务进度与权限流分发
+- ✅ **UI 层解耦**: ReplacingViewModel 迁移至 UseCase 驱动模式，建立 ViewModelFactory 手动 DI，MainActivity 适配新架构
+- ✅ **物理模块化拆分**: :core 基础设施层、:domain 纯业务逻辑层、:data 数据访问层、:app UI 展示层
+- ✅ **测试迁移**: UseCase 测试迁移至 :domain 模块，Worker/Orchestrator 测试迁移至 :core 模块
+- ✅ **依赖方向**: 严格遵守 Clean Architecture，:app → :data → :domain ← :core
+
+### V11.0.0 (已完成 - Compose UI Revolution)
+- ✅ **MVI 架构基础**:
+  - ✅ ReplacingIntent: 20+ 种用户意图覆盖
+  - ✅ ReplacingState: 统一状态模型 + TaskPhase 枚举
+  - ✅ ReplacingViewModel: 完整状态管理
+  - ✅ ReplacingViewModelTest: 20 个单元测试
+- ✅ **Hybrid Compose 集成**:
+  - ✅ TaskProgressOverlay 连接 MVI
+  - ✅ MainDashboard 数据流连接
+  - ✅ 主包区域迁移（Compose MainPackCard）
+  - ✅ 更新包区域迁移（Compose PatchVersionCard）
+- ✅ **Compose 组件完善**:
+  - ✅ Atomic Design 骨架（Atoms/Molecules/Organisms）
+  - ✅ 主包选择器组件（MainPackCard）
+  - ✅ 小包列表组件（LazyColumn）
+  - ✅ 日志卡片组件（LogConsole）
+
+### V10.0.0 (已完成 - Performance Engine & APM)
+- ✅ **极致性能引擎**:
+  - ✅ **自适应并发调度**: 引入 `AdaptivePermitScheduler`，基于 CPU 负载、内存压力及 IO 速度实时调整并发度。
+  - ✅ **小文件聚合优化**: 针对极小文件（<1KB）分流处理，减少系统调用开销。
+  - ✅ **动态并发软限制**: 采用 `permitMutex` + `runningTasksCount` 机制，彻底解决 Semaphore 实例替换导致的竞态风险。
+- ✅ **APM 性能监控**:
+  - ✅ **细粒度指标采集**: 实现 IO 写入物理延迟（IO Wait）与 Shizuku Binder 调用时延（IPC Latency）的精准记录。
+  - ✅ **性能诊断系统**: 提供基于多维度指标的自动化优化建议。
+- ✅ **全架构适配**: Root/Native/Shizuku 模式全面实装自适应并发与 APM 监控。
+- ✅ **V11 预备工作**: 
+  - ✅ Compose UI 组件骨架（Atomic Design: Atoms/Molecules/Organisms）
+  - ✅ MVI 架构基础（ReplacingIntent/State/ViewModel）
+  - ✅ 为 MainActivity 重构铺平道路
+
+### V9.0.0 (已完成 - Quality Foundation)
+- ✅ 测试基础设施：Jacoco/Detekt/Ktlint 全量配置
+- ✅ 核心单元测试：SpeedCalculator, ProgressTracker, FileHasher, IoOptimizer
+- ✅ 质量门禁：Detekt Baseline + Ktlint Auto-format
+- ✅ CI/CD：GitHub Actions 自动化流水线
+- ✅ 覆盖率验证：Jacoco 80% 目标建立
+
 ### V8.0.0 (已完成 - Orchestrator Architecture Refactoring)
 - ✅ 架构演进：FileReplaceWorker 模块化拆分
   - ✅ 创建 `FileReplaceOrchestrator` 接口，定义统一契约
@@ -156,22 +210,37 @@ IoOptimizer (IO 优化)
   - ✅ 更新 project_specs.md 记录架构演进
   - ✅ 无需删除 V1 代码，确保向后兼容
 
-### V11.0.0 (进行中 - Compose UI Revolution)
-- 🔄 **MVI 架构基础**:
-  - ✅ ReplacingIntent: 20+ 种用户意图覆盖
-  - ✅ ReplacingState: 统一状态模型 + TaskPhase 枚举
-  - ✅ ReplacingViewModel: 完整状态管理
-  - ✅ ReplacingViewModelTest: 20 个单元测试
-- 🔄 **Hybrid Compose 集成**:
-  - ✅ TaskProgressOverlay 连接 MVI
-  - ✅ MainDashboard 数据流连接
-  - ⏳ 主包区域迁移（includeMainPack）
-  - ⏳ 更新包区域迁移（includeUpdatePack）
-- ⏳ **Compose 组件完善**:
-  - ✅ Atomic Design 骨架（Atoms/Molecules/Organisms）
-  - ⏳ 主包选择器组件
-  - ⏳ 小包列表组件（RecyclerView → LazyColumn）
-  - ⏳ 日志卡片组件
+### V11.0.0 核心任务库 (Compose UI Revolution) - 已完成 ✅
+- [x] **MVI 架构基础**:
+  - [x] ReplacingIntent: 20+ 种用户意图覆盖
+  - [x] ReplacingState: 统一状态模型 + TaskPhase 枚举
+  - [x] ReplacingViewModel: 完整状态管理
+  - [x] ReplacingViewModelTest: 20 个单元测试
+- [x] **Hybrid Compose 集成**:
+  - [x] TaskProgressOverlay 连接 MVI
+  - [x] MainDashboard 数据流连接
+  - [x] 主包区域迁移（Compose MainPackCard）
+  - [x] 更新包区域迁移（Compose PatchVersionCard）
+- [x] **Compose 组件完善**:
+  - [x] Atomic Design 骨架（Atoms/Molecules/Organisms）
+  - [x] 主包选择器组件（MainPackCard）
+  - [x] 小包列表组件（LazyColumn）
+  - [x] 日志卡片组件（LogConsole）
+
+### V12.0.0 核心任务库 (Clean Architecture & DDD) - 已完成 ✅
+- [x] **Domain 层建立**: 核心实体、仓储接口、业务用例
+- [x] **Data 层实现**: ConfigRepositoryImpl 封装 Manager 逻辑
+- [x] **UI 层解耦**: ViewModel 迁移至 UseCase 驱动模式，手动 DI
+- [x] **物理模块化拆分**: :core / :domain / :data / :app
+- [x] **测试迁移**: UseCase / Worker / Orchestrator 测试迁移至对应模块
+
+### V13.0.0 核心任务库 (安全与任务闭环) - 已完成 ✅
+- [x] **状态机统一**: ReplaceProgressManager 使用 TaskPhase 枚举替代字符串 phase
+- [x] **目标身份模型**: 新增 TargetApp/TargetLocation 领域模型，消除空包名兜底
+- [x] **解压安全契约**: ArchiveEntryValidator 统一条目校验，所有解压器共享安全契约
+- [x] **AIDL 白名单**: 删除 executeCommand 公共入口，命令白名单 fail-closed
+- [x] **测试门禁**: ReplaceProgressManagerTest 覆盖 11 个状态机用例
+- [x] **UI 终态反馈**: TaskProgressOverlay 支持成功/失败/取消三种终态可关闭
 
 ### V10.0.0 (已完成 ✅ - Performance Engine & APM)
 - ✅ **极致性能引擎**:
@@ -194,15 +263,12 @@ IoOptimizer (IO 优化)
 - ✅ CI/CD：GitHub Actions 自动化流水线
 - ✅ 覆盖率验证：Jacoco 80% 目标建立
 
-## 8. 未来演进愿景 (V10 - V15)
+## 8. 未来演进愿景 (V14 - V16)
 详细计划见 [`plans/ULTIMATE_EVOLUTION_GUIDE.md`](plans/ULTIMATE_EVOLUTION_GUIDE.md)
 
-- **V10 (APM & Performance)**: 极致 IO 监控与 Zero-Copy 2.0。
-- **V11 (Jetpack Compose)**: UI 全面现代化重构，彻底解决 MainActivity 冗余。
-- **V12 (DDD & Modularization)**: 领域驱动设计，多模块解耦。
-- **V13 (Advanced Stealth)**: 隐匿性增强，防范厂商侦测。
-- **V14 (AI Agent Integration)**: 集成端侧大模型，实现自然语言管理文件。
-- **V15 (Universal Core)**: 跨平台核心库 (KMP)，支持除 Android 外的更多系统管理。
+- **V14 (Advanced Stealth)**: 隐匿性增强，防范厂商侦测，Phantom Stealth 2.0。
+- **V15 (AI Agent Integration)**: 集成端侧大模型，实现自然语言管理文件。
+- **V16 (Universal Core)**: 跨平台核心库 (KMP)，支持除 Android 外的更多系统管理。
 
 ### 难点 1: Android 11+ 的分区存储限制
 

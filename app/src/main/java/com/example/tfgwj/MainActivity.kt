@@ -23,6 +23,7 @@ import com.example.tfgwj.domain.model.EnvironmentStatus
 import com.example.tfgwj.domain.model.TaskPhase
 import com.example.tfgwj.manager.*
 import com.example.tfgwj.performance.PerformanceMonitor
+import com.example.tfgwj.security.ArchiveEntryValidator
 import com.example.tfgwj.shizuku.ShizukuManager
 import com.example.tfgwj.ui.FloatingBallManager
 import com.example.tfgwj.ui.HelpDialog
@@ -88,8 +89,6 @@ class MainActivity : AppCompatActivity() {
         initViews()
         setupObservers()
         checkAllPermissions()
-
-        androidx.work.WorkManager.getInstance(this).cancelAllWorkByTag("file_replace")
 
         lifecycleScope.launch {
             ReplaceProgressManager.progressState.collectLatest { state ->
@@ -232,9 +231,10 @@ class MainActivity : AppCompatActivity() {
                     TaskProgressOverlay(
                         viewModel = replacingViewModel,
                         onCancel = {
-                            androidx.work.WorkManager.getInstance(this@MainActivity)
-                                .cancelAllWorkByTag("file_replace")
-                        }
+                            replacingViewModel.handleIntent(ReplacingIntent.CancelReplace)
+                        },
+                        onRetry = { replacingViewModel.handleIntent(ReplacingIntent.RetryReplace) },
+                        onDismiss = { replacingViewModel.handleIntent(ReplacingIntent.DismissTaskResult) },
                     )
                 }
             }
@@ -242,7 +242,11 @@ class MainActivity : AppCompatActivity() {
         lifecycleScope.launch {
             replacingViewModel.uiState.collectLatest {
                 binding.composeViewTaskOverlay.visibility =
-                    if (it.isReplacing || it.phase != com.example.tfgwj.domain.model.TaskPhase.IDLE) View.VISIBLE else View.GONE
+                    if (it.isReplacing ||
+                        it.phase == com.example.tfgwj.domain.model.TaskPhase.FAILURE ||
+                        it.phase == com.example.tfgwj.domain.model.TaskPhase.COMPLETED ||
+                        it.phase == com.example.tfgwj.domain.model.TaskPhase.CANCELLED
+                    ) View.VISIBLE else View.GONE
             }
         }
     }
@@ -339,18 +343,37 @@ class MainActivity : AppCompatActivity() {
     private fun loadWechatIcon() { lifecycleScope.launch { AppIconHelper.getWechatIcon(this@MainActivity)?.let { binding.toolbar.menu.findItem(R.id.action_wechat)?.icon = it } } }
 
     private fun loadMainPacks() {
-        if (replacingViewModel.uiState.value.selectedMainPackPath != null) return
         replacingViewModel.handleIntent(ReplacingIntent.ScanMainPacks)
         lifecycleScope.launch {
-            mainPackManager.scanMainPacks()
-            mainPackManager.mainPacks.value.firstOrNull()?.let { replacingViewModel.updateMainPackInfo(it.path, it.name, null, "") }
+            val targetPackage = preferencesManager.appPackageName.first()
+            val selectedPath = replacingViewModel.uiState.value.selectedMainPackPath
+            if (selectedPath != null) {
+                replacingViewModel.updateMainPackInfo(
+                    selectedPath,
+                    File(selectedPath).name,
+                    null,
+                    targetPackage,
+                )
+                return@launch
+            }
+            mainPackManager.scanMainPacks(targetPackage)
+            mainPackManager.mainPacks.value.firstOrNull()?.let {
+                replacingViewModel.updateMainPackInfo(it.path, it.name, null, targetPackage)
+            }
         }
     }
 
     private fun loadLastMainPackPath() {
         lifecycleScope.launch {
             preferencesManager.lastMainPackPath.collectLatest { path ->
-                if (path != null && path.isNotEmpty() && File(path).exists()) replacingViewModel.updateMainPackInfo(path, File(path).name, null, "")
+                if (path != null && path.isNotEmpty() && File(path).exists()) {
+                    replacingViewModel.updateMainPackInfo(
+                        path,
+                        File(path).name,
+                        null,
+                        preferencesManager.appPackageName.first(),
+                    )
+                }
             }
         }
     }
@@ -359,8 +382,9 @@ class MainActivity : AppCompatActivity() {
 
     private fun handleSelectedFolder(uri: Uri) {
         getPathFromUri(uri)?.let { path ->
-            replacingViewModel.updateMainPackInfo(path, File(path).name, null, "com.tencent.tmgp.pubgmhd")
             lifecycleScope.launch {
+                val targetPackage = preferencesManager.appPackageName.first()
+                replacingViewModel.updateMainPackInfo(path, File(path).name, null, targetPackage)
                 preferencesManager.saveLastSelectedFolderPath(path); preferencesManager.saveLastMainPackPath(path)
                 loadPatchVersions()
             }
@@ -420,25 +444,32 @@ class MainActivity : AppCompatActivity() {
         val state = replacingViewModel.uiState.value
         val path = state.selectedMainPackPath ?: return
         lifecycleScope.launch {
+            val targetPackage = state.targetPackage
+            if (targetPackage.isBlank() ||
+                !com.example.tfgwj.worker.orchestrator.PathConstants.isValidPackageName(targetPackage)
+            ) {
+                Toast.makeText(this@MainActivity, "请先选择有效的目标应用", Toast.LENGTH_LONG).show()
+                return@launch
+            }
             val status = permissionManager.checkAllPermissions()
             if (!status.hasManageStorage) requestPermissions()
-            else if (status.bestMode != PermissionChecker.AccessMode.NONE) replacingViewModel.handleIntent(ReplacingIntent.StartReplace(path, state.targetPackage))
-            else MaterialAlertDialogBuilder(this@MainActivity).setTitle("环境未验证").setMessage("强制尝试执行替换？").setPositiveButton("强制执行") { _, _ -> replacingViewModel.handleIntent(ReplacingIntent.StartReplace(path, state.targetPackage)) }.setNegativeButton("去授权", { _, _ -> requestPermissions() }).show()
+            else if (status.bestMode != PermissionChecker.AccessMode.NONE) replacingViewModel.handleIntent(ReplacingIntent.StartReplace(path, targetPackage))
+            else MaterialAlertDialogBuilder(this@MainActivity).setTitle("环境未验证").setMessage("强制尝试执行替换？").setPositiveButton("强制执行") { _, _ -> replacingViewModel.handleIntent(ReplacingIntent.StartReplace(path, targetPackage)) }.setNegativeButton("去授权", { _, _ -> requestPermissions() }).show()
         }
     }
 
-    private fun launchGame() { lifecycleScope.launch { val pkg = preferencesManager.appPackageName.first(); try { packageManager.getLaunchIntentForPackage(pkg)?.let { startActivity(it) } ?: Toast.makeText(this@MainActivity, "未找到游戏", Toast.LENGTH_SHORT).show() } catch (e: Exception) { Toast.makeText(this@MainActivity, "启动失败", Toast.LENGTH_SHORT).show() } } }
+    private fun launchGame() { lifecycleScope.launch { val pkg = preferencesManager.appPackageName.first(); if (pkg.isBlank()) { Toast.makeText(this@MainActivity, "请先选择目标应用", Toast.LENGTH_SHORT).show(); return@launch }; try { packageManager.getLaunchIntentForPackage(pkg)?.let { startActivity(it) } ?: Toast.makeText(this@MainActivity, "未找到游戏", Toast.LENGTH_SHORT).show() } catch (e: Exception) { Toast.makeText(this@MainActivity, "启动失败", Toast.LENGTH_SHORT).show() } } }
 
     private fun confirmCleanEnvironment() {
         MaterialAlertDialogBuilder(this).setTitle("🧹 清理环境确认").setMessage("确定要清理 Saved 目录吗？").setPositiveButton("立即清理") { _, _ ->
-            lifecycleScope.launch { val pkg = preferencesManager.appPackageName.first(); SmartCacheManager.cleanEnvironment(this@MainActivity, pkg, shizukuManager) { _, _, _ -> }; Toast.makeText(this@MainActivity, "✅ 清理完成", Toast.LENGTH_LONG).show() }
+            lifecycleScope.launch { val pkg = preferencesManager.appPackageName.first(); if (pkg.isBlank()) { Toast.makeText(this@MainActivity, "请先选择目标应用", Toast.LENGTH_SHORT).show(); return@launch }; SmartCacheManager.cleanEnvironment(this@MainActivity, pkg, shizukuManager) { _, _, _ -> }; Toast.makeText(this@MainActivity, "✅ 清理完成", Toast.LENGTH_LONG).show() }
         }.setNegativeButton("取消", null).show()
     }
 
     private fun checkEnvironment(forceRefresh: Boolean = false) {
         lifecycleScope.launch {
             if (forceRefresh) {
-                try { Runtime.getRuntime().exec(arrayOf("am", "force-stop", preferencesManager.appPackageName.first())).waitFor(); delay(500) } catch (e: Exception) {}
+                try { val pkg = preferencesManager.appPackageName.first(); if (pkg.isNotBlank()) { Runtime.getRuntime().exec(arrayOf("am", "force-stop", pkg)).waitFor(); delay(500) } } catch (e: Exception) {}
             }
             replacingViewModel.handleIntent(ReplacingIntent.CheckEnvironment)
         }
@@ -449,24 +480,76 @@ class MainActivity : AppCompatActivity() {
     private fun scanAndExtractArchive() {
         val path = replacingViewModel.uiState.value.selectedMainPackPath ?: return
         lifecycleScope.launch {
+            val pkg = preferencesManager.appPackageName.first()
+            if (pkg.isBlank() ||
+                !com.example.tfgwj.worker.orchestrator.PathConstants.isValidPackageName(pkg)
+            ) {
+                Toast.makeText(this@MainActivity, "请先选择有效的目标应用", Toast.LENGTH_LONG).show()
+                return@launch
+            }
             val archives = ArchiveScanner.getInstance().scanArchives()
             if (archives.isEmpty()) Toast.makeText(this@MainActivity, "未找到压缩包", Toast.LENGTH_SHORT).show()
             else MaterialAlertDialogBuilder(this@MainActivity).setTitle("选择压缩包解压到主包").setItems(archives.map { "${it.name} (${it.sizeText})" }.toTypedArray()) { _, which ->
                 lifecycleScope.launch {
                     val result = ExtractManager.getInstance().extractToCache(archives[which].path, null, File(archives[which].path).nameWithoutExtension)
                     if (result.success) {
-                        val pkg = preferencesManager.appPackageName.first(); val target = File(PermissionChecker.getAppConfigPath(pkg).replace("/storage/emulated/0/Android/data/", "$path/Android/data/"))
+                        val target = File(mainPackManager.getConfigPath(path, pkg))
                         if (!target.exists()) target.mkdirs()
-                        val allFiles = File(result.outputPath).walkTopDown().filter { it.isFile }.toList()
-                        IoOptimizer.parallelProcess(allFiles, action = { if (IoOptimizer.needsUpdate(it, File(target, it.name))) IoOptimizer.fastCopy(it, File(target, it.name)) else true }) { _, _, _ -> }
-                        loadPatchVersions()
+                        val extractedRoot = File(result.outputPath)
+                        val allFiles = extractedRoot.walkTopDown().filter { it.isFile }.toList()
+                        val copyResult = IoOptimizer.parallelProcess(
+                            allFiles,
+                            action = { source ->
+                                val relativePath = source.relativeTo(extractedRoot).path.replace(File.separatorChar, '/')
+                                val destination = ArchiveEntryValidator.resolveWithin(target, relativePath)
+                                destination.parentFile?.mkdirs()
+                                if (IoOptimizer.needsUpdate(source, destination)) IoOptimizer.fastCopy(source, destination) else true
+                            },
+                        ) { _, _, _ -> }
+                        if (copyResult.success) {
+                            loadPatchVersions()
+                        } else {
+                            Toast.makeText(this@MainActivity, "部分更新文件复制失败", Toast.LENGTH_LONG).show()
+                        }
                     }
                 }
             }.setNegativeButton("取消", null).show()
         }
     }
 
-    private fun checkForUpdates() { lifecycleScope.launch { UpdateManager.checkUpdateAsync(this@MainActivity)?.let { if (it.isUpdateAvailable) MaterialAlertDialogBuilder(this@MainActivity).setTitle("新版本 V${it.latestVersion}").setMessage(it.releaseNotes).setPositiveButton("立即更新") { _, _ -> lifecycleScope.launch { UpdateManager.downloadApk(this@MainActivity, it.downloadUrl).collectLatest { if (it == 100) AppInstaller.installApk(this@MainActivity, File(externalCacheDir, "update_tfgwj_ota.apk")) } } }.setNegativeButton("稍后", null).show() } } }
+    private fun checkForUpdates() {
+        lifecycleScope.launch {
+            UpdateManager.checkUpdateAsync(this@MainActivity)?.let {
+                if (it.isUpdateAvailable) MaterialAlertDialogBuilder(this@MainActivity)
+                    .setTitle("新版本 V${it.latestVersion}")
+                    .setMessage(it.releaseNotes)
+                    .setPositiveButton("立即更新") { _, _ ->
+                        lifecycleScope.launch {
+                            UpdateManager.downloadApk(this@MainActivity, it.downloadUrl).collectLatest { progress ->
+                                when {
+                                    progress == 100 -> {
+                                        val result = AppInstaller.installApk(
+                                            this@MainActivity,
+                                            File(externalCacheDir, "update_tfgwj_ota.apk"),
+                                        )
+                                        when (result) {
+                                            is AppInstaller.InstallResult.Success ->
+                                                Toast.makeText(this@MainActivity, "已发起安装 (${result.mode})", Toast.LENGTH_SHORT).show()
+                                            is AppInstaller.InstallResult.Failure ->
+                                                Toast.makeText(this@MainActivity, "安装失败: ${result.reason}", Toast.LENGTH_LONG).show()
+                                        }
+                                    }
+                                    progress == -2 -> Toast.makeText(this@MainActivity, "更新包校验失败，已删除", Toast.LENGTH_LONG).show()
+                                    progress < 0 -> Toast.makeText(this@MainActivity, "更新下载失败", Toast.LENGTH_LONG).show()
+                                }
+                            }
+                        }
+                    }
+                    .setNegativeButton("稍后", null)
+                    .show()
+            }
+        }
+    }
 
     private fun openWechat() { val id = getString(R.string.author_wechat); (getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager).setPrimaryClip(android.content.ClipData.newPlainText("微信号", id)); try { packageManager.getLaunchIntentForPackage("com.tencent.mm")?.let { startActivity(it) }; Toast.makeText(this, "微信号已复制", Toast.LENGTH_LONG).show() } catch (e: Exception) {} }
 

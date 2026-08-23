@@ -1,6 +1,7 @@
 package com.example.tfgwj.worker.orchestrator
 
 import android.util.Log
+import com.example.tfgwj.domain.model.TaskPhase
 import io.mockk.every
 import io.mockk.mockkStatic
 import io.mockk.unmockkAll
@@ -32,7 +33,7 @@ class ProgressTrackerTest {
     private var lastTotal = -1
     private var lastMessage = ""
     private var lastSpeed = -1f
-    private var lastPhase = ""
+    private var lastPhase = TaskPhase.IDLE
 
     private lateinit var tracker: ProgressTracker
 
@@ -50,7 +51,7 @@ class ProgressTrackerTest {
         every { System.currentTimeMillis() } returns 1000L
 
         progressCount = 0
-        tracker = ProgressTracker(config, testScope) { p: Int, pr: Int, t: Int, m: String, s: Float, ph: String ->
+        tracker = ProgressTracker(config, testScope) { p: Int, pr: Int, t: Int, m: String, s: Float, ph: TaskPhase ->
             progressCount++
             lastProgress = p
             lastProcessed = pr
@@ -123,9 +124,9 @@ class ProgressTrackerTest {
     @Test
     fun `phase is correctly propagated`() = runTest {
         tracker.initialize(100)
-        tracker.updateProgress(50, "Verifying...", "VERIFYING")
+        tracker.updateProgress(50, "Verifying...", TaskPhase.VERIFYING)
 
-        assertEquals("VERIFYING", lastPhase)
+        assertEquals(TaskPhase.VERIFYING, lastPhase)
     }
 
     @Test

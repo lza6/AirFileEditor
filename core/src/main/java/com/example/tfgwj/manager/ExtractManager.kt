@@ -1,6 +1,9 @@
 package com.example.tfgwj.manager
 
 import android.util.Log
+import com.example.tfgwj.security.ArchiveEntryMetadata
+import com.example.tfgwj.security.ArchiveEntryValidator
+import com.example.tfgwj.security.ArchiveSafetyGuard
 import com.example.tfgwj.utils.PermissionChecker
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -98,35 +101,47 @@ class ExtractManager private constructor() {
                 }
 
                 // 确定输出目录
-                val dirName =
-                    outputDirName
-                        ?: archiveFile.nameWithoutExtension
-                val outputDir = File(PermissionChecker.CACHE_DIR, dirName)
-
-                // 如果目录已存在，先清理
-                if (outputDir.exists()) {
-                    outputDir.deleteRecursively()
+                val dirName = ArchiveEntryValidator.requireSafeDirectoryName(
+                    outputDirName ?: archiveFile.nameWithoutExtension,
+                )
+                if (archivePath.endsWith(".rar", ignoreCase = true)) {
+                    return@withContext ExtractResult(false, errorMessage = "RAR 格式暂不支持")
                 }
-                outputDir.mkdirs()
+                val outputDir = File(PermissionChecker.CACHE_DIR, dirName)
+                val stagingDir = ArchiveSafetyGuard.newStagingDirectory(outputDir)
 
                 _extractStatus.value = "正在解压: ${archiveFile.name}"
 
-                // 根据后缀选择解压方式
                 val result =
-                    if (archivePath.endsWith(".7z", ignoreCase = true)) {
-                        extract7z(archivePath, outputDir.absolutePath, password)
-                    } else {
-                        extractZip(archivePath, outputDir.absolutePath, password)
+                    try {
+                        if (archivePath.endsWith(".7z", ignoreCase = true)) {
+                            extract7z(archivePath, stagingDir.absolutePath, password)
+                        } else if (archivePath.endsWith(".rar", ignoreCase = true)) {
+                            ExtractResult(false, errorMessage = "RAR 格式暂不支持")
+                        } else {
+                            extractZip(archivePath, stagingDir.absolutePath, password)
+                        }
+                    } catch (e: Exception) {
+                        ArchiveSafetyGuard.discardDirectory(stagingDir)
+                        throw e
                     }
 
                 if (result.success) {
+                    if (outputDir.exists()) {
+                        ArchiveSafetyGuard.discardDirectory(outputDir)
+                    }
+                    if (!stagingDir.renameTo(outputDir)) {
+                        stagingDir.copyRecursively(outputDir, overwrite = true)
+                        ArchiveSafetyGuard.discardDirectory(stagingDir)
+                    }
                     _extractStatus.value = "解压完成: ${result.extractedCount} 个文件"
                     Log.d(TAG, "解压成功: $archivePath -> ${outputDir.absolutePath}")
+                    result.copy(outputPath = outputDir.absolutePath)
                 } else {
+                    ArchiveSafetyGuard.discardDirectory(stagingDir)
                     _extractStatus.value = "解压失败: ${result.errorMessage}"
+                    result
                 }
-
-                result
             } catch (e: PasswordRequiredException) {
                 Log.w(TAG, "解压需要密码")
                 _extractStatus.value = "需要密码"
@@ -168,30 +183,38 @@ class ExtractManager private constructor() {
                 }
 
                 val outputDir = File(mainPackPath)
-
-                // 确保目标目录存在
                 if (!outputDir.exists()) {
                     outputDir.mkdirs()
                 }
+                val stagingDir = ArchiveSafetyGuard.newStagingDirectory(outputDir)
 
                 _extractStatus.value = "正在解压: ${archiveFile.name} -> ${outputDir.name}"
 
-                // 根据后缀选择解压方式
                 val result =
-                    if (archivePath.endsWith(".7z", ignoreCase = true)) {
-                        extract7z(archivePath, outputDir.absolutePath, password)
-                    } else {
-                        extractZip(archivePath, outputDir.absolutePath, password)
+                    try {
+                        if (archivePath.endsWith(".7z", ignoreCase = true)) {
+                            extract7z(archivePath, stagingDir.absolutePath, password)
+                        } else if (archivePath.endsWith(".rar", ignoreCase = true)) {
+                            ExtractResult(false, errorMessage = "RAR 格式暂不支持")
+                        } else {
+                            extractZip(archivePath, stagingDir.absolutePath, password)
+                        }
+                    } catch (e: Exception) {
+                        ArchiveSafetyGuard.discardDirectory(stagingDir)
+                        throw e
                     }
 
                 if (result.success) {
+                    stagingDir.copyRecursively(outputDir, overwrite = true)
+                    ArchiveSafetyGuard.discardDirectory(stagingDir)
                     _extractStatus.value = "解压完成: ${result.extractedCount} 个文件"
                     Log.d(TAG, "解压成功: $archivePath -> ${outputDir.absolutePath}")
+                    result.copy(outputPath = outputDir.absolutePath)
                 } else {
+                    ArchiveSafetyGuard.discardDirectory(stagingDir)
                     _extractStatus.value = "解压失败: ${result.errorMessage}"
+                    result
                 }
-
-                result
             } catch (e: PasswordRequiredException) {
                 Log.w(TAG, "解压需要密码")
                 _extractStatus.value = "需要密码"
@@ -208,6 +231,7 @@ class ExtractManager private constructor() {
 
     /**
      * 使用 Commons Compress 解压 7z 文件
+     * 先完整遍历条目做安全校验，再重新打开归档写入，避免恶意条目在发现前留下部分内容。
      */
     private fun extract7z(
         archivePath: String,
@@ -221,7 +245,29 @@ class ExtractManager private constructor() {
 
             Log.d(TAG, "开始解压 7z 文件: ${file.name}, 大小: $archiveSize bytes")
 
-            // 如果有密码，需要传入 char[]
+            val destinationDir = File(outputPath)
+            val probeEntries = mutableListOf<ArchiveEntryMetadata>()
+
+            // 第一遍：统计并校验所有条目。
+            @Suppress("DEPRECATION")
+            val probeFile =
+                if (password.isNullOrEmpty()) {
+                    SevenZFile(file)
+                } else {
+                    SevenZFile(file, password.toCharArray())
+                }
+            try {
+                var probeEntry = probeFile.nextEntry
+                while (probeEntry != null) {
+                    probeEntries += ArchiveEntryMetadata(probeEntry.name, probeEntry.size)
+                    probeEntry = probeFile.nextEntry
+                }
+            } finally {
+                probeFile.close()
+            }
+            ArchiveSafetyGuard.validateEntries(probeEntries)
+
+            // 第二遍：真正写入。
             @Suppress("DEPRECATION")
             val sevenZFile =
                 if (password.isNullOrEmpty()) {
@@ -245,17 +291,22 @@ class ExtractManager private constructor() {
             try {
                 while (entry != null) {
                     if (!entry.isDirectory) {
-                        val outFile = File(outputPath, entry.name)
+                        val outFile = ArchiveEntryValidator.resolveWithin(File(outputPath), entry.name)
                         outFile.parentFile?.mkdirs()
 
                         Log.d(TAG, "正在解压文件: ${entry.name}, 大小: ${entry.size} bytes")
 
                         // 使用智能缓冲区提高写入性能
                         BufferedOutputStream(FileOutputStream(outFile), buffer.size).use { bos ->
-                            var len: Int
+                            var entryBytes = 0L
+                            var len = 0
                             while (sevenZFile.read(buffer).also { len = it } != -1) {
+                                entryBytes += len
+                                require(entryBytes <= ArchiveSafetyGuard.MAX_ENTRY_SIZE_BYTES) {
+                                    "压缩包单文件超过大小限制: ${entry.name}"
+                                }
+                                extractedSize = ArchiveSafetyGuard.addBytesWithinLimit(extractedSize, len.toLong())
                                 bos.write(buffer, 0, len)
-                                extractedSize += len
 
                                 val now = System.currentTimeMillis()
 
@@ -369,6 +420,14 @@ class ExtractManager private constructor() {
             val fileHeaders = zipFile.fileHeaders
             val totalFiles = fileHeaders.size
 
+            // 在写入任何文件前校验全部条目，避免压缩包在发现恶意条目前留下部分内容。
+            val destinationDir = File(outputPath)
+            ArchiveSafetyGuard.validateEntries(
+                fileHeaders.map { header ->
+                    ArchiveEntryMetadata(header.fileName, header.uncompressedSize)
+                },
+            )
+
             Log.d(TAG, "共 $totalFiles 个文件需要解压（单线程模式）")
 
             if (totalFiles == 0) {
@@ -387,7 +446,7 @@ class ExtractManager private constructor() {
             // 逐个文件解压（单线程，确保稳定性）
             for (header in fileHeaders) {
                 if (!header.isDirectory) {
-                    val outputFile = File(outputPath, header.fileName)
+                    val outputFile = ArchiveEntryValidator.resolveWithin(destinationDir, header.fileName)
                     outputFile.parentFile?.mkdirs()
 
                     // 使用 IoOptimizer 的缓冲区
@@ -395,10 +454,15 @@ class ExtractManager private constructor() {
                     try {
                         BufferedOutputStream(FileOutputStream(outputFile), buffer.size).use { bos ->
                             val inputStream = zipFile.getInputStream(header)
-                            var len: Int
+                            var entryBytes = 0L
+                            var len = 0
                             while (inputStream.read(buffer).also { len = it } != -1) {
+                                entryBytes += len
+                                require(entryBytes <= ArchiveSafetyGuard.MAX_ENTRY_SIZE_BYTES) {
+                                    "压缩包单文件超过大小限制: ${header.fileName}"
+                                }
+                                extractedSize = ArchiveSafetyGuard.addBytesWithinLimit(extractedSize, len.toLong())
                                 bos.write(buffer, 0, len)
-                                extractedSize += len
                             }
                             inputStream.close()
                             bos.flush()

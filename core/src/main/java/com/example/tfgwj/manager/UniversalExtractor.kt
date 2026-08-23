@@ -1,6 +1,9 @@
 package com.example.tfgwj.manager
 
 import android.util.Log
+import com.example.tfgwj.security.ArchiveEntryMetadata
+import com.example.tfgwj.security.ArchiveEntryValidator
+import com.example.tfgwj.security.ArchiveSafetyGuard
 import com.example.tfgwj.utils.IoRateCalculator
 import com.example.tfgwj.utils.PauseControl
 import kotlinx.coroutines.Dispatchers
@@ -98,6 +101,8 @@ class UniversalExtractor private constructor() {
             _status.value = "准备解压..."
             _currentFile.value = ""
 
+            val finalDir = File(outputDir)
+            var stagingDir: File? = null
             try {
                 val file = File(archivePath)
                 if (!file.exists()) {
@@ -105,33 +110,49 @@ class UniversalExtractor private constructor() {
                 }
 
                 val extension = getExtension(file.name).lowercase()
-                _status.value = "正在解压: ${file.name}"
+                if (extension == "rar") {
+                    return@withContext ExtractResult(false, errorMessage = "RAR 格式暂不支持，请使用 ZIP 或 7z")
+                }
+                if (extension !in SUPPORTED_EXTENSIONS && extension != "tar.gz" && extension != "tar.xz") {
+                    return@withContext ExtractResult(false, errorMessage = "不支持的格式: $extension")
+                }
 
-                // 确保输出目录存在
-                File(outputDir).mkdirs()
+                _status.value = "正在解压: ${file.name}"
+                stagingDir = ArchiveSafetyGuard.newStagingDirectory(finalDir)
+                val stagingPath = stagingDir.absolutePath
 
                 val result =
                     when (extension) {
-                        "zip" -> extractZip(archivePath, outputDir, password)
-                        "7z" -> extract7z(archivePath, outputDir, password)
-                        "tar" -> extractTar(archivePath, outputDir)
-                        "gz", "tgz" -> extractGzip(archivePath, outputDir)
-                        "xz" -> extractXz(archivePath, outputDir)
-                        "tar.gz" -> extractTarGz(archivePath, outputDir)
-                        "tar.xz" -> extractTarXz(archivePath, outputDir)
-                        "rar" -> ExtractResult(false, errorMessage = "RAR 格式暂不支持，请使用 ZIP 或 7z")
+                        "zip" -> extractZip(archivePath, stagingPath, password)
+                        "7z" -> extract7z(archivePath, stagingPath, password)
+                        "tar" -> extractTar(archivePath, stagingPath)
+                        "gz", "tgz" -> extractGzip(archivePath, stagingPath)
+                        "xz" -> extractXz(archivePath, stagingPath)
+                        "tar.gz" -> extractTarGz(archivePath, stagingPath)
+                        "tar.xz" -> extractTarXz(archivePath, stagingPath)
                         else -> ExtractResult(false, errorMessage = "不支持的格式: $extension")
                     }
 
                 if (result.success) {
+                    if (finalDir.exists()) {
+                        ArchiveSafetyGuard.discardDirectory(finalDir)
+                    }
+                    if (!stagingDir.renameTo(finalDir)) {
+                        stagingDir.copyRecursively(finalDir, overwrite = true)
+                        ArchiveSafetyGuard.discardDirectory(stagingDir)
+                    }
+                    stagingDir = null
                     _status.value = "解压完成: ${result.extractedCount} 个文件"
+                    result.copy(outputPath = outputDir)
                 } else {
+                    ArchiveSafetyGuard.discardDirectory(stagingDir)
+                    stagingDir = null
                     _status.value = "解压失败: ${result.errorMessage}"
+                    result
                 }
-
-                result
             } catch (e: Exception) {
                 Log.e(TAG, "解压失败", e)
+                stagingDir?.let { ArchiveSafetyGuard.discardDirectory(it) }
                 ExtractResult(false, errorMessage = e.message ?: "未知错误")
             } finally {
                 _isExtracting.value = false
@@ -162,11 +183,41 @@ class UniversalExtractor private constructor() {
             val file = File(path)
             val totalSize = file.length()
 
+            // 第一遍：流式扫描、校验并读取所有条目，阻断重复条目和压缩炸弹。
+            FileInputStream(path).use { fis ->
+                BufferedInputStream(fis).use { bis ->
+                    ZipInputStream(bis).use { zis ->
+                        val seenEntries = HashSet<String>()
+                        val validationBuffer = ByteArray(BUFFER_SIZE)
+                        var validatedTotalBytes = 0L
+                        var probe = zis.nextEntry
+                        while (probe != null) {
+                            val normalizedName = probe.name.replace('\\', '/')
+                            require(seenEntries.add(normalizedName)) { "重复压缩包条目: ${probe.name}" }
+                            ArchiveSafetyGuard.validateEntry(probe.name)
+                            var entryBytes = 0L
+                            var len = 0
+                            while (!probe.isDirectory && zis.read(validationBuffer).also { len = it } > 0) {
+                                entryBytes += len
+                                require(entryBytes <= ArchiveSafetyGuard.MAX_ENTRY_SIZE_BYTES) {
+                                    "压缩包单文件超过大小限制: ${probe.name}"
+                                }
+                                validatedTotalBytes = ArchiveSafetyGuard.addBytesWithinLimit(validatedTotalBytes, len.toLong())
+                            }
+                            zis.closeEntry()
+                            probe = zis.nextEntry
+                        }
+                    }
+                }
+            }
+
+            // 第二遍：真正写入。
             FileInputStream(path).use { fis ->
                 BufferedInputStream(fis).use { bis ->
                     ZipInputStream(bis).use { zis ->
                         var entry = zis.nextEntry
                         val buffer = com.example.tfgwj.utils.IoOptimizer.acquireBuffer()
+                        var totalWrittenBytes = 0L
 
                         try {
                             while (entry != null) {
@@ -174,14 +225,7 @@ class UniversalExtractor private constructor() {
                                 kotlinx.coroutines.runBlocking { PauseControl.waitIfPaused() }
 
                                 val fileName = entry.name
-                                val outFile = File(outputDir, fileName)
-
-                                // 2. Zip Slip 安全检查
-                                val canonicalDest = File(outputDir).canonicalPath
-                                val canonicalEntry = outFile.canonicalPath
-                                if (!canonicalEntry.startsWith(canonicalDest + File.separator)) {
-                                    throw SecurityException("Zip Slip 检测: $fileName")
-                                }
+                                val outFile = ArchiveEntryValidator.resolveWithin(File(outputDir), fileName)
 
                                 _currentFile.value = fileName
 
@@ -191,8 +235,14 @@ class UniversalExtractor private constructor() {
                                     outFile.parentFile?.mkdirs()
                                     // 增加 FileOutputStream 的缓冲区
                                     BufferedOutputStream(FileOutputStream(outFile)).use { bos ->
-                                        var len: Int
+                                        var entryBytes = 0L
+                                        var len = 0
                                         while (zis.read(buffer).also { len = it } > 0) {
+                                            entryBytes += len
+                                            require(entryBytes <= ArchiveSafetyGuard.MAX_ENTRY_SIZE_BYTES) {
+                                                "压缩包单文件超过大小限制: $fileName"
+                                            }
+                                            totalWrittenBytes = ArchiveSafetyGuard.addBytesWithinLimit(totalWrittenBytes, len.toLong())
                                             bos.write(buffer, 0, len)
                                             totalProcessedBytes += len
 
@@ -242,48 +292,19 @@ class UniversalExtractor private constructor() {
                 zipFile.setPassword(password.toCharArray())
             }
 
-            zipFile.isRunInThread = true // 实际上我们会阻塞等待，但需要它来支持 ProgressMonitor
-            val monitor = zipFile.progressMonitor
-            val ioRateCalculator = IoRateCalculator()
+            // 先校验所有 Central Directory 条目，再允许 Zip4j 写入任何文件。
+            val destinationDir = File(outputDir)
+            ArchiveSafetyGuard.validateEntries(
+                zipFile.fileHeaders.map { header ->
+                    ArchiveEntryMetadata(header.fileName, header.uncompressedSize)
+                },
+            )
 
-            // 安全检查
-            zipFile.fileHeaders.forEach { header ->
-                val outFile = File(outputDir, header.fileName)
-                val canonicalDest = File(outputDir).canonicalPath
-                val canonicalEntry = outFile.canonicalPath
-                if (!canonicalEntry.startsWith(canonicalDest + File.separator)) {
-                    throw SecurityException("Zip Slip: ${header.fileName}")
-                }
-            }
-
-            // 异步解压但阻塞等待进度
-            Thread {
-                try {
-                    zipFile.extractAll(outputDir)
-                } catch (e: Exception) {
-                }
-            }.start()
-
-            while (monitor.state == ProgressMonitor.State.BUSY) {
-                kotlinx.coroutines.runBlocking { PauseControl.waitIfPaused() }
-
-                _progress.value = monitor.percentDone
-                _currentFile.value = monitor.fileName ?: ""
-
-                // Zip4j 不直接提供字节处理量，很难计算精确速度，这里暂时用已处理大小估算
-                val processed = monitor.workCompleted
-                val speed = ioRateCalculator.update(processed)
-                _currentSpeed.value = speed
-
-                Thread.sleep(100)
-            }
-
-            if (monitor.result == ProgressMonitor.Result.SUCCESS) {
-                val count = File(outputDir).walkTopDown().count { it.isFile }
-                ExtractResult(true, outputDir, count)
-            } else {
-                ExtractResult(false, errorMessage = monitor.exception?.message ?: "解压失败")
-            }
+            // 同步执行可向调用方传播异常，不能再由后台线程吞掉失败后伪装成功。
+            zipFile.isRunInThread = false
+            zipFile.extractAll(outputDir)
+            val count = destinationDir.walkTopDown().count { it.isFile }
+            ExtractResult(true, outputDir, count)
         } catch (e: Exception) {
             ExtractResult(false, errorMessage = e.message)
         }
@@ -291,6 +312,7 @@ class UniversalExtractor private constructor() {
 
     /**
      * 7z 解压
+     * 先完整遍历条目做安全校验，再重新打开归档写入，避免恶意条目在发现前留下部分内容。
      */
     private fun extract7z(
         path: String,
@@ -298,18 +320,28 @@ class UniversalExtractor private constructor() {
         password: String?,
     ): ExtractResult {
         return try {
-            val sevenZFile =
+            // 第一遍：统计条目并全部通过安全校验。
+            val destinationDir = File(outputDir)
+            val probeEntries = mutableListOf<ArchiveEntryMetadata>()
+            val probe =
                 if (!password.isNullOrEmpty()) {
                     SevenZFile.builder().setFile(File(path)).setPassword(password).get()
                 } else {
                     SevenZFile.builder().setFile(File(path)).get()
                 }
+            try {
+                var entry: SevenZArchiveEntry? = probe.nextEntry
+                while (entry != null) {
+                    probeEntries += ArchiveEntryMetadata(entry.name, entry.size)
+                    entry = probe.nextEntry
+                }
+            } finally {
+                probe.close()
+            }
+            ArchiveSafetyGuard.validateEntries(probeEntries)
+            val totalEntries = probeEntries.size
 
-            var count = 0
-            var entry: SevenZArchiveEntry? = sevenZFile.nextEntry
-            val totalEntries = sevenZFile.entries.count()
-
-            sevenZFile.close()
+            // 第二遍：真正写入。
             val sevenZ =
                 if (!password.isNullOrEmpty()) {
                     SevenZFile.builder().setFile(File(path)).setPassword(password).get()
@@ -317,9 +349,11 @@ class UniversalExtractor private constructor() {
                     SevenZFile.builder().setFile(File(path)).get()
                 }
 
-            entry = sevenZ.nextEntry
+            var count = 0
+            var totalWrittenBytes = 0L
+            var entry: SevenZArchiveEntry? = sevenZ.nextEntry
             while (entry != null) {
-                val outFile = File(outputDir, entry.name)
+                val outFile = ArchiveEntryValidator.resolveWithin(destinationDir, entry.name)
                 _currentFile.value = entry.name
 
                 if (entry.isDirectory) {
@@ -328,8 +362,14 @@ class UniversalExtractor private constructor() {
                     outFile.parentFile?.mkdirs()
                     FileOutputStream(outFile).use { fos ->
                         val buffer = ByteArray(BUFFER_SIZE)
-                        var len: Int
+                        var entryBytes = 0L
+                        var len = 0
                         while (sevenZ.read(buffer).also { len = it } > 0) {
+                            entryBytes += len
+                            require(entryBytes <= ArchiveSafetyGuard.MAX_ENTRY_SIZE_BYTES) {
+                                "压缩包单文件超过大小限制: ${entry.name}"
+                            }
+                            totalWrittenBytes = ArchiveSafetyGuard.addBytesWithinLimit(totalWrittenBytes, len.toLong())
                             fos.write(buffer, 0, len)
                         }
                     }
@@ -355,7 +395,7 @@ class UniversalExtractor private constructor() {
         path: String,
         outputDir: String,
     ): ExtractResult {
-        return extractArchive(TarArchiveInputStream(FileInputStream(path)), outputDir)
+        return extractArchive(outputDir) { TarArchiveInputStream(FileInputStream(path)) }
     }
 
     /**
@@ -370,11 +410,17 @@ class UniversalExtractor private constructor() {
             val outputName = file.name.removeSuffix(".gz").removeSuffix(".tgz")
             val outputFile = File(outputDir, if (outputName.endsWith(".tar")) outputName else outputName)
 
+            ArchiveSafetyGuard.validateEntry(outputFile.name)
             GzipCompressorInputStream(BufferedInputStream(FileInputStream(path))).use { gzIn ->
                 FileOutputStream(outputFile).use { fos ->
                     val buffer = ByteArray(BUFFER_SIZE)
-                    var len: Int
+                    var written = 0L
+                    var len = 0
                     while (gzIn.read(buffer).also { len = it } > 0) {
+                        written = ArchiveSafetyGuard.addBytesWithinLimit(written, len.toLong())
+                        require(written <= ArchiveSafetyGuard.MAX_ENTRY_SIZE_BYTES) {
+                            "压缩包单文件超过大小限制: ${outputFile.name}"
+                        }
                         fos.write(buffer, 0, len)
                     }
                 }
@@ -406,11 +452,17 @@ class UniversalExtractor private constructor() {
             val outputName = file.name.removeSuffix(".xz")
             val outputFile = File(outputDir, outputName)
 
+            ArchiveSafetyGuard.validateEntry(outputFile.name)
             XZCompressorInputStream(BufferedInputStream(FileInputStream(path))).use { xzIn ->
                 FileOutputStream(outputFile).use { fos ->
                     val buffer = ByteArray(BUFFER_SIZE)
-                    var len: Int
+                    var written = 0L
+                    var len = 0
                     while (xzIn.read(buffer).also { len = it } > 0) {
+                        written = ArchiveSafetyGuard.addBytesWithinLimit(written, len.toLong())
+                        require(written <= ArchiveSafetyGuard.MAX_ENTRY_SIZE_BYTES) {
+                            "压缩包单文件超过大小限制: ${outputFile.name}"
+                        }
                         fos.write(buffer, 0, len)
                     }
                 }
@@ -437,14 +489,10 @@ class UniversalExtractor private constructor() {
         path: String,
         outputDir: String,
     ): ExtractResult {
-        return try {
-            val tarIn =
-                TarArchiveInputStream(
-                    GzipCompressorInputStream(BufferedInputStream(FileInputStream(path))),
-                )
-            extractArchive(tarIn, outputDir)
-        } catch (e: Exception) {
-            ExtractResult(false, errorMessage = e.message)
+        return extractArchive(outputDir) {
+            TarArchiveInputStream(
+                GzipCompressorInputStream(BufferedInputStream(FileInputStream(path))),
+            )
         }
     }
 
@@ -455,62 +503,66 @@ class UniversalExtractor private constructor() {
         path: String,
         outputDir: String,
     ): ExtractResult {
-        return try {
-            val tarIn =
-                TarArchiveInputStream(
-                    XZCompressorInputStream(BufferedInputStream(FileInputStream(path))),
-                )
-            extractArchive(tarIn, outputDir)
-        } catch (e: Exception) {
-            ExtractResult(false, errorMessage = e.message)
+        return extractArchive(outputDir) {
+            TarArchiveInputStream(
+                XZCompressorInputStream(BufferedInputStream(FileInputStream(path))),
+            )
         }
     }
 
     /**
-     * 通用 Archive 解压
+     * 通用 Archive 解压：先重开流完成预检，再写入。
      */
     private fun extractArchive(
-        archiveIn: ArchiveInputStream<*>,
         outputDir: String,
+        openStream: () -> ArchiveInputStream<*>,
     ): ExtractResult {
         return try {
-            var count = 0
-            var entry: ArchiveEntry? = archiveIn.nextEntry
-
-            while (entry != null) {
-                // Zip Slip 检查
-                val outFile = File(outputDir, entry.name)
-                val canonicalDest = File(outputDir).canonicalPath
-                val canonicalEntry = outFile.canonicalPath
-                if (!canonicalEntry.startsWith(canonicalDest)) {
-                    throw SecurityException("检测到 Zip Slip 攻击尝试: ${entry.name}")
+            openStream().use { probeIn ->
+                val entries = mutableListOf<ArchiveEntryMetadata>()
+                var probe = probeIn.nextEntry
+                while (probe != null) {
+                    entries += ArchiveEntryMetadata(probe.name, probe.size)
+                    probe = probeIn.nextEntry
                 }
-
-                _currentFile.value = entry.name
-
-                if (entry.isDirectory) {
-                    outFile.mkdirs()
-                } else {
-                    outFile.parentFile?.mkdirs()
-                    val buffer = com.example.tfgwj.utils.IoOptimizer.acquireBuffer()
-                    try {
-                        BufferedOutputStream(FileOutputStream(outFile)).use { bos ->
-                            var len: Int
-                            while (archiveIn.read(buffer).also { len = it } > 0) {
-                                bos.write(buffer, 0, len)
-                            }
-                            bos.flush()
-                        }
-                    } finally {
-                        com.example.tfgwj.utils.IoOptimizer.releaseBuffer(buffer)
-                    }
-                    count++
-                }
-
-                entry = archiveIn.nextEntry
+                ArchiveSafetyGuard.validateEntries(entries)
             }
 
-            archiveIn.close()
+            var count = 0
+            var totalWrittenBytes = 0L
+            val destinationDir = File(outputDir)
+            openStream().use { archiveIn ->
+                var entry: ArchiveEntry? = archiveIn.nextEntry
+                while (entry != null) {
+                    val outFile = ArchiveEntryValidator.resolveWithin(destinationDir, entry.name)
+                    _currentFile.value = entry.name
+                    if (entry.isDirectory) {
+                        outFile.mkdirs()
+                    } else {
+                        outFile.parentFile?.mkdirs()
+                        val buffer = com.example.tfgwj.utils.IoOptimizer.acquireBuffer()
+                        try {
+                            BufferedOutputStream(FileOutputStream(outFile)).use { bos ->
+                                var entryBytes = 0L
+                                var len = 0
+                                while (archiveIn.read(buffer).also { len = it } > 0) {
+                                    entryBytes += len
+                                    require(entryBytes <= ArchiveSafetyGuard.MAX_ENTRY_SIZE_BYTES) {
+                                        "压缩包单文件超过大小限制: ${entry.name}"
+                                    }
+                                    totalWrittenBytes = ArchiveSafetyGuard.addBytesWithinLimit(totalWrittenBytes, len.toLong())
+                                    bos.write(buffer, 0, len)
+                                }
+                                bos.flush()
+                            }
+                        } finally {
+                            com.example.tfgwj.utils.IoOptimizer.releaseBuffer(buffer)
+                        }
+                        count++
+                    }
+                    entry = archiveIn.nextEntry
+                }
+            }
             ExtractResult(true, outputDir, count)
         } catch (e: Exception) {
             Log.e(TAG, "Archive 解压失败", e)

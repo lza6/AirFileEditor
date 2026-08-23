@@ -48,13 +48,7 @@
             android:enabled="true"
             android:exported="true"
             tools:ignore="ExportedContentProvider" />
-            
-        <!-- 文件替换服务 -->
-        <service
-            android:name=".service.FileReplaceService"
-            android:exported="false"
-            android:foregroundServiceType="specialUse" />
-            
+
         <!-- 前台服务类型说明（Android 14+需要） -->
         <property
             android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"

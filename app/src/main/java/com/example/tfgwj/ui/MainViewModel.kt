@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.tfgwj.data.PreferencesManager
+import com.example.tfgwj.domain.model.TaskPhase
 import com.example.tfgwj.manager.*
 import com.example.tfgwj.performance.PerformanceMonitor
 import kotlinx.coroutines.flow.*
@@ -182,6 +183,6 @@ data class ReplaceProgressState(
     val total: Int = 0,
     val currentFile: String = "",
     val speed: Float = 0f,
-    val phase: String = "IDLE",
+    val phase: TaskPhase = TaskPhase.IDLE,
     val isReplacing: Boolean = false,
 )

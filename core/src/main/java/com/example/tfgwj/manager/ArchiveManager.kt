@@ -4,6 +4,9 @@ import android.content.Context
 import android.util.Log
 import android.widget.Toast
 import com.example.tfgwj.model.ArchiveFile
+import com.example.tfgwj.security.ArchiveEntryMetadata
+import com.example.tfgwj.security.ArchiveEntryValidator
+import com.example.tfgwj.security.ArchiveSafetyGuard
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -175,60 +178,54 @@ class ArchiveManager(private val context: Context) {
 
         val outputDir = outputPath ?: getDefaultExtractDirectory(archiveFile.fileName)
         val outputDirFile = File(outputDir)
+        var stagingDir: File? = null
 
         try {
             Log.d(TAG, "Extracting archive: ${archiveFile.fileName} to $outputDir")
-
-            // 创建输出目录
-            if (!outputDirFile.exists()) {
-                outputDirFile.mkdirs()
+            when (archiveFile.fileType.lowercase()) {
+                "rar" -> {
+                    Log.w(TAG, "RAR format rejected: no safe in-process extractor available")
+                    _extractionResult.value = ExtractionResult(false, null, archiveFile, "解压失败")
+                    return@withContext
+                }
+                "tar", "tgz", "tar.gz", "bz2", "xz" -> {
+                    Log.w(TAG, "${archiveFile.fileType.uppercase()} format not supported by ArchiveManager, use UniversalExtractor")
+                    _extractionResult.value = ExtractionResult(false, null, archiveFile, "解压失败")
+                    return@withContext
+                }
             }
 
-            // 根据文件类型选择解压方法
+            stagingDir = ArchiveSafetyGuard.newStagingDirectory(outputDirFile)
             val success =
                 when (archiveFile.fileType.lowercase()) {
-                    "zip", "jar" -> extractZip(archiveFile.file, outputDirFile, password)
-                    "gz", "gzip" -> extractGz(archiveFile.file, outputDirFile)
-                    "7z" -> {
-                        Toast.makeText(context, "7z格式需要Shizuku权限或系统安装7z命令", Toast.LENGTH_SHORT).show()
-                        extract7z(archiveFile.file, outputDirFile, password)
-                    }
-                    "rar" -> {
-                        Toast.makeText(context, "RAR格式需要Shizuku权限或系统安装unrar命令", Toast.LENGTH_SHORT).show()
-                        extractRar(archiveFile.file, outputDirFile, password)
-                    }
-                    "tar", "tgz", "tar.gz", "bz2", "xz" -> {
-                        Toast.makeText(context, "${archiveFile.fileType.uppercase()}格式暂不支持，请使用ZIP或GZ格式", Toast.LENGTH_SHORT).show()
-                        false
-                    }
+                    "zip", "jar" -> extractZip(archiveFile.file, stagingDir, password)
+                    "gz", "gzip" -> extractGz(archiveFile.file, stagingDir)
+                    "7z" -> extract7z(archiveFile.file, stagingDir, password)
                     else -> {
                         Log.e(TAG, "Unsupported archive type: ${archiveFile.fileType}")
-                        Toast.makeText(context, "不支持的格式: ${archiveFile.fileType}", Toast.LENGTH_SHORT).show()
                         false
                     }
                 }
 
-            val result =
-                if (success) {
-                    ExtractionResult(
-                        success = true,
-                        outputPath = outputDir,
-                        archiveFile = archiveFile,
-                        message = "解压成功",
-                    )
-                } else {
-                    ExtractionResult(
-                        success = false,
-                        outputPath = null,
-                        archiveFile = archiveFile,
-                        message = "解压失败",
-                    )
+            if (success) {
+                if (outputDirFile.exists()) {
+                    ArchiveSafetyGuard.discardDirectory(outputDirFile)
                 }
-
-            _extractionResult.value = result
+                if (!stagingDir.renameTo(outputDirFile)) {
+                    stagingDir.copyRecursively(outputDirFile, overwrite = true)
+                    ArchiveSafetyGuard.discardDirectory(stagingDir)
+                }
+                stagingDir = null
+                _extractionResult.value = ExtractionResult(true, outputDir, archiveFile, "解压成功")
+            } else {
+                ArchiveSafetyGuard.discardDirectory(stagingDir)
+                stagingDir = null
+                _extractionResult.value = ExtractionResult(false, null, archiveFile, "解压失败")
+            }
             _extractionProgress.value = 1f
         } catch (e: Exception) {
             Log.e(TAG, "Error extracting archive", e)
+            stagingDir?.let { ArchiveSafetyGuard.discardDirectory(it) }
             _extractionResult.value =
                 ExtractionResult(
                     success = false,
@@ -243,6 +240,7 @@ class ArchiveManager(private val context: Context) {
 
     /**
      * 解压ZIP文件
+     * 先流式扫描并校验所有条目，再重新打开归档写入，避免恶意条目在发现前留下部分内容。
      */
     private fun extractZip(
         zipFile: File,
@@ -250,15 +248,40 @@ class ArchiveManager(private val context: Context) {
         password: String?,
     ): Boolean {
         return try {
-            val passwordBytes = password?.toByteArray()
+            // 第一遍：校验所有条目。
+            FileInputStream(zipFile).use { fis ->
+                ZipInputStream(fis).use { zis ->
+                    val seenEntries = HashSet<String>()
+                    val validationBuffer = ByteArray(8192)
+                    var validatedTotalBytes = 0L
+                    var probe = zis.nextEntry
+                    while (probe != null) {
+                        val normalizedName = probe.name.replace('\\', '/')
+                        require(seenEntries.add(normalizedName)) { "重复压缩包条目: ${probe.name}" }
+                        ArchiveSafetyGuard.validateEntry(probe.name)
+                        var entryBytes = 0L
+                        var len = 0
+                        while (!probe.isDirectory && zis.read(validationBuffer).also { len = it } > 0) {
+                            entryBytes += len
+                            require(entryBytes <= ArchiveSafetyGuard.MAX_ENTRY_SIZE_BYTES) {
+                                "压缩包单文件超过大小限制: ${probe.name}"
+                            }
+                            validatedTotalBytes = ArchiveSafetyGuard.addBytesWithinLimit(validatedTotalBytes, len.toLong())
+                        }
+                        zis.closeEntry()
+                        probe = zis.nextEntry
+                    }
+                }
+            }
 
+            // 第二遍：真正写入。
             FileInputStream(zipFile).use { fis ->
                 ZipInputStream(fis).use { zis ->
                     var entry: ZipEntry?
                     while (zis.nextEntry.also { entry = it } != null) {
                         if (shouldCancelExtract.get()) return false
 
-                        val entryFile = File(outputDir, entry!!.name)
+                        val entryFile = ArchiveEntryValidator.resolveWithin(outputDir, entry!!.name)
 
                         if (entry!!.isDirectory) {
                             entryFile.mkdirs()
@@ -266,8 +289,15 @@ class ArchiveManager(private val context: Context) {
                             entryFile.parentFile?.mkdirs()
                             FileOutputStream(entryFile).use { fos ->
                                 val buffer = ByteArray(8192)
-                                var bytesRead: Int
+                                var entryBytes = 0L
+                                var totalWritten = 0L
+                                var bytesRead = 0
                                 while (zis.read(buffer).also { bytesRead = it } != -1) {
+                                    entryBytes += bytesRead
+                                    require(entryBytes <= ArchiveSafetyGuard.MAX_ENTRY_SIZE_BYTES) {
+                                        "压缩包单文件超过大小限制: ${entry!!.name}"
+                                    }
+                                    totalWritten = ArchiveSafetyGuard.addBytesWithinLimit(totalWritten, bytesRead.toLong())
                                     fos.write(buffer, 0, bytesRead)
                                 }
                             }
@@ -284,75 +314,34 @@ class ArchiveManager(private val context: Context) {
     }
 
     /**
-     * 解压7z文件（使用Shizuku调用系统7z命令）
-     * 注意：需要系统安装7z命令（如termux）
+     * 解压 7z 文件。使用受统一条目校验保护的内置实现，避免将压缩包路径和
+     * 密码拼接为 Shizuku shell 命令。
      */
-    private fun extract7z(
+    private suspend fun extract7z(
         archiveFile: File,
         outputDir: File,
         password: String?,
     ): Boolean {
-        return try {
-            Log.d(TAG, "Extracting 7z file using Shizuku: ${archiveFile.name}")
-
-            val command =
-                if (password != null) {
-                    "7z x \"${archiveFile.absolutePath}\" -o\"${outputDir.absolutePath}\" -p\"$password\" -y"
-                } else {
-                    "7z x \"${archiveFile.absolutePath}\" -o\"${outputDir.absolutePath}\" -y"
-                }
-
-            val shizukuManager = com.example.tfgwj.shizuku.ShizukuManager.getInstance(context)
-            if (shizukuManager.isAuthorized.value) {
-                val exitCode = shizukuManager.executeCommand(command)
-                if (exitCode == 0) {
-                    Log.d(TAG, "7z extraction successful")
-                    return true
-                }
-            }
-
-            Log.e(TAG, "7z extraction failed. 提示：需要Shizuku权限或系统安装7z命令（如termux）")
-            false
-        } catch (e: Exception) {
-            Log.e(TAG, "Error extracting 7z: ${e.message}")
-            false
-        }
+        val result = UniversalExtractor.getInstance().extract(
+            archiveFile.absolutePath,
+            outputDir.absolutePath,
+            password,
+        )
+        if (!result.success) Log.e(TAG, "7z extraction failed: ${result.errorMessage}")
+        return result.success
     }
 
     /**
-     * 解压RAR文件（使用Shizuku调用系统unrar命令）
-     * 注意：需要系统安装unrar命令
+     * RAR 暂未接入可验证的逐条目安全解压实现，因此禁止将其交给任意 shell
+     * 命令执行；调用方会得到失败结果而非部分解压的未知状态。
      */
     private fun extractRar(
         archiveFile: File,
         outputDir: File,
         password: String?,
     ): Boolean {
-        return try {
-            Log.d(TAG, "Extracting RAR file using Shizuku: ${archiveFile.name}")
-
-            val command =
-                if (password != null) {
-                    "unrar x -p\"$password\" -y \"${archiveFile.absolutePath}\" \"${outputDir.absolutePath}\""
-                } else {
-                    "unrar x -y \"${archiveFile.absolutePath}\" \"${outputDir.absolutePath}\""
-                }
-
-            val shizukuManager = com.example.tfgwj.shizuku.ShizukuManager.getInstance(context)
-            if (shizukuManager.isAuthorized.value) {
-                val exitCode = shizukuManager.executeCommand(command)
-                if (exitCode == 0) {
-                    Log.d(TAG, "RAR extraction successful")
-                    return true
-                }
-            }
-
-            Log.e(TAG, "RAR extraction failed. 提示：需要Shizuku权限或系统安装unrar命令")
-            false
-        } catch (e: Exception) {
-            Log.e(TAG, "Error extracting RAR: ${e.message}")
-            false
-        }
+        Log.w(TAG, "RAR extraction rejected until a safe in-process extractor is available: ${archiveFile.name}")
+        return false
     }
 
     /**
@@ -364,12 +353,18 @@ class ArchiveManager(private val context: Context) {
     ): Boolean {
         return try {
             val outputFile = File(outputDir, gzFile.nameWithoutExtension)
+            ArchiveSafetyGuard.validateEntry(outputFile.name)
             FileInputStream(gzFile).use { fis ->
                 GZIPInputStream(BufferedInputStream(fis)).use { gzInput ->
                     FileOutputStream(outputFile).use { fos ->
                         val buffer = ByteArray(8192)
-                        var bytesRead: Int
+                        var written = 0L
+                        var bytesRead = 0
                         while (gzInput.read(buffer).also { bytesRead = it } != -1) {
+                            written = ArchiveSafetyGuard.addBytesWithinLimit(written, bytesRead.toLong())
+                            require(written <= ArchiveSafetyGuard.MAX_ENTRY_SIZE_BYTES) {
+                                "压缩包单文件超过大小限制: ${outputFile.name}"
+                            }
                             fos.write(buffer, 0, bytesRead)
                         }
                     }

@@ -74,7 +74,7 @@ sealed class ReplaceError {
     class AndroidDirMissing : ReplaceError() {
         override val title = "主包结构错误"
         override val message = "未找到 Android 文件夹"
-        override val solution = "主包必须包含 Android/data/com.tencent.tmgp.pubgmhd/ 目录"
+        override val solution = "主包必须包含 Android/data/<目标包名>/ 目录"
         override val canRetry = false
     }
 

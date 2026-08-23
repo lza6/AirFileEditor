@@ -17,14 +17,21 @@ class ReplaceFileUseCaseTest {
     fun `invoke with empty sourcePath returns failure`() = runTest {
         val result = useCase("", "com.example.target")
         assertTrue(result.isFailure)
-        assertEquals("路径或包名不能为空", result.exceptionOrNull()?.message)
+        assertEquals("源路径不能为空", result.exceptionOrNull()?.message)
     }
 
     @Test
     fun `invoke with empty targetPackage returns failure`() = runTest {
         val result = useCase("/path/to/source", "")
         assertTrue(result.isFailure)
-        assertEquals("路径或包名不能为空", result.exceptionOrNull()?.message)
+        assertEquals("目标包名不能为空", result.exceptionOrNull()?.message)
+    }
+
+    @Test
+    fun `invoke with illegal package name returns failure before repository`() = runTest {
+        val result = useCase("/path/to/source", "not_a_package")
+        assertTrue(result.isFailure)
+        assertTrue(result.exceptionOrNull()?.message?.startsWith("非法目标包名") == true)
     }
 
     @Test

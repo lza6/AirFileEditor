@@ -61,8 +61,8 @@ fun MainPackCard(
         ) {
             // 应用信息头
             AppInfoHeader(
-                appName = state.mainPackAppName ?: "和平精英",
-                packageName = state.targetPackage.ifEmpty { "com.tencent.tmgp.pubgmhd" },
+                appName = state.mainPackAppName ?: "未选择应用",
+                packageName = state.targetPackage.ifEmpty { "未选择应用" },
                 onClick = onAppInfoClick
             )
 
@@ -209,12 +209,15 @@ fun MainPackCard(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                // 开始替换按钮（主要按钮）
+                // 开始替换按钮（主要按钮）：未选择目标应用或主包时禁用，禁止空包名兜底
                 Button(
                     onClick = onStartReplace,
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(8.dp),
-                    enabled = state.selectedMainPackPath != null && !state.isReplacing
+                    enabled =
+                        state.selectedMainPackPath != null &&
+                            state.targetPackage.isNotBlank() &&
+                            !state.isReplacing
                 ) {
                     Icon(
                         imageVector = Icons.Default.Refresh,

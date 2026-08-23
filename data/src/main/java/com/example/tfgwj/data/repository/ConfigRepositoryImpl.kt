@@ -1,6 +1,8 @@
 package com.example.tfgwj.data.repository
 
 import android.content.Context
+import androidx.work.ExistingWorkPolicy
+import androidx.work.WorkManager
 import com.example.tfgwj.domain.model.*
 import com.example.tfgwj.domain.repository.*
 import com.example.tfgwj.manager.*
@@ -8,12 +10,15 @@ import com.example.tfgwj.shizuku.ShizukuManager
 import com.example.tfgwj.utils.FileTimeModifier
 import com.example.tfgwj.utils.PermissionChecker
 import com.example.tfgwj.worker.FileReplaceWorkerV2
+import com.example.tfgwj.worker.orchestrator.PathConstants
 import com.example.tfgwj.manager.ArchiveScanner
 import com.example.tfgwj.manager.ExtractManager
 import com.example.tfgwj.manager.ReplaceProgressManager
 import com.example.tfgwj.manager.MainPackManager
 import com.example.tfgwj.manager.PatchManager
 import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.io.File
 
 /**
@@ -51,13 +56,30 @@ class ConfigRepositoryImpl(
     override fun getPermissionStatus(): Flow<PermissionStatus> = _permissionStatus.asStateFlow()
 
     override suspend fun startReplace(sourcePath: String, targetPackage: String, incremental: Boolean): Result<String> {
-        return try {
+        return withContext(Dispatchers.IO) {
+            try {
             val workRequest = FileReplaceWorkerV2.createWorkRequestV2(sourcePath, targetPackage, incremental)
-            androidx.work.WorkManager.getInstance(context).enqueue(workRequest)
+            WorkManager.getInstance(context).enqueueUniqueWork(
+                FileReplaceWorkerV2.UNIQUE_WORK_NAME,
+                ExistingWorkPolicy.KEEP,
+                workRequest,
+            )
             Result.success(workRequest.id.toString())
-        } catch (e: Exception) {
-            Result.failure(e)
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
         }
+    }
+
+    override suspend fun cancelReplace(): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            WorkManager.getInstance(context).cancelUniqueWork(FileReplaceWorkerV2.UNIQUE_WORK_NAME)
+            ReplaceProgressManager.cancel()
+        }
+    }
+
+    override suspend fun dismissReplaceResult(): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching { ReplaceProgressManager.reset() }
     }
 
     override fun getTaskProgress(): Flow<TaskProgress> = ReplaceProgressManager.progressState.map {
@@ -67,21 +89,58 @@ class ConfigRepositoryImpl(
             progress = it.progress,
             speed = it.speed,
             currentFile = it.currentFile,
-            phase = when (it.phase) {
-                "IDLE" -> TaskPhase.IDLE
-                "PREPARING" -> TaskPhase.PREPARING
-                "REPLACING" -> TaskPhase.REPLACING
-                "VERIFYING" -> TaskPhase.VERIFYING
-                "COMPLETED" -> TaskPhase.COMPLETED
-                "FAILURE" -> TaskPhase.FAILURE
-                else -> TaskPhase.IDLE
-            },
-            isReplacing = it.isReplacing
+            phase = it.phase,
+            isReplacing = it.isReplacing,
+            errorMessage = it.errorMessage,
         )
     }
 
-    override suspend fun scanMainPacks(): List<String> {
-        mainPackManager.scanMainPacks()
+    override fun getReplaceHistory(): Flow<List<com.example.tfgwj.domain.repository.ReplaceHistoryItem>> =
+        com.example.tfgwj.data.ReplaceHistoryManager.getInstance(context).history.map { items ->
+            items.map {
+                com.example.tfgwj.domain.repository.ReplaceHistoryItem(
+                    timestamp = it.timestamp,
+                    packageName = it.packageName,
+                    sourcePath = it.sourcePath,
+                    targetPath = it.targetPath,
+                    totalFiles = it.totalFiles,
+                    successCount = it.successCount,
+                    failedCount = it.failedCount,
+                    errors = it.errors,
+                    backupPath = it.backupPath,
+                )
+            }
+        }
+
+    override suspend fun restoreFromBackup(backupPath: String, targetPackage: String): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                require(PathConstants.isValidPackageName(targetPackage)) { "非法目标包名: $targetPackage" }
+                val backupManager = com.example.tfgwj.manager.BackupManager.getInstance(context)
+                val targetPath = PathConstants.buildTargetDataPath(targetPackage)
+                val ok = backupManager.restoreBackup(backupPath, targetPath)
+                if (!ok) error("恢复失败: $backupPath -> $targetPath")
+
+                // 恢复本身也写审计记录
+                val historyManager = com.example.tfgwj.data.ReplaceHistoryManager.getInstance(context)
+                historyManager.addHistory(
+                    com.example.tfgwj.data.ReplaceHistoryItem(
+                        timestamp = System.currentTimeMillis(),
+                        packageName = targetPackage,
+                        sourcePath = backupPath,
+                        targetPath = targetPath,
+                        totalFiles = 0,
+                        successCount = 0,
+                        failedCount = 0,
+                        errors = emptyList(),
+                        backupPath = backupPath,
+                    ),
+                )
+            }
+        }
+
+    override suspend fun scanMainPacks(targetPackage: String): List<String> {
+        mainPackManager.scanMainPacks(targetPackage)
         return mainPackManager.mainPacks.value.map { it.path }
     }
 

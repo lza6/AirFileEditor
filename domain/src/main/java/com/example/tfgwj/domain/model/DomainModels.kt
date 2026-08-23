@@ -21,7 +21,7 @@ enum class EnvironmentStatus {
 }
 
 /**
- * 任务执行阶段
+ * 任务执行阶段（V13 收口：终态包含 CANCELLED，唯一权威状态源）
  */
 enum class TaskPhase {
     IDLE,
@@ -29,7 +29,8 @@ enum class TaskPhase {
     REPLACING,
     VERIFYING,
     COMPLETED,
-    FAILURE
+    FAILURE,
+    CANCELLED
 }
 
 /**
