@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>V13 变更报告</title>
+  <style>
+    :root { --bg:#0f1419; --fg:#e7ecf3; --muted:#9aa8b8; --card:#1a222c; --ok:#3dd68c; --bad:#ff6b6b; --accent:#7aa2ff; }
+    body { font-family: "Segoe UI", sans-serif; background:var(--bg); color:var(--fg); margin:0; padding:24px; line-height:1.55; }
+    main { max-width:900px; margin:0 auto; }
+    h1,h2 { color:var(--accent); }
+    .card { background:var(--card); padding:16px 20px; border-radius:12px; margin:16px 0; }
+    code { background:#11181f; padding:2px 6px; border-radius:4px; }
+    button { background:var(--accent); border:0; color:#081018; padding:8px 14px; border-radius:8px; font-weight:700; cursor:pointer; }
+    .ok { color:var(--ok); } .bad { color:var(--bad); } .muted { color:var(--muted); }
+    label { display:block; margin:8px 0; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>V13.0.0 变更报告</h1>
+  <p class="muted">听风改文件 / AirFileEditor · 2026-08-23 · tag <code>v13.0.0</code></p>
+
+  <div class="card">
+    <h2>上下文</h2>
+    <p>V12 完成四模块拆分后，任务状态、目标包名、解压安全和特权 IPC 仍可能分叉。本轮把未提交修复冻结为可回归基线，而不是继续堆 V14 功能。</p>
+  </div>
+
+  <div class="card">
+    <h2>做了什么</h2>
+    <ul>
+      <li>TaskPhase 七态成为唯一权威源；终态不算运行中。</li>
+      <li>空/非法包名 fail-closed，无默认包名。</li>
+      <li>ArchiveEntryValidator + ArchiveSafetyGuard：路径穿越、重复条目、解压大小上限、staging 失败清理。</li>
+      <li>ZIP/7z 先预检再写；TAR 重开流两遍；RAR 创建输出前失败。</li>
+      <li>AIDL 命令/路径白名单；<code>:data</code> compileSdk 36；删除死 <code>FileReplaceService</code>。</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h2>验证证据</h2>
+    <ul>
+      <li class="ok">assembleDebug 成功</li>
+      <li class="ok">ArchiveSafetyGuard / ArchiveEntryValidator / PathConstants / ReplaceProgressManager / AIDL 安全 / ReplacingViewModel / domain 测试绿</li>
+      <li class="bad">无真机/模拟器，设备 E2E 未跑</li>
+      <li class="bad">core 全量 Robolectric 曾卡死，未作门禁</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h2>测验（提交后计分，及格 80%）</h2>
+    <form id="quiz">
+      <label>1. 任务状态唯一权威源是？<br>
+        <input type="radio" name="q1" value="a"> WorkManager 字符串 phase<br>
+        <input type="radio" name="q1" value="b"> TaskPhase 枚举
+      </label>
+      <label>2. 空包名应如何处理？<br>
+        <input type="radio" name="q2" value="a"> 回退默认游戏包名<br>
+        <input type="radio" name="q2" value="b"> fail-closed 直接失败
+      </label>
+      <label>3. 解压写入前必须？<br>
+        <input type="radio" name="q3" value="a"> 先完整校验条目<br>
+        <input type="radio" name="q3" value="b"> 边写边校验即可
+      </label>
+      <label>4. dismissReplaceResult 会？<br>
+        <input type="radio" name="q4" value="a"> 取消 WorkManager 任务<br>
+        <input type="radio" name="q4" value="b"> 只复位状态，不取消任务
+      </label>
+      <label>5. RAR 策略是？<br>
+        <input type="radio" name="q5" value="a"> Toast 后继续解压<br>
+        <input type="radio" name="q5" value="b"> 创建输出前失败
+      </label>
+      <button type="submit">提交测验</button>
+    </form>
+    <p id="score" class="muted">尚未提交</p>
+  </div>
+</main>
+<script>
+const answers = {q1:'b',q2:'b',q3:'a',q4:'b',q5:'b'};
+document.getElementById('quiz').addEventListener('submit', function(e){
+  e.preventDefault();
+  let ok=0, total=5;
+  Object.keys(answers).forEach(k=>{
+    const el=document.querySelector('input[name="'+k+'"]:checked');
+    if(el && el.value===answers[k]) ok++;
+  });
+  const pct=Math.round(ok/total*100);
+  const node=document.getElementById('score');
+  node.className = pct>=80 ? 'ok' : 'bad';
+  node.textContent = '得分 '+pct+'%（'+ok+'/'+total+'）。及格线 80%。答案不在提交前展示。';
+});
+</script>
+</body>
+</html>
