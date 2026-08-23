@@ -14,10 +14,6 @@ import androidx.compose.ui.semantics.*
  *
  * @version V11.0.0 - Accessibility
  */
-
-/**
- * 添加无障碍内容描述
- */
 fun Modifier.accessibilityDescription(description: String): Modifier =
     semantics {
         contentDescription = description

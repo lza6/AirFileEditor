@@ -21,7 +21,7 @@ fun TaskProgressOverlay(
     onCancel: () -> Unit,
     onRetry: () -> Unit,
     onDismiss: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
@@ -33,13 +33,14 @@ fun TaskProgressOverlay(
     if (uiState.isReplacing || isTerminal) {
         Surface(
             modifier = modifier.fillMaxSize(),
-            color = MaterialTheme.colorScheme.background.copy(alpha = 0.95f)
+            color = MaterialTheme.colorScheme.background.copy(alpha = 0.95f),
         ) {
             LazyColumn(
-                modifier = Modifier
-                    .padding(24.dp)
-                    .fillMaxSize(),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                modifier =
+                    Modifier
+                        .padding(24.dp)
+                        .fillMaxSize(),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 item {
                     Text(
@@ -56,7 +57,7 @@ fun TaskProgressOverlay(
                                 TaskPhase.COMPLETED -> MaterialTheme.colorScheme.tertiary
                                 TaskPhase.FAILURE -> MaterialTheme.colorScheme.error
                                 else -> MaterialTheme.colorScheme.primary
-                            }
+                            },
                     )
                 }
 
@@ -69,7 +70,7 @@ fun TaskProgressOverlay(
                         speedMBps = uiState.speedMBps,
                         phase = uiState.phase,
                         isReplacing = uiState.isReplacing,
-                        onCancel = onCancel
+                        onCancel = onCancel,
                     )
                 }
 
@@ -78,7 +79,7 @@ fun TaskProgressOverlay(
                         ApmDashboardCard(
                             ioWaitMs = uiState.ioWaitMs,
                             ipcLatencyMs = uiState.ipcLatencyMs,
-                            memoryUsagePercent = uiState.memoryUsagePercent
+                            memoryUsagePercent = uiState.memoryUsagePercent,
                         )
                     }
                 }
@@ -148,27 +149,37 @@ private fun TerminalSummaryCard(
     isError: Boolean,
 ) {
     Card(
-        colors = CardDefaults.cardColors(
-            containerColor =
-                if (isError) MaterialTheme.colorScheme.errorContainer
-                else MaterialTheme.colorScheme.tertiaryContainer
-        ),
-        modifier = Modifier.fillMaxWidth()
+        colors =
+            CardDefaults.cardColors(
+                containerColor =
+                    if (isError) {
+                        MaterialTheme.colorScheme.errorContainer
+                    } else {
+                        MaterialTheme.colorScheme.tertiaryContainer
+                    },
+            ),
+        modifier = Modifier.fillMaxWidth(),
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(
                 text = title,
                 style = MaterialTheme.typography.labelLarge,
                 color =
-                    if (isError) MaterialTheme.colorScheme.onErrorContainer
-                    else MaterialTheme.colorScheme.onTertiaryContainer
+                    if (isError) {
+                        MaterialTheme.colorScheme.onErrorContainer
+                    } else {
+                        MaterialTheme.colorScheme.onTertiaryContainer
+                    },
             )
             Text(
                 text = detail,
                 style = MaterialTheme.typography.bodyMedium,
                 color =
-                    if (isError) MaterialTheme.colorScheme.onErrorContainer
-                    else MaterialTheme.colorScheme.onTertiaryContainer
+                    if (isError) {
+                        MaterialTheme.colorScheme.onErrorContainer
+                    } else {
+                        MaterialTheme.colorScheme.onTertiaryContainer
+                    },
             )
         }
     }
@@ -177,21 +188,22 @@ private fun TerminalSummaryCard(
 @Composable
 fun ErrorMessageCard(message: String) {
     Card(
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.errorContainer
-        ),
-        modifier = Modifier.fillMaxWidth()
+        colors =
+            CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.errorContainer,
+            ),
+        modifier = Modifier.fillMaxWidth(),
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(
                 text = "错误",
                 style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onErrorContainer
+                color = MaterialTheme.colorScheme.onErrorContainer,
             )
             Text(
                 text = message,
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onErrorContainer
+                color = MaterialTheme.colorScheme.onErrorContainer,
             )
         }
     }

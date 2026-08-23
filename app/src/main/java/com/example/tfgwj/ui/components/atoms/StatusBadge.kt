@@ -9,7 +9,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -26,33 +25,35 @@ enum class TaskStatus {
     RUNNING,
     SUCCESS,
     FAILED,
-    PAUSED
+    PAUSED,
 }
 
 @Composable
 fun StatusBadge(
     status: TaskStatus,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
-    val (text, bgColor, textColor) = when (status) {
-        TaskStatus.IDLE -> Triple("空闲", MaterialTheme.colorScheme.surfaceVariant, MaterialTheme.colorScheme.onSurfaceVariant)
-        TaskStatus.RUNNING -> Triple("进行中", MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.onPrimaryContainer)
-        TaskStatus.SUCCESS -> Triple("成功", Green40.copy(alpha = 0.2f), Green40)
-        TaskStatus.FAILED -> Triple("失败", Red40.copy(alpha = 0.2f), Red40)
-        TaskStatus.PAUSED -> Triple("已暂停", Orange40.copy(alpha = 0.2f), Orange40)
-    }
+    val (text, bgColor, textColor) =
+        when (status) {
+            TaskStatus.IDLE -> Triple("空闲", MaterialTheme.colorScheme.surfaceVariant, MaterialTheme.colorScheme.onSurfaceVariant)
+            TaskStatus.RUNNING -> Triple("进行中", MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.onPrimaryContainer)
+            TaskStatus.SUCCESS -> Triple("成功", Green40.copy(alpha = 0.2f), Green40)
+            TaskStatus.FAILED -> Triple("失败", Red40.copy(alpha = 0.2f), Red40)
+            TaskStatus.PAUSED -> Triple("已暂停", Orange40.copy(alpha = 0.2f), Orange40)
+        }
 
     Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(4.dp))
-            .background(bgColor)
-            .padding(horizontal = 8.dp, vertical = 2.dp)
+        modifier =
+            modifier
+                .clip(RoundedCornerShape(4.dp))
+                .background(bgColor)
+                .padding(horizontal = 8.dp, vertical = 2.dp),
     ) {
         Text(
             text = text,
             color = textColor,
             fontSize = 10.sp,
-            fontWeight = FontWeight.Bold
+            fontWeight = FontWeight.Bold,
         )
     }
 }

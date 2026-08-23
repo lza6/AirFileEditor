@@ -6,7 +6,6 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.util.Log
 import android.view.View
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
@@ -15,11 +14,9 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.ViewCompositionStrategy
-import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.example.tfgwj.data.PreferencesManager
 import com.example.tfgwj.databinding.ActivityMainBinding
-import com.example.tfgwj.domain.model.EnvironmentStatus
 import com.example.tfgwj.domain.model.TaskPhase
 import com.example.tfgwj.manager.*
 import com.example.tfgwj.performance.PerformanceMonitor
@@ -36,7 +33,6 @@ import com.example.tfgwj.ui.mvi.*
 import com.example.tfgwj.ui.theme.TfgwjTheme
 import com.example.tfgwj.utils.*
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
@@ -64,17 +60,20 @@ class MainActivity : AppCompatActivity() {
     }
 
     // 权限请求
-    private val storagePermissionLauncher = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
-        if (permissions.values.all { it }) checkAllPermissions()
-    }
+    private val storagePermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
+            if (permissions.values.all { it }) checkAllPermissions()
+        }
 
-    private val manageStorageLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
-        checkAllPermissions()
-    }
+    private val manageStorageLauncher =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+            checkAllPermissions()
+        }
 
-    private val folderPickerLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        if (result.resultCode == RESULT_OK) result.data?.data?.let { handleSelectedFolder(it) }
-    }
+    private val folderPickerLauncher =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            if (result.resultCode == RESULT_OK) result.data?.data?.let { handleSelectedFolder(it) }
+        }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -142,10 +141,22 @@ class MainActivity : AppCompatActivity() {
     private fun initViews() {
         binding.toolbar.setOnMenuItemClickListener {
             when (it.itemId) {
-                R.id.action_wechat -> { openWechat(); true }
-                R.id.action_github -> { openGithub(); true }
-                R.id.action_help -> { HelpDialog.show(this); true }
-                R.id.action_stealth -> { showPhantomStealthDialog(); true }
+                R.id.action_wechat -> {
+                    openWechat()
+                    true
+                }
+                R.id.action_github -> {
+                    openGithub()
+                    true
+                }
+                R.id.action_help -> {
+                    HelpDialog.show(this)
+                    true
+                }
+                R.id.action_stealth -> {
+                    showPhantomStealthDialog()
+                    true
+                }
                 else -> false
             }
         }
@@ -171,8 +182,11 @@ class MainActivity : AppCompatActivity() {
     private fun setupObservers() {
         lifecycleScope.launch {
             preferencesManager.lockedTimeEnabled.collectLatest { enabled ->
-                if (enabled) preferencesManager.lockedTime.collectLatest { replacingViewModel.handleIntent(ReplacingIntent.LockFileTime(it)) }
-                else replacingViewModel.handleIntent(ReplacingIntent.UnlockFileTime)
+                if (enabled) {
+                    preferencesManager.lockedTime.collectLatest { replacingViewModel.handleIntent(ReplacingIntent.LockFileTime(it)) }
+                } else {
+                    replacingViewModel.handleIntent(ReplacingIntent.UnlockFileTime)
+                }
             }
         }
         lifecycleScope.launch {
@@ -193,10 +207,19 @@ class MainActivity : AppCompatActivity() {
                 val status by permissionManager.permissionStatus.collectAsState()
                 replacingViewModel.updatePermissions(status.hasManageStorage, status.hasShizukuPermission)
                 PermissionCard(status = status, onRequestPermission = { requestPermissions() }, onManualSelectMode = {
-                    com.example.tfgwj.ui.ModeSelectionDialog.show(this@MainActivity, permissionManager, object : com.example.tfgwj.ui.ModeSelectionDialog.Callback {
-                        override fun onModeSelected(mode: PermissionChecker.AccessMode) { lifecycleScope.launch { if (permissionManager.manuallySelectMode(mode)) checkEnvironment() } }
-                        override fun onRequestShizukuPermission() { permissionManager.requestShizukuPermission() }
-                    })
+                    com.example.tfgwj.ui.ModeSelectionDialog.show(
+                        this@MainActivity,
+                        permissionManager,
+                        object : com.example.tfgwj.ui.ModeSelectionDialog.Callback {
+                            override fun onModeSelected(mode: PermissionChecker.AccessMode) {
+                                lifecycleScope.launch { if (permissionManager.manuallySelectMode(mode)) checkEnvironment() }
+                            }
+
+                            override fun onRequestShizukuPermission() {
+                                permissionManager.requestShizukuPermission()
+                            }
+                        },
+                    )
                 })
             }
         }
@@ -207,17 +230,21 @@ class MainActivity : AppCompatActivity() {
             TfgwjTheme {
                 val uiState by replacingViewModel.uiState.collectAsState()
                 val progressState by ReplaceProgressManager.progressState.collectAsState()
-                val ioStats = PerformanceMonitor.getIOStats().let { if (progressState.speed > 0f) it.copy(avgSpeedMBps = progressState.speed.toDouble()) else it }
-                val taskStatus = when {
-                    uiState.isReplacing -> com.example.tfgwj.ui.components.atoms.TaskStatus.RUNNING
-                    uiState.errorMessage != null -> com.example.tfgwj.ui.components.atoms.TaskStatus.FAILED
-                    uiState.phase == com.example.tfgwj.domain.model.TaskPhase.COMPLETED -> com.example.tfgwj.ui.components.atoms.TaskStatus.SUCCESS
-                    uiState.isPaused -> com.example.tfgwj.ui.components.atoms.TaskStatus.PAUSED
-                    else -> com.example.tfgwj.ui.components.atoms.TaskStatus.IDLE
-                }
+                val ioStats =
+                    PerformanceMonitor.getIOStats().let {
+                        if (progressState.speed > 0f) it.copy(avgSpeedMBps = progressState.speed.toDouble()) else it
+                    }
+                val taskStatus =
+                    when {
+                        uiState.isReplacing -> com.example.tfgwj.ui.components.atoms.TaskStatus.RUNNING
+                        uiState.errorMessage != null -> com.example.tfgwj.ui.components.atoms.TaskStatus.FAILED
+                        uiState.phase == com.example.tfgwj.domain.model.TaskPhase.COMPLETED -> com.example.tfgwj.ui.components.atoms.TaskStatus.SUCCESS
+                        uiState.isPaused -> com.example.tfgwj.ui.components.atoms.TaskStatus.PAUSED
+                        else -> com.example.tfgwj.ui.components.atoms.TaskStatus.IDLE
+                    }
                 com.example.tfgwj.ui.components.organisms.MainDashboard(
                     ioStats = ioStats,
-                    currentStatus = taskStatus
+                    currentStatus = taskStatus,
                 )
             }
         }
@@ -246,7 +273,11 @@ class MainActivity : AppCompatActivity() {
                         it.phase == com.example.tfgwj.domain.model.TaskPhase.FAILURE ||
                         it.phase == com.example.tfgwj.domain.model.TaskPhase.COMPLETED ||
                         it.phase == com.example.tfgwj.domain.model.TaskPhase.CANCELLED
-                    ) View.VISIBLE else View.GONE
+                    ) {
+                        View.VISIBLE
+                    } else {
+                        View.GONE
+                    }
             }
         }
     }
@@ -266,7 +297,7 @@ class MainActivity : AppCompatActivity() {
                     onApplyLockedTime = { applyLockedTime() },
                     onStartReplace = { startReplaceToGame() },
                     onLaunchGame = { launchGame() },
-                    onCleanEnvironment = { confirmCleanEnvironment() }
+                    onCleanEnvironment = { confirmCleanEnvironment() },
                 )
             }
         }
@@ -281,7 +312,7 @@ class MainActivity : AppCompatActivity() {
                     onSelectPatch = { replacingViewModel.handleIntent(ReplacingIntent.SelectPatch(it)) },
                     onScanArchives = { scanArchives() },
                     onRefreshPatches = { loadPatchVersions() },
-                    onExtractAndUpdate = { scanAndExtractArchive() }
+                    onExtractAndUpdate = { scanAndExtractArchive() },
                 )
             }
         }
@@ -295,7 +326,10 @@ class MainActivity : AppCompatActivity() {
                     logs = if (state.logContent.isEmpty()) listOf("等待日志输出...") else state.logContent.split("\n"),
                     logSize = state.logSize,
                     onCopyLogs = { copyLogsToClipboard() },
-                    onClearLogs = { replacingViewModel.handleIntent(ReplacingIntent.ClearLogs); AppLogger.clearMemoryLogs() }
+                    onClearLogs = {
+                        replacingViewModel.handleIntent(ReplacingIntent.ClearLogs)
+                        AppLogger.clearMemoryLogs()
+                    },
                 )
             }
         }
@@ -305,8 +339,11 @@ class MainActivity : AppCompatActivity() {
         lifecycleScope.launch {
             val status = permissionManager.checkAllPermissions()
             if (!status.hasManageStorage) {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) permissionManager.requestManageStoragePermission(this@MainActivity, manageStorageLauncher)
-                else permissionManager.requestStoragePermission(storagePermissionLauncher)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    permissionManager.requestManageStoragePermission(this@MainActivity, manageStorageLauncher)
+                } else {
+                    permissionManager.requestStoragePermission(storagePermissionLauncher)
+                }
             } else if (status.bestMode == PermissionChecker.AccessMode.SHIZUKU && !status.hasShizukuPermission) {
                 permissionManager.requestShizukuPermission { if (it) checkAllPermissions() }
             }
@@ -316,18 +353,27 @@ class MainActivity : AppCompatActivity() {
     private fun showAppSelectorDialog() {
         lifecycleScope.launch {
             val current = preferencesManager.appPackageName.first()
-            val all = try {
-                packageManager.getInstalledApplications(PackageManager.GET_META_DATA)
-                    .filter { it.flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM == 0 }
-                    .sortedBy { it.loadLabel(packageManager).toString() }
-                    .map { AppInfo(it.packageName, it.loadLabel(packageManager).toString()) }
-            } catch (e: Exception) { PermissionChecker.getSupportedAppsList().map { AppInfo(it.packageName, it.displayName) } }
-            MaterialAlertDialogBuilder(this@MainActivity).setTitle("选择应用").setSingleChoiceItems(all.map { "${it.name} (${it.packageName})" }.toTypedArray(), all.indexOfFirst { it.packageName == current }.coerceAtLeast(0)) { dialog, which ->
+            val all =
+                try {
+                    packageManager.getInstalledApplications(PackageManager.GET_META_DATA)
+                        .filter { it.flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM == 0 }
+                        .sortedBy { it.loadLabel(packageManager).toString() }
+                        .map { AppInfo(it.packageName, it.loadLabel(packageManager).toString()) }
+                } catch (e: Exception) {
+                    PermissionChecker.getSupportedAppsList().map { AppInfo(it.packageName, it.displayName) }
+                }
+            MaterialAlertDialogBuilder(this@MainActivity).setTitle("选择应用").setSingleChoiceItems(
+                all.map {
+                    "${it.name} (${it.packageName})"
+                }.toTypedArray(),
+                all.indexOfFirst { it.packageName == current }.coerceAtLeast(0),
+            ) { dialog, which ->
                 lifecycleScope.launch {
                     preferencesManager.setAppPackageName(all[which].packageName)
                     updateAppInfoDisplay(all[which].packageName)
                     loadMainPacks()
-                    delay(500); checkEnvironment()
+                    delay(500)
+                    checkEnvironment()
                 }
                 dialog.dismiss()
             }.setNegativeButton("取消", null).show()
@@ -335,12 +381,25 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateAppInfoDisplay(packageName: String) {
-        lifecycleScope.launch { replacingViewModel.updateMainPackInfo(replacingViewModel.uiState.value.selectedMainPackPath, AppIconHelper.getAppName(this@MainActivity, packageName), AppIconHelper.getAppIcon(this@MainActivity, packageName), packageName) }
+        lifecycleScope.launch {
+            replacingViewModel.updateMainPackInfo(
+                replacingViewModel.uiState.value.selectedMainPackPath,
+                AppIconHelper.getAppName(this@MainActivity, packageName),
+                AppIconHelper.getAppIcon(this@MainActivity, packageName),
+                packageName,
+            )
+        }
     }
 
-    private fun loadAppIcon() { lifecycleScope.launch { updateAppInfoDisplay(preferencesManager.appPackageName.first()) } }
+    private fun loadAppIcon() {
+        lifecycleScope.launch { updateAppInfoDisplay(preferencesManager.appPackageName.first()) }
+    }
 
-    private fun loadWechatIcon() { lifecycleScope.launch { AppIconHelper.getWechatIcon(this@MainActivity)?.let { binding.toolbar.menu.findItem(R.id.action_wechat)?.icon = it } } }
+    private fun loadWechatIcon() {
+        lifecycleScope.launch {
+            AppIconHelper.getWechatIcon(this@MainActivity)?.let { binding.toolbar.menu.findItem(R.id.action_wechat)?.icon = it }
+        }
+    }
 
     private fun loadMainPacks() {
         replacingViewModel.handleIntent(ReplacingIntent.ScanMainPacks)
@@ -378,14 +437,17 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun loadPatchVersions() { replacingViewModel.handleIntent(ReplacingIntent.RefreshPatches) }
+    private fun loadPatchVersions() {
+        replacingViewModel.handleIntent(ReplacingIntent.RefreshPatches)
+    }
 
     private fun handleSelectedFolder(uri: Uri) {
         getPathFromUri(uri)?.let { path ->
             lifecycleScope.launch {
                 val targetPackage = preferencesManager.appPackageName.first()
                 replacingViewModel.updateMainPackInfo(path, File(path).name, null, targetPackage)
-                preferencesManager.saveLastSelectedFolderPath(path); preferencesManager.saveLastMainPackPath(path)
+                preferencesManager.saveLastSelectedFolderPath(path)
+                preferencesManager.saveLastMainPackPath(path)
                 loadPatchVersions()
             }
             AppLogger.action("选择源文件夹", path)
@@ -396,22 +458,57 @@ class MainActivity : AppCompatActivity() {
         val docId = android.provider.DocumentsContract.getTreeDocumentId(uri)
         val split = docId.split(":")
         return if (split.size >= 2) {
-            if (split[0] == "primary" || split[0] == "home") "/storage/emulated/0/${split[1]}"
-            else getStoragePathByUuid(split[0])?.let { if (split[1].isNotEmpty()) "$it/${split[1]}" else it } ?: "/storage/${split[0]}${if (split[1].isNotEmpty()) "/${split[1]}" else ""}"
-        } else "/storage/emulated/0/$docId"
+            if (split[0] == "primary" || split[0] == "home") {
+                "/storage/emulated/0/${split[1]}"
+            } else {
+                getStoragePathByUuid(split[0])?.let {
+                    if (split[1].isNotEmpty()) "$it/${split[1]}" else it
+                } ?: "/storage/${split[0]}${if (split[1].isNotEmpty()) "/${split[1]}" else ""}"
+            }
+        } else {
+            "/storage/emulated/0/$docId"
+        }
     }
 
-    private fun getStoragePathByUuid(uuid: String): String? = try { getSystemService(android.os.storage.StorageManager::class.java).storageVolumes.find { it.uuid?.equals(uuid, true) == true }?.directory?.absolutePath } catch (e: Exception) { null }
+    private fun getStoragePathByUuid(uuid: String): String? =
+        try {
+            getSystemService(android.os.storage.StorageManager::class.java).storageVolumes.find {
+                it.uuid?.equals(uuid, true) == true
+            }?.directory?.absolutePath
+        } catch (e: Exception) {
+            null
+        }
 
     private fun showTimePickerDialog() {
         val path = replacingViewModel.uiState.value.selectedMainPackPath ?: return
         val helper = TimePickerHelper(this, lifecycleScope)
-        helper.setOnTimeSelectedListener(object : TimePickerHelper.OnTimeSelectedListener {
-            override fun onTimeSelected(time: Long, formatted: String) { MaterialAlertDialogBuilder(this@MainActivity).setTitle("确认修改时间").setMessage("将文件时间修改为: $formatted?").setPositiveButton("确定") { _, _ -> helper.applyTimeToFolder(path, time) }.setNegativeButton("取消", null).show() }
-            override fun onApplyStarted() {}
-            override fun onApplyCompleted(count: Int, formatted: String) { Toast.makeText(this@MainActivity, "已修改 $count 个文件", Toast.LENGTH_SHORT).show() }
-            override fun onApplyFailed(error: String) {}
-        })
+        helper.setOnTimeSelectedListener(
+            object : TimePickerHelper.OnTimeSelectedListener {
+                override fun onTimeSelected(
+                    time: Long,
+                    formatted: String,
+                ) {
+                    MaterialAlertDialogBuilder(
+                        this@MainActivity,
+                    ).setTitle(
+                        "确认修改时间",
+                    ).setMessage(
+                        "将文件时间修改为: $formatted?",
+                    ).setPositiveButton("确定") { _, _ -> helper.applyTimeToFolder(path, time) }.setNegativeButton("取消", null).show()
+                }
+
+                override fun onApplyStarted() {}
+
+                override fun onApplyCompleted(
+                    count: Int,
+                    formatted: String,
+                ) {
+                    Toast.makeText(this@MainActivity, "已修改 $count 个文件", Toast.LENGTH_SHORT).show()
+                }
+
+                override fun onApplyFailed(error: String) {}
+            },
+        )
         helper.showDateTimePicker(FileTimeModifier.getFileTime(path) ?: System.currentTimeMillis())
     }
 
@@ -419,8 +516,17 @@ class MainActivity : AppCompatActivity() {
         val path = replacingViewModel.uiState.value.selectedMainPackPath ?: return
         lifecycleScope.launch {
             val locked = preferencesManager.getLockedTimeIfEnabled()
-            if (locked != null) { preferencesManager.unlockTime(); replacingViewModel.handleIntent(ReplacingIntent.UnlockFileTime); Toast.makeText(this@MainActivity, "🔓 已解锁时间", Toast.LENGTH_SHORT).show() }
-            else FileTimeModifier.getFileTime(path)?.let { preferencesManager.lockTime(it); replacingViewModel.handleIntent(ReplacingIntent.LockFileTime(it)); Toast.makeText(this@MainActivity, "✓ 已锁定时间: ${FileTimeModifier.formatTime(it)}", Toast.LENGTH_SHORT).show() }
+            if (locked != null) {
+                preferencesManager.unlockTime()
+                replacingViewModel.handleIntent(ReplacingIntent.UnlockFileTime)
+                Toast.makeText(this@MainActivity, "🔓 已解锁时间", Toast.LENGTH_SHORT).show()
+            } else {
+                FileTimeModifier.getFileTime(path)?.let {
+                    preferencesManager.lockTime(it)
+                    replacingViewModel.handleIntent(ReplacingIntent.LockFileTime(it))
+                    Toast.makeText(this@MainActivity, "✓ 已锁定时间: ${FileTimeModifier.formatTime(it)}", Toast.LENGTH_SHORT).show()
+                }
+            }
         }
     }
 
@@ -428,7 +534,14 @@ class MainActivity : AppCompatActivity() {
         val path = replacingViewModel.uiState.value.selectedMainPackPath ?: return
         lifecycleScope.launch {
             preferencesManager.getLockedTimeIfEnabled()?.let { time ->
-                MaterialAlertDialogBuilder(this@MainActivity).setTitle("应用锁定时间").setMessage("将文件时间修改为锁定的时间: ${FileTimeModifier.formatTime(time)}?").setPositiveButton("确定") { _, _ -> lifecycleScope.launch { val (count, _) = FileTimeModifier.setCustomTime(path, time); Toast.makeText(this@MainActivity, "已修改 $count 个文件", Toast.LENGTH_LONG).show() } }.setNegativeButton("取消", null).show()
+                MaterialAlertDialogBuilder(
+                    this@MainActivity,
+                ).setTitle("应用锁定时间").setMessage("将文件时间修改为锁定的时间: ${FileTimeModifier.formatTime(time)}?").setPositiveButton("确定") { _, _ ->
+                    lifecycleScope.launch {
+                        val (count, _) = FileTimeModifier.setCustomTime(path, time)
+                        Toast.makeText(this@MainActivity, "已修改 $count 个文件", Toast.LENGTH_LONG).show()
+                    }
+                }.setNegativeButton("取消", null).show()
             }
         }
     }
@@ -452,30 +565,99 @@ class MainActivity : AppCompatActivity() {
                 return@launch
             }
             val status = permissionManager.checkAllPermissions()
-            if (!status.hasManageStorage) requestPermissions()
-            else if (status.bestMode != PermissionChecker.AccessMode.NONE) replacingViewModel.handleIntent(ReplacingIntent.StartReplace(path, targetPackage))
-            else MaterialAlertDialogBuilder(this@MainActivity).setTitle("环境未验证").setMessage("强制尝试执行替换？").setPositiveButton("强制执行") { _, _ -> replacingViewModel.handleIntent(ReplacingIntent.StartReplace(path, targetPackage)) }.setNegativeButton("去授权", { _, _ -> requestPermissions() }).show()
+            if (!status.hasManageStorage) {
+                requestPermissions()
+            } else if (status.bestMode != PermissionChecker.AccessMode.NONE) {
+                replacingViewModel.handleIntent(ReplacingIntent.StartReplace(path, targetPackage))
+            } else {
+                MaterialAlertDialogBuilder(
+                    this@MainActivity,
+                ).setTitle(
+                    "环境未验证",
+                ).setMessage(
+                    "强制尝试执行替换？",
+                ).setPositiveButton(
+                    "强制执行",
+                ) { _, _ ->
+                    replacingViewModel.handleIntent(
+                        ReplacingIntent.StartReplace(path, targetPackage),
+                    )
+                }.setNegativeButton("去授权", { _, _ -> requestPermissions() }).show()
+            }
         }
     }
 
-    private fun launchGame() { lifecycleScope.launch { val pkg = preferencesManager.appPackageName.first(); if (pkg.isBlank()) { Toast.makeText(this@MainActivity, "请先选择目标应用", Toast.LENGTH_SHORT).show(); return@launch }; try { packageManager.getLaunchIntentForPackage(pkg)?.let { startActivity(it) } ?: Toast.makeText(this@MainActivity, "未找到游戏", Toast.LENGTH_SHORT).show() } catch (e: Exception) { Toast.makeText(this@MainActivity, "启动失败", Toast.LENGTH_SHORT).show() } } }
+    private fun launchGame() {
+        lifecycleScope.launch {
+            val pkg = preferencesManager.appPackageName.first()
+            if (pkg.isBlank()) {
+                Toast.makeText(this@MainActivity, "请先选择目标应用", Toast.LENGTH_SHORT).show()
+                return@launch
+            }
+            try {
+                packageManager.getLaunchIntentForPackage(pkg)?.let {
+                    startActivity(it)
+                } ?: Toast.makeText(this@MainActivity, "未找到游戏", Toast.LENGTH_SHORT).show()
+            } catch (e: Exception) {
+                Toast.makeText(this@MainActivity, "启动失败", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
 
     private fun confirmCleanEnvironment() {
         MaterialAlertDialogBuilder(this).setTitle("🧹 清理环境确认").setMessage("确定要清理 Saved 目录吗？").setPositiveButton("立即清理") { _, _ ->
-            lifecycleScope.launch { val pkg = preferencesManager.appPackageName.first(); if (pkg.isBlank()) { Toast.makeText(this@MainActivity, "请先选择目标应用", Toast.LENGTH_SHORT).show(); return@launch }; SmartCacheManager.cleanEnvironment(this@MainActivity, pkg, shizukuManager) { _, _, _ -> }; Toast.makeText(this@MainActivity, "✅ 清理完成", Toast.LENGTH_LONG).show() }
+            lifecycleScope.launch {
+                val pkg = preferencesManager.appPackageName.first()
+                if (pkg.isBlank()) {
+                    Toast.makeText(this@MainActivity, "请先选择目标应用", Toast.LENGTH_SHORT).show()
+                    return@launch
+                }
+                SmartCacheManager.cleanEnvironment(this@MainActivity, pkg, shizukuManager) { _, _, _ -> }
+                Toast.makeText(this@MainActivity, "✅ 清理完成", Toast.LENGTH_LONG).show()
+            }
         }.setNegativeButton("取消", null).show()
     }
 
     private fun checkEnvironment(forceRefresh: Boolean = false) {
         lifecycleScope.launch {
             if (forceRefresh) {
-                try { val pkg = preferencesManager.appPackageName.first(); if (pkg.isNotBlank()) { Runtime.getRuntime().exec(arrayOf("am", "force-stop", pkg)).waitFor(); delay(500) } } catch (e: Exception) {}
+                try {
+                    val pkg = preferencesManager.appPackageName.first()
+                    if (pkg.isNotBlank()) {
+                        Runtime.getRuntime().exec(arrayOf("am", "force-stop", pkg)).waitFor()
+                        delay(500)
+                    }
+                } catch (
+                    e: Exception,
+                ) {
+                }
             }
             replacingViewModel.handleIntent(ReplacingIntent.CheckEnvironment)
         }
     }
 
-    private fun scanArchives() { lifecycleScope.launch { val archives = ArchiveScanner.getInstance().scanArchives(); if (archives.isEmpty()) Toast.makeText(this@MainActivity, "未找到压缩包", Toast.LENGTH_SHORT).show() else MaterialAlertDialogBuilder(this@MainActivity).setTitle("选择压缩包解压").setItems(archives.map { "${it.name} (${it.sizeText})" }.toTypedArray()) { _, which -> lifecycleScope.launch { if (ExtractManager.getInstance().extractToCache(archives[which].path, null).success) loadPatchVersions() } }.setNegativeButton("取消", null).show() } }
+    private fun scanArchives() {
+        lifecycleScope.launch {
+            val archives = ArchiveScanner.getInstance().scanArchives()
+            if (archives.isEmpty()) {
+                Toast.makeText(
+                    this@MainActivity,
+                    "未找到压缩包",
+                    Toast.LENGTH_SHORT,
+                ).show()
+            } else {
+                MaterialAlertDialogBuilder(this@MainActivity).setTitle("选择压缩包解压").setItems(
+                    archives.map {
+                        "${it.name} (${it.sizeText})"
+                    }.toTypedArray(),
+                ) { _, which ->
+                    lifecycleScope.launch {
+                        if (ExtractManager.getInstance().extractToCache(archives[which].path, null).success) loadPatchVersions()
+                    }
+                }.setNegativeButton("取消", null).show()
+            }
+        }
+    }
 
     private fun scanAndExtractArchive() {
         val path = replacingViewModel.uiState.value.selectedMainPackPath ?: return
@@ -488,76 +670,126 @@ class MainActivity : AppCompatActivity() {
                 return@launch
             }
             val archives = ArchiveScanner.getInstance().scanArchives()
-            if (archives.isEmpty()) Toast.makeText(this@MainActivity, "未找到压缩包", Toast.LENGTH_SHORT).show()
-            else MaterialAlertDialogBuilder(this@MainActivity).setTitle("选择压缩包解压到主包").setItems(archives.map { "${it.name} (${it.sizeText})" }.toTypedArray()) { _, which ->
-                lifecycleScope.launch {
-                    val result = ExtractManager.getInstance().extractToCache(archives[which].path, null, File(archives[which].path).nameWithoutExtension)
-                    if (result.success) {
-                        val target = File(mainPackManager.getConfigPath(path, pkg))
-                        if (!target.exists()) target.mkdirs()
-                        val extractedRoot = File(result.outputPath)
-                        val allFiles = extractedRoot.walkTopDown().filter { it.isFile }.toList()
-                        val copyResult = IoOptimizer.parallelProcess(
-                            allFiles,
-                            action = { source ->
-                                val relativePath = source.relativeTo(extractedRoot).path.replace(File.separatorChar, '/')
-                                val destination = ArchiveEntryValidator.resolveWithin(target, relativePath)
-                                destination.parentFile?.mkdirs()
-                                if (IoOptimizer.needsUpdate(source, destination)) IoOptimizer.fastCopy(source, destination) else true
-                            },
-                        ) { _, _, _ -> }
-                        if (copyResult.success) {
-                            loadPatchVersions()
-                        } else {
-                            Toast.makeText(this@MainActivity, "部分更新文件复制失败", Toast.LENGTH_LONG).show()
+            if (archives.isEmpty()) {
+                Toast.makeText(this@MainActivity, "未找到压缩包", Toast.LENGTH_SHORT).show()
+            } else {
+                MaterialAlertDialogBuilder(this@MainActivity).setTitle("选择压缩包解压到主包").setItems(
+                    archives.map {
+                        "${it.name} (${it.sizeText})"
+                    }.toTypedArray(),
+                ) { _, which ->
+                    lifecycleScope.launch {
+                        val result =
+                            ExtractManager.getInstance().extractToCache(
+                                archives[which].path,
+                                null,
+                                File(archives[which].path).nameWithoutExtension,
+                            )
+                        if (result.success) {
+                            val target = File(mainPackManager.getConfigPath(path, pkg))
+                            if (!target.exists()) target.mkdirs()
+                            val extractedRoot = File(result.outputPath)
+                            val allFiles = extractedRoot.walkTopDown().filter { it.isFile }.toList()
+                            val copyResult =
+                                IoOptimizer.parallelProcess(
+                                    allFiles,
+                                    action = { source ->
+                                        val relativePath = source.relativeTo(extractedRoot).path.replace(File.separatorChar, '/')
+                                        val destination = ArchiveEntryValidator.resolveWithin(target, relativePath)
+                                        destination.parentFile?.mkdirs()
+                                        if (IoOptimizer.needsUpdate(
+                                                source,
+                                                destination,
+                                            )
+                                        ) {
+                                            IoOptimizer.fastCopy(source, destination)
+                                        } else {
+                                            true
+                                        }
+                                    },
+                                ) { _, _, _ -> }
+                            if (copyResult.success) {
+                                loadPatchVersions()
+                            } else {
+                                Toast.makeText(this@MainActivity, "部分更新文件复制失败", Toast.LENGTH_LONG).show()
+                            }
                         }
                     }
-                }
-            }.setNegativeButton("取消", null).show()
+                }.setNegativeButton("取消", null).show()
+            }
         }
     }
 
     private fun checkForUpdates() {
         lifecycleScope.launch {
             UpdateManager.checkUpdateAsync(this@MainActivity)?.let {
-                if (it.isUpdateAvailable) MaterialAlertDialogBuilder(this@MainActivity)
-                    .setTitle("新版本 V${it.latestVersion}")
-                    .setMessage(it.releaseNotes)
-                    .setPositiveButton("立即更新") { _, _ ->
-                        lifecycleScope.launch {
-                            UpdateManager.downloadApk(this@MainActivity, it.downloadUrl).collectLatest { progress ->
-                                when {
-                                    progress == 100 -> {
-                                        val result = AppInstaller.installApk(
-                                            this@MainActivity,
-                                            File(externalCacheDir, "update_tfgwj_ota.apk"),
-                                        )
-                                        when (result) {
-                                            is AppInstaller.InstallResult.Success ->
-                                                Toast.makeText(this@MainActivity, "已发起安装 (${result.mode})", Toast.LENGTH_SHORT).show()
-                                            is AppInstaller.InstallResult.Failure ->
-                                                Toast.makeText(this@MainActivity, "安装失败: ${result.reason}", Toast.LENGTH_LONG).show()
+                if (it.isUpdateAvailable) {
+                    MaterialAlertDialogBuilder(this@MainActivity)
+                        .setTitle("新版本 V${it.latestVersion}")
+                        .setMessage(it.releaseNotes)
+                        .setPositiveButton("立即更新") { _, _ ->
+                            lifecycleScope.launch {
+                                UpdateManager.downloadApk(this@MainActivity, it.downloadUrl).collectLatest { progress ->
+                                    when {
+                                        progress == 100 -> {
+                                            val result =
+                                                AppInstaller.installApk(
+                                                    this@MainActivity,
+                                                    File(externalCacheDir, "update_tfgwj_ota.apk"),
+                                                )
+                                            when (result) {
+                                                is AppInstaller.InstallResult.Success ->
+                                                    Toast.makeText(this@MainActivity, "已发起安装 (${result.mode})", Toast.LENGTH_SHORT).show()
+                                                is AppInstaller.InstallResult.Failure ->
+                                                    Toast.makeText(this@MainActivity, "安装失败: ${result.reason}", Toast.LENGTH_LONG).show()
+                                            }
                                         }
+                                        progress == -2 -> Toast.makeText(this@MainActivity, "更新包校验失败，已删除", Toast.LENGTH_LONG).show()
+                                        progress < 0 -> Toast.makeText(this@MainActivity, "更新下载失败", Toast.LENGTH_LONG).show()
                                     }
-                                    progress == -2 -> Toast.makeText(this@MainActivity, "更新包校验失败，已删除", Toast.LENGTH_LONG).show()
-                                    progress < 0 -> Toast.makeText(this@MainActivity, "更新下载失败", Toast.LENGTH_LONG).show()
                                 }
                             }
                         }
-                    }
-                    .setNegativeButton("稍后", null)
-                    .show()
+                        .setNegativeButton("稍后", null)
+                        .show()
+                }
             }
         }
     }
 
-    private fun openWechat() { val id = getString(R.string.author_wechat); (getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager).setPrimaryClip(android.content.ClipData.newPlainText("微信号", id)); try { packageManager.getLaunchIntentForPackage("com.tencent.mm")?.let { startActivity(it) }; Toast.makeText(this, "微信号已复制", Toast.LENGTH_LONG).show() } catch (e: Exception) {} }
+    private fun openWechat() {
+        val id = getString(R.string.author_wechat)
+        (
+            getSystemService(
+                Context.CLIPBOARD_SERVICE,
+            ) as android.content.ClipboardManager
+        ).setPrimaryClip(android.content.ClipData.newPlainText("微信号", id))
+        try {
+            packageManager.getLaunchIntentForPackage("com.tencent.mm")?.let { startActivity(it) }
+            Toast.makeText(this, "微信号已复制", Toast.LENGTH_LONG).show()
+        } catch (e: Exception) {
+        }
+    }
 
-    private fun openGithub() { try { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(getString(R.string.github_url)))) } catch (e: Exception) {} }
+    private fun openGithub() {
+        try {
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(getString(R.string.github_url))))
+        } catch (e: Exception) {
+        }
+    }
 
-    private fun showPhantomStealthDialog() { MaterialAlertDialogBuilder(this).setTitle("引爆隐匿").setMessage("是否立即引爆隐匿程序？").setPositiveButton("立刻隐匿") { _, _ -> StealthManager.execute(this) }.setNegativeButton("取消", null).show() }
+    private fun showPhantomStealthDialog() {
+        MaterialAlertDialogBuilder(
+            this,
+        ).setTitle(
+            "引爆隐匿",
+        ).setMessage("是否立即引爆隐匿程序？").setPositiveButton("立刻隐匿") { _, _ -> StealthManager.execute(this) }.setNegativeButton("取消", null).show()
+    }
 
     data class AppInfo(val packageName: String, val name: String)
 
-    override fun onDestroy() { super.onDestroy() ; AppLogger.close() }
+    override fun onDestroy() {
+        super.onDestroy()
+        AppLogger.close()
+    }
 }

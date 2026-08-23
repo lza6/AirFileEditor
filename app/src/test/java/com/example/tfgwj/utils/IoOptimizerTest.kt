@@ -8,7 +8,9 @@ import io.mockk.mockkObject
 import io.mockk.mockkStatic
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runTest
-import org.junit.Assert.*
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -22,7 +24,6 @@ import java.io.File
 @RunWith(RobolectricTestRunner::class)
 @Config(manifest = Config.NONE)
 class IoOptimizerTest {
-
     @get:Rule
     val tempFolder = TemporaryFolder()
 
@@ -83,20 +84,22 @@ class IoOptimizerTest {
     }
 
     @Test
-    fun `parallelProcess executes all actions`() = runTest {
-        val items = listOf("task1", "task2", "task3")
-        val completed = mutableListOf<String>()
+    fun `parallelProcess executes all actions`() =
+        runTest {
+            val items = listOf("task1", "task2", "task3")
+            val completed = mutableListOf<String>()
 
-        val result = IoOptimizer.parallelProcess(items, action = { item: String ->
-            completed.add(item)
-            true
-        })
+            val result =
+                IoOptimizer.parallelProcess(items, action = { item: String ->
+                    completed.add(item)
+                    true
+                })
 
-        assertTrue(result.success)
-        assertEquals(3, result.successCount)
-        assertEquals(3, completed.size)
-        assertTrue(completed.containsAll(items))
-    }
+            assertTrue(result.success)
+            assertEquals(3, result.successCount)
+            assertEquals(3, completed.size)
+            assertTrue(completed.containsAll(items))
+        }
 
     @Test
     fun `buffer pool reuses buffers`() {

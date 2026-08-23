@@ -3,7 +3,10 @@ package com.example.tfgwj.utils
 import android.util.Log
 import io.mockk.every
 import io.mockk.mockkStatic
-import org.junit.Assert.*
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -16,7 +19,6 @@ import java.io.File
 @RunWith(RobolectricTestRunner::class)
 @Config(manifest = Config.NONE)
 class FileHasherTest {
-
     @get:Rule
     val tempFolder = TemporaryFolder()
 

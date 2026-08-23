@@ -23,44 +23,53 @@ fun ModeSelectorItem(
     isSelected: Boolean,
     isRecommended: Boolean,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     val borderColor = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
-    val backgroundColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.1f) else MaterialTheme.colorScheme.surface
+    val backgroundColor =
+        if (isSelected) {
+            MaterialTheme.colorScheme.primaryContainer.copy(
+                alpha = 0.1f,
+            )
+        } else {
+            MaterialTheme.colorScheme.surface
+        }
 
     Surface(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .clickable(onClick = onClick),
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .clickable(onClick = onClick),
         shape = RoundedCornerShape(12.dp),
         color = backgroundColor,
-        border = BorderStroke(if (isSelected) 2.dp else 1.dp, borderColor)
+        border = BorderStroke(if (isSelected) 2.dp else 1.dp, borderColor),
     ) {
         Row(
-            modifier = Modifier
-                .padding(16.dp)
-                .fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
+            modifier =
+                Modifier
+                    .padding(16.dp)
+                    .fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         text = title,
                         style = MaterialTheme.typography.titleMedium,
-                        color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                        color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                     )
                     if (isRecommended) {
                         Spacer(modifier = Modifier.width(8.dp))
                         Surface(
                             color = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
-                            shape = RoundedCornerShape(4.dp)
+                            shape = RoundedCornerShape(4.dp),
                         ) {
                             Text(
                                 text = "推荐",
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                                 style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.primary
+                                color = MaterialTheme.colorScheme.primary,
                             )
                         }
                     }
@@ -69,13 +78,13 @@ fun ModeSelectorItem(
                 Text(
                     text = description,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
 
             RadioButton(
                 selected = isSelected,
-                onClick = null // Handled by surface clickable
+                onClick = null, // Handled by surface clickable
             )
         }
     }
@@ -87,11 +96,11 @@ fun ModeSelectorGroup(
     recommendedMode: PermissionChecker.AccessMode,
     androidVersion: Int,
     onModeSelected: (PermissionChecker.AccessMode) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     Column(
         modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         PermissionChecker.AccessMode.values().filter { it != PermissionChecker.AccessMode.NONE }.forEach { mode ->
             val (title, desc) = PermissionChecker.getModeDescription(mode, androidVersion)
@@ -101,7 +110,7 @@ fun ModeSelectorGroup(
                 description = desc,
                 isSelected = selectedMode == mode,
                 isRecommended = recommendedMode == mode,
-                onClick = { onModeSelected(mode) }
+                onClick = { onModeSelected(mode) },
             )
         }
     }

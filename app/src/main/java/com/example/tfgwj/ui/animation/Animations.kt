@@ -12,10 +12,6 @@ import androidx.compose.runtime.getValue
  *
  * @version V11.0.0 - Animation Enhancement
  */
-
-/**
- * 淡入淡出动画
- */
 @Composable
 fun FadeTransition(
     visible: Boolean,

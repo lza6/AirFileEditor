@@ -15,10 +15,6 @@ import androidx.compose.ui.unit.dp
  *
  * @version V11.0.0 - Responsive Layout
  */
-
-/**
- * 屏幕尺寸分类
- */
 enum class WindowSizeClass {
     COMPACT, // 手机竖屏 (< 600dp)
     MEDIUM, // 手机横屏/小平板 (600dp - 840dp)

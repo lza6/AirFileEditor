@@ -19,21 +19,22 @@ import androidx.compose.ui.unit.sp
 fun StatusBadge(
     text: String,
     containerColor: Color = MaterialTheme.colorScheme.primaryContainer,
-    contentColor: Color = MaterialTheme.colorScheme.onPrimaryContainer
+    contentColor: Color = MaterialTheme.colorScheme.onPrimaryContainer,
 ) {
     Surface(
         color = containerColor,
         contentColor = contentColor,
         shape = RoundedCornerShape(8.dp),
-        modifier = Modifier.padding(vertical = 4.dp)
+        modifier = Modifier.padding(vertical = 4.dp),
     ) {
         Text(
             text = text,
-            style = MaterialTheme.typography.labelMedium.copy(
-                fontWeight = FontWeight.Bold,
-                fontSize = 11.sp
-            ),
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+            style =
+                MaterialTheme.typography.labelMedium.copy(
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 11.sp,
+                ),
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
         )
     }
 }
@@ -44,20 +45,22 @@ fun StatusBadge(
 @Composable
 fun IoSpeedText(
     speedMBps: Float,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
-    val displaySpeed = if (speedMBps < 1.0) {
-        "${(speedMBps * 1024).toInt()} KB/s"
-    } else {
-        "${String.format("%.1f", speedMBps)} MB/s"
-    }
+    val displaySpeed =
+        if (speedMBps < 1.0) {
+            "${(speedMBps * 1024).toInt()} KB/s"
+        } else {
+            "${String.format("%.1f", speedMBps)} MB/s"
+        }
 
     Text(
         text = displaySpeed,
-        style = MaterialTheme.typography.bodyMedium.copy(
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.primary
-        ),
-        modifier = modifier
+        style =
+            MaterialTheme.typography.bodyMedium.copy(
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.primary,
+            ),
+        modifier = modifier,
     )
 }

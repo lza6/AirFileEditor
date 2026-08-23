@@ -1,6 +1,5 @@
 package com.example.tfgwj.ui.mvi
 
-import com.example.tfgwj.domain.model.AccessMode
 import com.example.tfgwj.domain.model.EnvironmentStatus
 import com.example.tfgwj.domain.model.TaskPhase
 import com.example.tfgwj.domain.repository.ConfigRepository
@@ -19,7 +18,6 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -31,7 +29,6 @@ import org.junit.Test
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class ReplacingViewModelTest {
-
     private val testDispatcher = UnconfinedTestDispatcher()
     private lateinit var viewModel: ReplacingViewModel
 
@@ -46,13 +43,14 @@ class ReplacingViewModelTest {
         Dispatchers.setMain(testDispatcher)
         coEvery { repository.cancelReplace() } returns Result.success(Unit)
         coEvery { repository.dismissReplaceResult() } returns Result.success(Unit)
-        viewModel = ReplacingViewModel(
-            replaceFileUseCase,
-            checkEnvironmentUseCase,
-            managePatchUseCase,
-            manageFileTimeUseCase,
-            repository
-        )
+        viewModel =
+            ReplacingViewModel(
+                replaceFileUseCase,
+                checkEnvironmentUseCase,
+                managePatchUseCase,
+                manageFileTimeUseCase,
+                repository,
+            )
     }
 
     @After
@@ -190,7 +188,7 @@ class ReplacingViewModelTest {
             path = "/path/to/main",
             appName = "Test App",
             icon = null,
-            targetPackage = "com.test.package"
+            targetPackage = "com.test.package",
         )
 
         val state = viewModel.uiState.value
@@ -201,10 +199,11 @@ class ReplacingViewModelTest {
 
     @Test
     fun `updatePatchVersions updates patch list and clears scanning`() {
-        val patches = listOf(
-            PatchVersion("v1.0", "/path/v1", 1024L, 10),
-            PatchVersion("v2.0", "/path/v2", 2048L, 20)
-        )
+        val patches =
+            listOf(
+                PatchVersion("v1.0", "/path/v1", 1024L, 10),
+                PatchVersion("v2.0", "/path/v2", 2048L, 20),
+            )
 
         viewModel.updatePatchVersions(patches)
 

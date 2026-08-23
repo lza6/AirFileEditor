@@ -21,9 +21,8 @@ class ReplacingViewModel(
     private val checkEnvironmentUseCase: CheckEnvironmentUseCase,
     private val managePatchUseCase: ManagePatchUseCase,
     private val manageFileTimeUseCase: ManageFileTimeUseCase,
-    private val repository: ConfigRepository
+    private val repository: ConfigRepository,
 ) : ViewModel() {
-
     private val _uiState = MutableStateFlow(ReplacingState())
     val uiState: StateFlow<ReplacingState> = _uiState.asStateFlow()
     private var lastReplaceIntent: ReplacingIntent.StartReplace? = null
@@ -32,15 +31,17 @@ class ReplacingViewModel(
         // 1. 订阅任务进度 — 直接使用 TaskPhase 枚举，消除字符串转换
         viewModelScope.launch {
             repository.getTaskProgress().collect { progress ->
-                _uiState.update { it.copy(
-                    processedFiles = progress.processed,
-                    totalFiles = progress.total,
-                    progress = progress.progress,
-                    speedMBps = progress.speed,
-                    currentFileName = progress.currentFile,
-                    phase = progress.phase,
-                    errorMessage = progress.errorMessage,
-                )}
+                _uiState.update {
+                    it.copy(
+                        processedFiles = progress.processed,
+                        totalFiles = progress.total,
+                        progress = progress.progress,
+                        speedMBps = progress.speed,
+                        currentFileName = progress.currentFile,
+                        phase = progress.phase,
+                        errorMessage = progress.errorMessage,
+                    )
+                }
             }
         }
 
@@ -103,17 +104,21 @@ class ReplacingViewModel(
                 viewModelScope.launch {
                     _uiState.update { it.copy(environmentStatus = EnvironmentStatus.CHECKING) }
                     val status = checkEnvironmentUseCase(_uiState.value.targetPackage, forceRefresh = true)
-                    _uiState.update { it.copy(
-                        environmentStatus = if (status.bestMode != com.example.tfgwj.domain.model.AccessMode.NONE) EnvironmentStatus.VALID else EnvironmentStatus.INVALID
-                    )}
+                    val isEnvValid = status.bestMode != com.example.tfgwj.domain.model.AccessMode.NONE
+                    _uiState.update {
+                        it.copy(
+                            environmentStatus = if (isEnvValid) EnvironmentStatus.VALID else EnvironmentStatus.INVALID,
+                        )
+                    }
                 }
             }
             is ReplacingIntent.RefreshPatches -> {
                 viewModelScope.launch {
                     _uiState.update { it.copy(isScanning = true) }
-                    val patches = managePatchUseCase.scanPatches().map {
-                        com.example.tfgwj.ui.mvi.PatchVersion(it.version, it.path, it.size, it.fileCount)
-                    }
+                    val patches =
+                        managePatchUseCase.scanPatches().map {
+                            com.example.tfgwj.ui.mvi.PatchVersion(it.version, it.path, it.size, it.fileCount)
+                        }
                     _uiState.update { it.copy(patchVersions = patches, isScanning = false) }
                 }
             }
@@ -142,23 +147,36 @@ class ReplacingViewModel(
     }
 
     // 更新权限状态
-    fun updatePermissions(hasStorage: Boolean, hasShizuku: Boolean) {
+    fun updatePermissions(
+        hasStorage: Boolean,
+        hasShizuku: Boolean,
+    ) {
         _uiState.update { it.copy(hasStoragePermission = hasStorage, hasShizukuPermission = hasShizuku) }
     }
 
     // 更新主包信息（targetPackage 为空表示"未选择应用"，禁止静默兜底）
-    fun updateMainPackInfo(path: String?, appName: String?, icon: Any?, targetPackage: String) {
+    fun updateMainPackInfo(
+        path: String?,
+        appName: String?,
+        icon: Any?,
+        targetPackage: String,
+    ) {
         val time = path?.let { manageFileTimeUseCase.getCurrentTime(it) }
-        _uiState.update { it.copy(
-            selectedMainPackPath = path,
-            mainPackAppName = appName,
-            mainPackIcon = icon,
-            targetPackage = targetPackage,
-            currentFileTime = time
-        )}
+        _uiState.update {
+            it.copy(
+                selectedMainPackPath = path,
+                mainPackAppName = appName,
+                mainPackIcon = icon,
+                targetPackage = targetPackage,
+                currentFileTime = time,
+            )
+        }
     }
 
-    fun updateLogContent(content: String, size: String) {
+    fun updateLogContent(
+        content: String,
+        size: String,
+    ) {
         _uiState.update { it.copy(logContent = content, logSize = size) }
     }
 

@@ -17,9 +17,9 @@ import androidx.appcompat.app.AlertDialog
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import com.example.tfgwj.R
+import com.example.tfgwj.domain.model.TaskPhase
 import com.example.tfgwj.utils.AppLogger
 import com.example.tfgwj.utils.PauseControl
-import com.example.tfgwj.domain.model.TaskPhase
 import com.example.tfgwj.worker.FileReplaceWorkerV2
 import com.google.android.material.progressindicator.CircularProgressIndicator
 import com.google.android.material.progressindicator.LinearProgressIndicator

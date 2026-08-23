@@ -16,23 +16,25 @@ import java.util.Locale
 @Composable
 fun IoSpeedText(
     speedMBps: Float,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
-    val speedText = when {
-        speedMBps <= 0 -> "0 KB/s"
-        speedMBps < 0.1f -> String.format(Locale.getDefault(), "%.1f KB/s", speedMBps * 1024)
-        speedMBps < 1f -> String.format(Locale.getDefault(), "%.0f KB/s", speedMBps * 1024)
-        else -> String.format(Locale.getDefault(), "%.1f MB/s", speedMBps)
-    }
+    val speedText =
+        when {
+            speedMBps <= 0 -> "0 KB/s"
+            speedMBps < 0.1f -> String.format(Locale.getDefault(), "%.1f KB/s", speedMBps * 1024)
+            speedMBps < 1f -> String.format(Locale.getDefault(), "%.0f KB/s", speedMBps * 1024)
+            else -> String.format(Locale.getDefault(), "%.1f MB/s", speedMBps)
+        }
 
     Text(
         text = speedText,
         modifier = modifier,
-        style = MaterialTheme.typography.labelMedium.copy(
-            fontFamily = FontFamily.Monospace,
-            fontWeight = FontWeight.Bold,
-            fontSize = 12.sp,
-            color = MaterialTheme.colorScheme.primary
-        )
+        style =
+            MaterialTheme.typography.labelMedium.copy(
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.Bold,
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.primary,
+            ),
     )
 }

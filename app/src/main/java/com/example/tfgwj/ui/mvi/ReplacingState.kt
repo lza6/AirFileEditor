@@ -22,43 +22,36 @@ data class ReplacingState(
     val phase: TaskPhase = TaskPhase.IDLE,
     val isPaused: Boolean = false,
     val errorMessage: String? = null,
-
     // APM 指标 (V10)
     val ioWaitMs: Long = 0,
     val ipcLatencyMs: Long = 0,
     val memoryUsagePercent: Double = 0.0,
     val activePermits: Int = 0,
-
     // 权限与环境
     val currentMode: PermissionChecker.AccessMode = PermissionChecker.AccessMode.NONE,
     val hasStoragePermission: Boolean = false,
     val hasShizukuPermission: Boolean = false,
     val environmentStatus: EnvironmentStatus = EnvironmentStatus.UNKNOWN,
-
     // 主包状态
     val selectedMainPackPath: String? = null,
     val mainPackAppName: String? = null,
     val mainPackIcon: Any? = null,
     val targetPackage: String = "",
     val availableMainPacks: List<String> = emptyList(),
-
     // 文件时间
     val lockedTime: Long? = null,
     val currentFileTime: Long? = null,
-
     // 小包状态
     val patchVersions: List<PatchVersion> = emptyList(),
     val selectedPatchVersion: String? = null,
     val isScanning: Boolean = false,
-
     // 日志
     val logContent: String = "",
     val logSize: String = "0 KB",
-
     // OTA 更新
     val hasUpdate: Boolean = false,
     val updateVersion: String? = null,
-    val updateDownloadProgress: Int = 0
+    val updateDownloadProgress: Int = 0,
 ) {
     /** 是否处于运行中，基于 phase 计算 */
     val isReplacing: Boolean
@@ -73,5 +66,5 @@ data class PatchVersion(
     val version: String,
     val path: String,
     val size: Long,
-    val fileCount: Int
+    val fileCount: Int,
 )

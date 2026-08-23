@@ -20,12 +20,13 @@ class ReplacingViewModelFactory(private val context: Context) : ViewModelProvide
             val patchManager = PatchManager.getInstance()
             val mainPackManager = MainPackManager.getInstance()
 
-            val repository: ConfigRepository = ConfigRepositoryImpl(
-                context.applicationContext,
-                shizukuManager,
-                patchManager,
-                mainPackManager
-            )
+            val repository: ConfigRepository =
+                ConfigRepositoryImpl(
+                    context.applicationContext,
+                    shizukuManager,
+                    patchManager,
+                    mainPackManager,
+                )
 
             val replaceFileUseCase = ReplaceFileUseCase(repository)
             val checkEnvironmentUseCase = CheckEnvironmentUseCase(repository)
@@ -38,7 +39,7 @@ class ReplacingViewModelFactory(private val context: Context) : ViewModelProvide
                 checkEnvironmentUseCase,
                 managePatchUseCase,
                 manageFileTimeUseCase,
-                repository
+                repository,
             ) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")
