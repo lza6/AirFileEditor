@@ -79,7 +79,7 @@ class PreferencesManager(private val context: Context) {
     val appPackageName: Flow<String> =
         context.dataStore.data
             .map { preferences ->
-                preferences[PreferencesKeys.APP_PACKAGE_NAME] ?: "com.tencent.tmgp.pubgmhd" // 默认和平精英包名
+                preferences[PreferencesKeys.APP_PACKAGE_NAME] ?: ""
             }
 
     suspend fun setAppPackageName(packageName: String) {
