@@ -6,20 +6,13 @@ import com.example.tfgwj.domain.model.TaskPhase
 import com.example.tfgwj.shizuku.ShizukuManager
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.withTimeout
 import java.io.File
-import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Shizuku 模式复制编排器
@@ -43,10 +36,10 @@ import java.util.concurrent.ConcurrentHashMap
  * @version V8.0.0 - Architecture Evolution
  */
 class ShizukuCopyOrchestrator(
-    private val context: Context,
-    private val config: CopyConfig,
+    context: Context,
+    config: CopyConfig,
     private val shizukuManager: ShizukuManager,
-) : FileReplaceOrchestrator {
+) : AbstractShellOrchestrator(context, config) {
     companion object {
         private const val TAG = "ShizukuCopyOrchestrator"
 
@@ -55,25 +48,10 @@ class ShizukuCopyOrchestrator(
         private const val CMD_CP_FILE = "cp -p -v %s %s"
     }
 
-    private val scope = kotlinx.coroutines.CoroutineScope(Dispatchers.IO + SupervisorJob())
-    private var watchdogJob: Job? = null
-    private val progressCounter = java.util.concurrent.atomic.AtomicInteger(0)
-    private val watchdogActive = java.util.concurrent.atomic.AtomicBoolean(true)
-    private val permitMutex = Mutex()
-    private val activeProcesses = ConcurrentHashMap.newKeySet<Process>()
-    @Volatile
-    private var dynamicPermits: Int = 1
-    @Volatile
-    private var runningTasksCount: Int = 0
-
     private lateinit var fileStatistics: FileStatistics
     private lateinit var progressTracker: ProgressTracker
     private lateinit var verificationManager: VerificationManager
     private var scheduler: com.example.tfgwj.performance.scheduler.AdaptivePermitScheduler? = null
-
-    private var totalFiles = 0
-    private var targetPackage = ""
-    private var sourceAndroidDir: File = File("")
 
     override suspend fun execute(
         androidDir: File,
@@ -87,8 +65,8 @@ class ShizukuCopyOrchestrator(
 
             this@ShizukuCopyOrchestrator.targetPackage = targetPackage
             this@ShizukuCopyOrchestrator.sourceAndroidDir = androidDir
-            this@ShizukuCopyOrchestrator.fileStatistics = FileStatistics(context, shizukuManager)
-            this@ShizukuCopyOrchestrator.verificationManager = VerificationManager(context, shizukuManager)
+            fileStatistics = FileStatistics(context, shizukuManager)
+            verificationManager = VerificationManager(context, shizukuManager)
 
             try {
                 // 1. 等待 Shizuku 服务连接（如果需要）
@@ -185,17 +163,18 @@ class ShizukuCopyOrchestrator(
 
     override fun getStrategyType(): StrategyType = StrategyType.SHIZUKU
 
+    override suspend fun executeCopyCommand(task: FileStatistics.CopyTask) {
+        runShizukuCpCommand(task)
+    }
+
+    override fun executeMkdirCommand(path: String): String? {
+        return executeShizukuCommand(CMD_MKDIR.format(shellEscape(path)))
+    }
+
     override fun cleanup() {
         try {
             scheduler?.stop()
-            watchdogActive.set(false)
-            watchdogJob?.cancel()
-            activeProcesses.forEach { process ->
-                runCatching { process.destroy() }
-                if (process.isAlive) runCatching { process.destroyForcibly() }
-            }
-            activeProcesses.clear()
-            scope.cancel()
+            super.cleanup()
         } catch (e: Exception) {
             Log.w(TAG, "清理资源失败", e)
         }
@@ -230,35 +209,7 @@ class ShizukuCopyOrchestrator(
             val tasks = fileStatistics.collectDirectoryTasks(sourceRoot, targetPackage)
 
             // 启动看门狗（Shizuku 模式下不解析 shell 输出，直接驱动进度）
-            watchdogJob =
-                scope.launch {
-                    while (watchdogActive.get() && isActive) {
-                        delay(500) // 500ms 更新频率
-                        if (!watchdogActive.get()) break
-
-                        try {
-                            val current = progressCounter.get()
-                            val progress =
-                                if (totalFiles > 0) {
-                                    (current.toFloat() / totalFiles * config.progressPhaseReplacingMax).toInt().coerceIn(
-                                        0,
-                                        config.progressPhaseReplacingMax,
-                                    )
-                                } else {
-                                    0
-                                }
-
-                            progressTracker.updateProgress(
-                                processed = current,
-                                message = "进行中... ($current/$totalFiles)",
-                                phase = TaskPhase.REPLACING,
-                            )
-                        } catch (e: Exception) {
-                            Log.w(TAG, "看门狗更新跳过: ${e.message}")
-                        }
-                    }
-                    Log.d(TAG, "🕵️ 看门狗已停止")
-                }
+            watchdogJob = createWatchdog(updateInterval = 500, progressTracker = progressTracker)
 
             try {
                 tasks.map { task ->
@@ -271,36 +222,6 @@ class ShizukuCopyOrchestrator(
             } finally {
                 watchdogActive.set(false)
                 watchdogJob?.cancel()
-            }
-        }
-    }
-
-    /**
-     * 根据 scheduler 的 permits 做软并发限制
-     */
-    private suspend fun processWithAdaptiveLimit(action: suspend () -> Unit) {
-        while (true) {
-            val permits = dynamicPermits.coerceAtLeast(1)
-            val acquired = withTimeoutOrNull(1000) {
-                permitMutex.withLock {
-                    if (runningTasksCount < permits) {
-                        runningTasksCount++
-                        true
-                    } else {
-                        false
-                    }
-                }
-            } ?: false
-
-            if (acquired) break
-            delay(50)
-        }
-
-        try {
-            action()
-        } finally {
-            permitMutex.withLock {
-                runningTasksCount = (runningTasksCount - 1).coerceAtLeast(0)
             }
         }
     }
@@ -368,22 +289,6 @@ class ShizukuCopyOrchestrator(
     }
 
     /**
-     * 校验目标路径是否在允许目录内
-     */
-    private fun isSafeTargetPath(path: String): Boolean {
-        return try {
-            val normalized = File(path).canonicalPath
-            normalized.startsWith("/storage/emulated/0/Android/data/") || normalized.startsWith("/storage/emulated/0/Android/obb/")
-        } catch (e: Exception) {
-            false
-        }
-    }
-
-    private fun shellEscape(value: String): String {
-        return "'" + value.replace("'", "'\"'\"'") + "'"
-    }
-
-    /**
      * 执行 Shizuku 命令（封装）
      */
     private fun executeShizukuCommand(cmd: String): String? {
@@ -392,32 +297,6 @@ class ShizukuCopyOrchestrator(
         } else {
             Log.w(TAG, "Shizuku 服务未连接，跳过命令: $cmd")
             null
-        }
-    }
-
-    /**
-     * 从 cp -v 输出提取文件名
-     */
-    private fun extractFileNameFromCpOutput(line: String): String {
-        return when {
-            line.contains(" -> ") -> {
-                line.substringAfterLast(" -> ")
-                    .trim()
-                    .trim('\'', '"')
-                    .substringAfterLast("/")
-            }
-            line.contains("cp '") -> {
-                line.substringAfter("cp '")
-                    .substringBefore("'")
-                    .substringAfterLast("/")
-            }
-            else -> {
-                line.trim()
-                    .trim('\'', '"')
-                    .substringAfterLast("/")
-                    .substringBefore(" ")
-                    .ifEmpty { "正在处理..." }
-            }
         }
     }
 }

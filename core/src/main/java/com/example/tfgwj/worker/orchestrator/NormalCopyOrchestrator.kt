@@ -3,7 +3,7 @@ package com.example.tfgwj.worker.orchestrator
 import android.content.Context
 import android.util.Log
 import com.example.tfgwj.domain.model.TaskPhase
-import com.example.tfgwj.utils.IoOptimizer
+import com.example.tfgwj.performance.IoEngine
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -238,10 +238,11 @@ class NormalCopyOrchestrator(
                         }
                     }
 
-                    // 增量检测 + Zero-Copy
-                    if (IoOptimizer.needsUpdate(sourceFile, targetFile)) {
-                        val success = IoOptimizer.fastCopy(sourceFile, targetFile)
-                        if (success) {
+                    // 增量检测 + Zero-Copy (V14: IoEngine 统一入口)
+                    if (IoEngine.needsUpdate(sourceFile, targetFile)) {
+                        // IoEngine.fastCopy 返回 Long(复制字节数)，>0 表示成功
+                        val copied = IoEngine.fastCopy(sourceFile, targetFile)
+                        if (copied > 0L) {
                             val bytes = sourceFile.length()
                             totalBytesProcessed.addAndGet(bytes)
                             progressSpeedMutex.withLock {

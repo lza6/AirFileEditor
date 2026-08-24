@@ -263,8 +263,8 @@ IoOptimizer (IO 优化)
 - ✅ CI/CD：GitHub Actions 自动化流水线
 - ✅ 覆盖率验证：Jacoco 80% 目标建立
 
-## 8. 未来演进愿景 (V14 - V16)
-详细计划见 [`plans/ULTIMATE_EVOLUTION_GUIDE.md`](plans/ULTIMATE_EVOLUTION_GUIDE.md)
+## 8. 未来演进愿景 (V14 - V18)
+详细计划见 [`docs/plans/下一步改进指南.md`](docs/plans/下一步改进指南.md)（V14-V18 完整落地路线，含引擎融合、UI 重构、测试补全、任务控制重构、跨设备、AI 与 KMP）
 
 - **V14 (Advanced Stealth)**: 隐匿性增强，防范厂商侦测，Phantom Stealth 2.0。
 - **V15 (AI Agent Integration)**: 集成端侧大模型，实现自然语言管理文件。
