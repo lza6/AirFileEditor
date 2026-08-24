@@ -42,6 +42,15 @@ misc.xml
 deploymentTargetDropDown.xml
 render.experimental.xml
 
+# AI tools & local config — developer-specific, never commit
+.claude/
+.mcp.json
+opencode.json
+AGENTS.md
+.ignore
+test-worker-cmdline.txt
+tasks/
+
 # Keystore files
 *.jks
 *.keystore
