@@ -20,6 +20,7 @@ import com.example.tfgwj.databinding.ActivityMainBinding
 import com.example.tfgwj.databinding.DialogHistoryContainerBinding
 import com.example.tfgwj.domain.model.TaskPhase
 import com.example.tfgwj.manager.*
+import com.example.tfgwj.performance.IoEngine
 import com.example.tfgwj.performance.PerformanceMonitor
 import com.example.tfgwj.security.ArchiveEntryValidator
 import com.example.tfgwj.shizuku.ShizukuManager
@@ -698,18 +699,18 @@ class MainActivity : AppCompatActivity() {
                             val extractedRoot = File(result.outputPath)
                             val allFiles = extractedRoot.walkTopDown().filter { it.isFile }.toList()
                             val copyResult =
-                                IoOptimizer.parallelProcess(
+                                IoEngine.parallelProcess(
                                     allFiles,
                                     action = { source ->
                                         val relativePath = source.relativeTo(extractedRoot).path.replace(File.separatorChar, '/')
                                         val destination = ArchiveEntryValidator.resolveWithin(target, relativePath)
                                         destination.parentFile?.mkdirs()
-                                        if (IoOptimizer.needsUpdate(
+                                        if (IoEngine.needsUpdate(
                                                 source,
                                                 destination,
                                             )
                                         ) {
-                                            IoOptimizer.fastCopy(source, destination)
+                                            IoEngine.fastCopy(source, destination) > 0L
                                         } else {
                                             true
                                         }

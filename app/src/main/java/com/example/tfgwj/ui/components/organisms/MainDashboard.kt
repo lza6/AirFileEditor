@@ -106,10 +106,10 @@ fun MainDashboard(
                     )
                 }
 
-                if (ioStats.mmapFallbackRate > 0) {
+                if (ioStats.mmapFallbackRate > 0.0) {
                     Spacer(modifier = Modifier.height(12.dp))
                     LinearProgressIndicator(
-                        progress = (ioStats.mmapFallbackRate / 100f).toFloat(),
+                        progress = { (ioStats.mmapFallbackRate.toFloat() / 100f).coerceIn(0f, 1f) },
                         modifier = Modifier.fillMaxWidth().height(4.dp),
                         color = MaterialTheme.colorScheme.error.copy(alpha = 0.6f),
                     )

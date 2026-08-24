@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.io.IOException
 
 data class HistoryUiState(
     val items: List<ReplaceHistoryItem> = emptyList(),
@@ -29,22 +30,26 @@ class HistoryViewModel(
 
     init {
         viewModelScope.launch {
-            historyManager.history.collect { items ->
-                val domainItems =
-                    items.map { item ->
-                        ReplaceHistoryItem(
-                            timestamp = item.timestamp,
-                            packageName = item.packageName,
-                            sourcePath = item.sourcePath,
-                            targetPath = item.targetPath,
-                            totalFiles = item.totalFiles,
-                            successCount = item.successCount,
-                            failedCount = item.failedCount,
-                            errors = item.errors,
-                            backupPath = item.backupPath,
-                        )
-                    }
-                _uiState.update { it.copy(items = domainItems.reversed(), isLoading = false) }
+            try {
+                historyManager.history.collect { items ->
+                    val domainItems =
+                        items.map { item ->
+                            ReplaceHistoryItem(
+                                timestamp = item.timestamp,
+                                packageName = item.packageName,
+                                sourcePath = item.sourcePath,
+                                targetPath = item.targetPath,
+                                totalFiles = item.totalFiles,
+                                successCount = item.successCount,
+                                failedCount = item.failedCount,
+                                errors = item.errors,
+                                backupPath = item.backupPath,
+                            )
+                        }
+                    _uiState.update { it.copy(items = domainItems.reversed(), isLoading = false, error = null) }
+                }
+            } catch (e: IOException) {
+                _uiState.update { it.copy(isLoading = false, error = "加载历史记录失败: ${e.message}") }
             }
         }
     }
@@ -59,13 +64,23 @@ class HistoryViewModel(
 
     fun deleteItem(timestamp: Long) {
         viewModelScope.launch {
-            historyManager.deleteHistory(timestamp)
+            try {
+                historyManager.deleteHistory(timestamp)
+                _uiState.update { it.copy(selectedItem = null) }
+            } catch (e: IOException) {
+                _uiState.update { it.copy(error = "删除失败: ${e.message}") }
+            }
         }
     }
 
     fun clearAll() {
         viewModelScope.launch {
-            historyManager.clearHistory()
+            try {
+                historyManager.clearHistory()
+                _uiState.update { it.copy(items = emptyList(), selectedItem = null) }
+            } catch (e: IOException) {
+                _uiState.update { it.copy(error = "清空失败: ${e.message}") }
+            }
         }
     }
 }
