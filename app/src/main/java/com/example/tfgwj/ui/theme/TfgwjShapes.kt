@@ -1,3 +1,5 @@
+@file:Suppress("MatchingDeclarationName")
+
 package com.example.tfgwj.ui.theme
 
 import androidx.compose.foundation.shape.RoundedCornerShape

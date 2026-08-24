@@ -17,6 +17,7 @@ import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.lifecycle.lifecycleScope
 import com.example.tfgwj.data.PreferencesManager
 import com.example.tfgwj.databinding.ActivityMainBinding
+import com.example.tfgwj.databinding.DialogHistoryContainerBinding
 import com.example.tfgwj.domain.model.TaskPhase
 import com.example.tfgwj.manager.*
 import com.example.tfgwj.performance.PerformanceMonitor
@@ -27,6 +28,7 @@ import com.example.tfgwj.ui.HelpDialog
 import com.example.tfgwj.ui.TimePickerHelper
 import com.example.tfgwj.ui.components.atoms.TaskStatus
 import com.example.tfgwj.ui.components.molecules.PermissionCard
+import com.example.tfgwj.ui.components.organisms.HistoryScreen
 import com.example.tfgwj.ui.components.organisms.MainDashboard
 import com.example.tfgwj.ui.compose.TaskProgressOverlay
 import com.example.tfgwj.ui.mvi.*
@@ -157,6 +159,10 @@ class MainActivity : AppCompatActivity() {
                     showPhantomStealthDialog()
                     true
                 }
+                R.id.action_history -> {
+                    showHistoryDialog()
+                    true
+                }
                 else -> false
             }
         }
@@ -245,6 +251,7 @@ class MainActivity : AppCompatActivity() {
                 com.example.tfgwj.ui.components.organisms.MainDashboard(
                     ioStats = ioStats,
                     currentStatus = taskStatus,
+                    onHistoryClick = { showHistoryDialog() },
                 )
             }
         }
@@ -784,6 +791,30 @@ class MainActivity : AppCompatActivity() {
         ).setTitle(
             "引爆隐匿",
         ).setMessage("是否立即引爆隐匿程序？").setPositiveButton("立刻隐匿") { _, _ -> StealthManager.execute(this) }.setNegativeButton("取消", null).show()
+    }
+
+    /**
+     * 全屏展示替换历史记录（基于 HistoryScreen Compose + AlertDialog 容器）
+     */
+    private fun showHistoryDialog() {
+        val historyViewModel: HistoryViewModel by viewModels {
+            HistoryViewModelFactory(application)
+        }
+        val dialog =
+            com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
+                .setCancelable(true)
+                .create()
+
+        val binding = DialogHistoryContainerBinding.inflate(layoutInflater)
+        dialog.setContentView(binding.root)
+
+        binding.composeViewHistory.setContent {
+            TfgwjTheme {
+                HistoryScreen(viewModel = historyViewModel, onDismiss = { dialog.dismiss() })
+            }
+        }
+
+        dialog.show()
     }
 
     data class AppInfo(val packageName: String, val name: String)

@@ -25,4 +25,10 @@
         android:title="引爆隐匿 (Phantom)"
         app:showAsAction="never" />
 
+    <item
+        android:id="@+id/action_history"
+        android:icon="@drawable/ic_history"
+        android:title="替换历史"
+        app:showAsAction="never" />
+
 </menu>

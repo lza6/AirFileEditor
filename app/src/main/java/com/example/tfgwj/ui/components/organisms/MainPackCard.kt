@@ -23,6 +23,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.tfgwj.domain.model.EnvironmentStatus
+import com.example.tfgwj.ui.components.molecules.AnimatedButton
+import com.example.tfgwj.ui.components.molecules.AnimatedButtonStyle
 import com.example.tfgwj.ui.mvi.ReplacingState
 
 /**
@@ -222,57 +224,36 @@ fun MainPackCard(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 // 开始替换按钮（主要按钮）：未选择目标应用或主包时禁用，禁止空包名兜底
-                Button(
+                AnimatedButton(
+                    text = "开始替换",
                     onClick = onStartReplace,
                     modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(8.dp),
+                    style = AnimatedButtonStyle.FILLED,
                     enabled =
                         state.selectedMainPackPath != null &&
                             state.targetPackage.isNotBlank() &&
                             !state.isReplacing,
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Refresh,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp),
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("开始替换")
-                }
+                    icon = Icons.Default.Refresh,
+                )
 
                 // 启动游戏按钮
-                FilledTonalButton(
+                AnimatedButton(
+                    text = "启动游戏",
                     onClick = onLaunchGame,
                     modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(8.dp),
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.PlayArrow,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp),
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("启动游戏")
-                }
+                    style = AnimatedButtonStyle.TONAL,
+                    icon = Icons.Default.PlayArrow,
+                )
             }
 
             // 清理环境按钮
-            TextButton(
+            AnimatedButton(
+                text = "清理环境",
                 onClick = onCleanEnvironment,
                 modifier = Modifier.fillMaxWidth(),
-                colors =
-                    ButtonDefaults.textButtonColors(
-                        contentColor = MaterialTheme.colorScheme.error,
-                    ),
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Delete,
-                    contentDescription = null,
-                    modifier = Modifier.size(16.dp),
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-                Text("清理环境", fontSize = 12.sp)
-            }
+                style = AnimatedButtonStyle.TEXT,
+                icon = Icons.Default.Delete,
+            )
         }
     }
 }

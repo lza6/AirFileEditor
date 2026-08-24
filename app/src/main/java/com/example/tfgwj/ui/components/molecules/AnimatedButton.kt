@@ -1,3 +1,5 @@
+@file:Suppress("MatchingDeclarationName")
+
 package com.example.tfgwj.ui.components.molecules
 
 import androidx.compose.animation.core.animateFloatAsState
@@ -27,10 +29,14 @@ import androidx.compose.ui.unit.dp
  * 点击时触发按压缩放动画，加载时显示 Spinner
  */
 enum class AnimatedButtonStyle {
-    FILLED, TONAL, OUTLINED, TEXT
+    FILLED,
+    TONAL,
+    OUTLINED,
+    TEXT,
 }
 
 @Composable
+@Suppress("LongParameterList")
 fun AnimatedButton(
     text: String,
     onClick: () -> Unit,
@@ -64,32 +70,36 @@ fun AnimatedButton(
     }
 
     when (style) {
-        AnimatedButtonStyle.FILLED -> Button(
-            onClick = onClick,
-            modifier = modifier.scale(scale),
-            enabled = enabled && !isLoading,
-            interactionSource = interactionSource,
-        ) { content() }
+        AnimatedButtonStyle.FILLED ->
+            Button(
+                onClick = onClick,
+                modifier = modifier.scale(scale),
+                enabled = enabled && !isLoading,
+                interactionSource = interactionSource,
+            ) { content() }
 
-        AnimatedButtonStyle.TONAL -> FilledTonalButton(
-            onClick = onClick,
-            modifier = modifier.scale(scale),
-            enabled = enabled && !isLoading,
-            interactionSource = interactionSource,
-        ) { content() }
+        AnimatedButtonStyle.TONAL ->
+            FilledTonalButton(
+                onClick = onClick,
+                modifier = modifier.scale(scale),
+                enabled = enabled && !isLoading,
+                interactionSource = interactionSource,
+            ) { content() }
 
-        AnimatedButtonStyle.OUTLINED -> OutlinedButton(
-            onClick = onClick,
-            modifier = modifier.scale(scale),
-            enabled = enabled && !isLoading,
-            interactionSource = interactionSource,
-        ) { content() }
+        AnimatedButtonStyle.OUTLINED ->
+            OutlinedButton(
+                onClick = onClick,
+                modifier = modifier.scale(scale),
+                enabled = enabled && !isLoading,
+                interactionSource = interactionSource,
+            ) { content() }
 
-        AnimatedButtonStyle.TEXT -> TextButton(
-            onClick = onClick,
-            modifier = modifier.scale(scale),
-            enabled = enabled && !isLoading,
-            interactionSource = interactionSource,
-        ) { content() }
+        AnimatedButtonStyle.TEXT ->
+            TextButton(
+                onClick = onClick,
+                modifier = modifier.scale(scale),
+                enabled = enabled && !isLoading,
+                interactionSource = interactionSource,
+            ) { content() }
     }
 }

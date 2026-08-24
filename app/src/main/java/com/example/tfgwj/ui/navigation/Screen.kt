@@ -20,6 +20,8 @@ sealed class Screen(val route: String) {
 
     object ModeSelection : Screen("mode_selection")
 
+    object History : Screen("history")
+
     /**
      * 带参数的路由
      */

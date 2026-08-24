@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -44,29 +43,35 @@ fun SkeletonLoader(
     val shimmerTranslate by infiniteTransition.animateFloat(
         initialValue = 0f,
         targetValue = 1000f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1200, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart,
-        ),
+        animationSpec =
+            infiniteRepeatable(
+                animation = tween(durationMillis = 1200, easing = LinearEasing),
+                repeatMode = RepeatMode.Restart,
+            ),
         label = "shimmer",
     )
 
-    val shimmer = Brush.linearGradient(
-        colors = listOf(
-            Color.LightGray.copy(alpha = 0.3f),
-            Color.LightGray.copy(alpha = 0.6f),
-            Color.LightGray.copy(alpha = 0.3f),
-        ),
-        start = Offset(shimmerTranslate - 200f, 0f),
-        end = Offset(shimmerTranslate, 0f),
-    )
+    // 200f: shimmer 渐变宽度，纯视觉参数
+    @Suppress("MagicNumber")
+    val shimmer =
+        Brush.linearGradient(
+            colors =
+                listOf(
+                    Color.LightGray.copy(alpha = 0.3f),
+                    Color.LightGray.copy(alpha = 0.6f),
+                    Color.LightGray.copy(alpha = 0.3f),
+                ),
+            start = Offset(shimmerTranslate - 200f, 0f),
+            end = Offset(shimmerTranslate, 0f),
+        )
 
     Box(
-        modifier = modifier
-            .width(width)
-            .height(height)
-            .clip(shape)
-            .background(shimmer),
+        modifier =
+            modifier
+                .width(width)
+                .height(height)
+                .clip(shape)
+                .background(shimmer),
     )
 }
 
@@ -76,9 +81,10 @@ fun SkeletonLoader(
 @Composable
 fun CardSkeleton(modifier: Modifier = Modifier) {
     Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(16.dp),
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .padding(16.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             SkeletonLoader(

@@ -13,9 +13,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.tfgwj.ui.components.molecules.EmptyStateView
 import com.example.tfgwj.ui.mvi.PatchVersion
 import com.example.tfgwj.ui.mvi.ReplacingState
 
@@ -82,14 +82,12 @@ fun PatchVersionCard(
                         .clip(RoundedCornerShape(8.dp)),
             ) {
                 if (state.patchVersions.isEmpty() && !state.isScanning) {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text(
-                            text = "暂无小包版本\n请先解压小包压缩包",
-                            textAlign = TextAlign.Center,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                        )
-                    }
+                    EmptyStateView(
+                        title = "暂无小包版本",
+                        subtitle = "请先解压小包压缩包",
+                        icon = Icons.Default.Archive,
+                        modifier = Modifier.fillMaxSize(),
+                    )
                 } else {
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),

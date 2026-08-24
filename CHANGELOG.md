@@ -1,5 +1,19 @@
 # Changelog
 
+## 14.1.0 - 2026-08-24
+
+### 测试
+- 新增 IoEngineTest (10+ 用例覆盖三种策略路径)
+### UI
+- 骨架屏接入 MainDashboard 加载态
+- 空态接入 PatchVersionCard 空列表
+- 动画按钮接入 MainPackCard 关键操作
+- 新增替换历史 UI (Screen+ViewModel+列表+详情)
+### 工程
+- checkQuality 门禁通过
+- 清理误提交的本地 AI 配置
+- 版本号升至 14.1.0 / versionCode 6
+
 ## 14.0.0 - 2026-08-24
 
 ### 引擎融合
