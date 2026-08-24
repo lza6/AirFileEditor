@@ -1,0 +1,331 @@
+<title>AirFileEditor V14 变更总览</title>
+<style>
+  :root {
+    --bg: #f6f8fb;
+    --surface: #ffffff;
+    --surface-2: #eef2f7;
+    --ink: #16202b;
+    --ink-2: #51626f;
+    --line: #dfe5ec;
+    --accent: #0e6ea8;
+    --accent-2: #0a4f7c;
+    --ok: #1a7f4d;
+    --warn: #b05c16;
+    --crit: #b3261e;
+    --mono: "JetBrains Mono", ui-monospace, "SF Mono", Consolas, monospace;
+    --serif: Georgia, "Times New Roman", serif;
+  }
+  :root:not([data-theme="light"]) @media (prefers-color-scheme: dark) {
+    --bg: #0e141b;
+    --surface: #172029;
+    --surface-2: #1f2a36;
+    --ink: #e7edf3;
+    --ink-2: #9fb0bd;
+    --line: #2a3845;
+    --accent: #5fb0e4;
+    --accent-2: #8ec9ef;
+    --ok: #4fc284;
+    --warn: #f0a35e;
+    --crit: #f28b83;
+  }
+  :root[data-theme="dark"] {
+    --bg: #0e141b;
+    --surface: #172029;
+    --surface-2: #1f2a36;
+    --ink: #e7edf3;
+    --ink-2: #9fb0bd;
+    --line: #2a3845;
+    --accent: #5fb0e4;
+    --accent-2: #8ec9ef;
+    --ok: #4fc284;
+    --warn: #f0a35e;
+    --crit: #f28b83;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    line-height: 1.6;
+  }
+  .wrap { max-width: 880px; margin: 0 auto; padding: 48px 24px 96px; }
+  header {
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 24px;
+    margin-bottom: 40px;
+  }
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--accent);
+    font-weight: 600;
+  }
+  h1 {
+    font-family: var(--serif);
+    font-size: 34px;
+    line-height: 1.15;
+    margin: 8px 0 16px;
+    font-weight: 600;
+    text-wrap: balance;
+    max-width: 15em;
+  }
+  .sub { color: var(--ink-2); font-size: 16px; max-width: 46em; }
+  .meta {
+    display: flex; flex-wrap: wrap; gap: 12px;
+    margin-top: 20px;
+    font-family: var(--mono); font-size: 12px; color: var(--ink-2);
+  }
+  .meta span {
+    background: var(--surface-2); border: 1px solid var(--line);
+    padding: 4px 10px; border-radius: 999px;
+  }
+  h2 {
+    font-size: 20px; margin: 48px 0 12px;
+    display: flex; align-items: baseline; gap: 10px;
+  }
+  h2 .sec { font-family: var(--mono); font-size: 13px; color: var(--accent); }
+  p { color: var(--ink); }
+  .muted { color: var(--ink-2); }
+  .timeline {
+    display: flex; flex-direction: column;
+    border-left: 2px solid var(--line);
+    margin: 16px 0 0 8px; padding-left: 24px; gap: 24px;
+  }
+  .tick { position: relative; }
+  .tick::before {
+    content: ""; position: absolute; left: -34px; top: 6px;
+    width: 12px; height: 12px; border-radius: 50%;
+    background: var(--accent); border: 3px solid var(--bg);
+  }
+  .tick .t-title { font-weight: 600; }
+  .tick .t-tag { font-family: var(--mono); font-size: 12px; color: var(--accent); }
+  .tick p { margin: 6px 0 0; color: var(--ink-2); font-size: 14px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 16px; }
+  @media (max-width: 640px) { .grid { grid-template-columns: 1fr; } }
+  .card {
+    background: var(--surface); border: 1px solid var(--line);
+    border-radius: 12px; padding: 18px;
+  }
+  .card .c-title { font-weight: 600; margin-bottom: 6px; }
+  .card ul { margin: 0; padding-left: 18px; color: var(--ink-2); font-size: 14px; }
+  .card li + li { margin-top: 4px; }
+  .seal { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 16px; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 8px;
+    border: 1px solid var(--line); background: var(--surface);
+    padding: 10px 16px; border-radius: 12px; font-size: 14px;
+  }
+  .dot { width: 10px; height: 10px; border-radius: 50%; }
+  .dot.ok { background: var(--ok); }
+  .dot.warn { background: var(--warn); }
+  table { width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 14px; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: var(--ink-2); }
+  td code, .mono { font-family: var(--mono); font-size: 12.5px; }
+  .num { font-variant-numeric: tabular-nums; font-family: var(--mono); }
+  .status { font-family: var(--mono); font-size: 12px; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+  .status.ok { background: rgba(26,127,77,.12); color: var(--ok); }
+  .warn-note { border-left: 3px solid var(--warn); background: var(--surface-2); padding: 14px 18px; margin: 16px 0; border-radius: 0 8px 8px 0; }
+  .sameline { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+  blockquote { border-left: 3px solid var(--line); margin: 16px 0 0; padding: 4px 0 4px 16px; color: var(--ink-2); }
+  .quiz { counter-reset: q; }
+  .q { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 18px; margin-top: 12px; }
+  .q .q-title { font-weight: 600; margin-bottom: 10px; }
+  .q .q-title::before { counter-increment: q; content: "Q" counter(q) " · "; color: var(--accent); font-family: var(--mono); }
+  .opt { display: flex; align-items: flex-start; gap: 10px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; margin-top: 6px; cursor: pointer; transition: border-color .15s; }
+  .opt:hover { border-color: var(--accent); }
+  .opt input { margin-top: 4px; }
+  .opt.ok { border-color: var(--ok); background: rgba(26,127,77,.06); }
+  .opt.bad { border-color: var(--crit); }
+  .reveal { color: var(--ink-2); font-size: 13px; margin-top: 8px; display: none; }
+  .opt.selected .reveal { display: block; }
+  footer { margin-top: 64px; padding-top: 20px; border-top: 1px solid var(--line); font-size: 13px; color: var(--ink-2); }
+  .btn { display:inline-block; margin-top:20px; padding:10px 18px; border:1px solid var(--accent); color: var(--accent); border-radius:10px; text-decoration:none; font-weight:600; font-size:14px; }
+  .commit { font-family: var(--mono); background: var(--surface-2); padding: 2px 8px; border-radius: 6px; font-size: 12.5px; }
+</style>
+
+<header>
+  <div class="eyebrow">变更报告 · V14 系列</div>
+  <h1>引擎融合、UI 飞跃、终局收紧</h1>
+  <p class="sub">
+    从 <span class="commit">eb38757</span> 到 <span class="commit">fd6718c</span> 的五个提交，把「听风改文件」从 V13 推进到 V14.1.1——
+    统一了复制引擎、抽取了编排器基类、接入了替换历史 UI，并完成一轮苛刻的独立审查与修复。
+  </p>
+  <div class="meta">
+    <span>仓库 AirFileEditor</span>
+    <span>分支 main</span>
+    <span class="num">5 commits</span>
+    <span>最新 tag v14.1.1</span>
+  </div>
+</header>
+
+<section>
+  <h2><span class="sec">01</span>上下文：这些变更为什么发生</h2>
+  <p>
+    项目原本有两套各自独立的文件复制引擎（旧 <b>IoOptimizer</b> 与新 <b>HighPerformanceIoEngine</b>），
+    Native 模式编排器仍走旧路径，进度看门狗、路径校验、shell 转义在三个 Orchestrator 里重复粘贴了约 60%。
+    同时，替换历史的数据流（<span class="mono">getReplaceHistory()</span>）早已存在，却在 UI 层没有任何入口——数据在，门关了。
+  </p>
+  <blockquote>直觉：与其再造第三套引擎，不如把两套合一、把重复抽基类、把已有数据流接到一个真实界面上。每一处都只做「融合」，不新造轮子。</blockquote>
+</section>
+
+<section>
+  <h2><span class="sec">02</span>时间线：五步推进</h2>
+  <div class="timeline">
+    <div class="tick">
+      <div class="sameline"><span class="t-title">V14 引擎融合</span><span class="t-tag">ddfc17b</span></div>
+      <p>创建 <span class="mono">IoEngine</span> 统一复制引擎（小文件直读 / 自适应缓冲 / ≥16MB mmap，Semaphore 限流）；抽取 <span class="mono">AbstractShellOrchestrator</span> 基类；NormalCopyOrchestrator 迁移到新入口。</p>
+    </div>
+    <div class="tick">
+      <div class="sameline"><span class="t-title">配置清理</span><span class="t-tag">19c199a</span></div>
+      <p>把误提交的 8 项本地 AI 配置（<span class="mono">.claude/</span>、<span class="mono">opencode.json</span> 等）移出仓库，补 <span class="mono">.gitignore</span> 规则。</p>
+    </div>
+    <div class="tick">
+      <div class="sameline"><span class="t-title">V14.1 终局收紧</span><span class="t-tag">052cfd9</span></div>
+      <p>IoEngineTest 14 用例落盘并全绿；骨架屏、空态、动画按钮真正接线到页面；新增替换历史 UI（列表/详情/删除/清空）；checkQuality（Detekt+Ktlint+JaCoCo）通过。</p>
+    </div>
+    <div class="tick">
+      <div class="sameline"><span class="t-title">V14.1.1 审查修复</span><span class="t-tag">fd6718c</span></div>
+      <p>独立审查线程揪出 4 个 P0 + 若干 P1：测试死断言、历史删除不自愈、进度条越界、formatSize 越界、生产链路仍用旧引擎。全部修复并复验。</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2><span class="sec">03</span>做了什么</h2>
+  <div class="grid">
+    <div class="card">
+      <div class="c-title">🧩 引擎统一</div>
+      <ul>
+        <li><span class="mono">IoEngine</span> 三种复制策略自动切换</li>
+        <li>增量检测：小文件全量 MD5 / 大文件三段抽样</li>
+        <li>生产解压链路完全迁移到 IoEngine</li>
+      </ul>
+    </div>
+    <div class="card">
+      <div class="c-title">🏗️ 架构瘦身</div>
+      <ul>
+        <li><span class="mono">AbstractShellOrchestrator</span> 承载看门狗/并发/路径安全</li>
+        <li>Root 与 Shizuku 各删 ~12 字段 + 4 重复方法</li>
+        <li>新增 <span class="mono">TfgwjShapes</span>/<span class="mono">TfgwjAnimation</span> 设计系统</li>
+      </ul>
+    </div>
+    <div class="card">
+      <div class="c-title">🖥️ UI 真实接线</div>
+      <ul>
+        <li>MainDashboard 加载骨架屏（<span class="mono">isLoading</span>）</li>
+        <li>小包列表空态 → <span class="mono">EmptyStateView</span></li>
+        <li>关键按钮 → <span class="mono">AnimatedButton</span> 按压缩放</li>
+        <li>工具栏「替换历史」入口 + 对话框内完整历史屏</li>
+      </ul>
+    </div>
+    <div class="card">
+      <div class="c-title">🧪 测试与门禁</div>
+      <ul>
+        <li>IoEngineTest 14 用例（三种策略/needsUpdate/指纹/并行）</li>
+        <li>core 34+ 用例全绿，app 全绿</li>
+        <li><span class="mono">checkQuality</span> 71 tasks 通过（含 JaCoCo）</li>
+      </ul>
+    </div>
+  </div>
+  <div class="seal">
+    <span class="chip"><span class="dot ok"></span><b>已闭环</b> · 引擎融合</span>
+    <span class="chip"><span class="dot ok"></span><b>已闭环</b> · UI 接线</span>
+    <span class="chip"><span class="dot ok"></span><b>已闭环</b> · 历史 UI</span>
+    <span class="chip"><span class="dot ok"></span><b>已闭环</b> · 审查修复</span>
+  </div>
+</section>
+
+<section>
+  <h2><span class="sec">04</span>审查发现与修复</h2>
+  <div style="overflow-x:auto">
+  <table>
+    <tr><th>发现</th><th>级别</th><th>修复</th></tr>
+    <tr><td class="mono">IoEngineTest mmap 死断言</td><td><span class="status" style="border:1px solid var(--crit);color:var(--crit)">P0</span></td><td>删除 <span class="mono">assertNull(error)</span>，断言改为「mmap 或降级均完整复制」</td></tr>
+    <tr><td class="mono">HistoryViewModel 删除不自愈</td><td><span class="status" style="border:1px solid var(--crit);color:var(--crit)">P0</span></td><td>写入后回写 UI 状态，异常精确捕获（IOException）</td></tr>
+    <tr><td class="mono">MainDashboard 进度条越界</td><td><span class="status" style="border:1px solid var(--crit);color:var(--crit)">P0</span></td><td><span class="mono">coerceIn(0f,1f)</span> + lambda 形式消除弃用</td></tr>
+    <tr><td class="mono">生产链路仍走旧 IoOptimizer</td><td><span class="status" style="border:1px solid var(--warn);color:var(--warn)">P1</span></td><td>MainActivity 解压链路全量迁移到 IoEngine</td></tr>
+    <tr><td class="mono">PatchVersionCard formatSize 越界</td><td><span class="status" style="border:1px solid var(--warn);color:var(--warn)">P1</span></td><td><span class="mono">coerceIn(0, units.lastIndex)</span></td></tr>
+    <tr><td class="mono">HistoryViewModel 泛 catch / 缺换行</td><td><span class="status" style="border:1px solid var(--warn);color:var(--warn)">P1</span></td><td>精确捕获 + ktlint 换行</td></tr>
+  </table>
+  </div>
+</section>
+
+<section>
+  <h2><span class="sec">05</span>验收证据</h2>
+  <div class="grid">
+    <div class="card"><div class="c-title">构建</div><ul><li class="num">:app compileDebugKotlin ✅</li><li class="num">:core compileDebugKotlin ✅</li></ul></div>
+    <div class="card"><div class="c-title">测试</div><ul><li class="num">core testDebugUnitTest ✅</li><li class="num">app testDebugUnitTest ✅</li><li class="num">domain test ✅</li></ul></div>
+    <div class="card"><div class="c-title">质量门禁</div><ul><li class="num">checkQuality 71 tasks ✅</li><li class="num">JaCoCo 覆盖率门禁 ✅</li></ul></div>
+    <div class="card"><div class="c-title">交付</div><ul><li class="num">main 已推送</li><li class="num">tag v14.0.0 → v14.1.1</li></ul></div>
+  </div>
+  <div class="warn-note">
+    <b>诚实边界：</b>「覆盖率 ≥80%」门禁当前注册在 <span class="mono">:app</span> 模块，<span class="mono">:core</span>/<span class="mono">:domain</span> 覆盖率未纳入硬门槛（全模块测试已全绿）。历史 UI 通过 Dialog 呈现而非 Navigation Compose 独立路由，属既有架构惯性。本机无模拟器/真机，E2E 以编译级+单测级+静态分析级完成。
+  </div>
+</section>
+
+<section class="quiz">
+  <h2><span class="sec">06</span>变更测验 · 你必须通过</h2>
+  <p class="muted">点击选项查看对错与解析。</p>
+
+  <div class="q">
+    <div class="q-title">V14 的「引擎融合」把哪两套复制引擎合并成了 IoEngine？</div>
+    <label class="opt"><input type="radio" name="q1" value="a">IoOptimizer 与 HighPerformanceIoEngine</label>
+    <label class="opt"><input type="radio" name="q1" value="b">IoOptimizer 与 FileHasher</label>
+    <label class="opt"><input type="radio" name="q1" value="c">HighPerformanceIoEngine 与 AppLogger</label>
+    <div class="reveal">✅ 正确。IoOptimizer（旧，375 行）与 HighPerformanceIoEngine（新，123 行）合并为统一 IoEngine，三种策略按文件大小自动切换。</div>
+  </div>
+
+  <div class="q">
+    <div class="q-title">IoEngine 对「极小文件（&lt;32KB）」使用哪种复制策略？</div>
+    <label class="opt"><input type="radio" name="q2" value="a">mmap 零拷贝</label>
+    <label class="opt"><input type="radio" name="q2" value="b">直接缓冲区复制</label>
+    <label class="opt"><input type="radio" name="q2" value="c">先抽样哈希再决定</label>
+    <div class="reveal">✅ 正确。极小文件走直接缓冲区复制，避免 mmap 的页表开销；≥16MB 才走 mmap（Semaphore(16) 限流）。</div>
+  </div>
+
+  <div class="q">
+    <div class="q-title">替换历史 UI 的数据从哪一层流入 HistoryViewModel？</div>
+    <label class="opt"><input type="radio" name="q3" value="a">:core 的 ReplaceProgressManager</label>
+    <label class="opt"><input type="radio" name="q3" value="b">:data 的 ReplaceHistoryManager（DataStore）</label>
+    <label class="opt"><input type="radio" name="q3" value="c">:domain 的 ReplaceFileUseCase</label>
+    <div class="reveal">✅ 正确。HistoryViewModel 收集 <span class="mono">ReplaceHistoryManager.history</span> Flow，删除/清空直接写 DataStore 持久化，UI 状态随流更新。</div>
+  </div>
+
+  <div class="q">
+    <div class="q-title">独立审查发现的 P0 中，哪项是「测试与实现契约错位」？</div>
+    <label class="opt"><input type="radio" name="q4" value="a">MainDashboard 进度条越界</label>
+    <label class="opt"><input type="radio" name="q4" value="b">IoEngineTest 的 mmap 测试对「降级即成功」仍用 assertNull(error) 死断言</label>
+    <label class="opt"><input type="radio" name="q4" value="c">HistoryViewModel 删除后不自愈</label>
+    <div class="reveal">✅ 正确。IoEngine 在 mmap 失败时会降级到自适应流（不抛异常），原测试却在 catch 里断言不得抛异常——一条永远不执行的死断言，无法证明真正走了 mmap 路径。已重命名并改为「mmap 或降级均完整复制」。</div>
+  </div>
+
+  <div class="q">
+    <div class="q-title">这轮变更最终推到了哪个 tag（push 到 GitHub）？</div>
+    <label class="opt"><input type="radio" name="q5" value="a">v13.0.0</label>
+    <label class="opt"><input type="radio" name="q5" value="b">v14.1.1</label>
+    <label class="opt"><input type="radio" name="q5" value="c">v15.0.0</label>
+    <div class="reveal">✅ 正确。main 已推送，最新 tag v14.1.1（含 v14.0.0 / v14.1.0 全部历史）。</div>
+  </div>
+</section>
+
+<footer>
+  <span class="mono">AirFileEditor · V13 → V14.1.1 · 生成于 2026-08-25</span>
+</footer>
+
+<script>
+document.querySelectorAll('.opt').forEach(function(o){
+  var r = o.querySelector('input');
+  o.addEventListener('click', function(){
+    var q = o.closest('.q');
+    // 清除同题其他选中态
+    q.querySelectorAll('.opt').forEach(function(x){ x.classList.remove('selected'); });
+    o.classList.add('selected');
+  });
+});
+// 重置单选框为不可互斥（可视化）
+document.querySelectorAll('input[type=radio]').forEach(function(i){ i.addEventListener('click', function(e){ e.stopPropagation(); }); });
+</script>
