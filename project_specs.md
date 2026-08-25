@@ -102,6 +102,17 @@ IoOptimizer (IO 优化)
 
 ## 6. 版本历史
 
+### V15.0.0 (已完成 - 任务控制重构与功能完整闭环)
+- ✅ **TaskController 接口与实现**: 新增 `TaskController` 接口（domain 层）+ `TaskControllerImpl`（core 层），替代 `ReplaceProgressManager` 全局单例
+- ✅ **ReplaceProgressManager 全面迁移**: 11 个文件全部迁移至 `TaskController`（Worker/Strategy/ConfigRepository/UI），原文件标记 `@Deprecated`
+- ✅ **IoOptimizer 全面迁移到 IoEngine**: ExtractManager/UniversalExtractor/PatchManager/NormalCopyStrategy 全部迁移，IoOptimizer 标记 `@Deprecated`
+- ✅ **SnackbarManager 统一管理**: 创建 `SnackbarManager` 事件总线，替换 MainActivity 中 19 处 `Toast.makeText()`
+- ✅ **测试补全**: AdaptiveBufferManagerTest(10) / TransactionWalManagerTest(9) / PathConstantsTest(20) / CopyConfigTest(5) = 44 个新用例
+- ✅ **ProgressTracker 栈溢出修复**: 注入 `clock` 函数替代 `mockkStatic(System::class)` 解决无限递归
+- ✅ **Windows 文件锁修复**: 移除 `doFirst` 清理逻辑，避免 Gradle 测试执行器锁冲突
+- ✅ **checkQuality 门禁**: Detekt + Ktlint + JaCoCo 全绿通过
+- ✅ **.kotlin 缓存清理**: 移除误追踪文件，更新 `.gitignore`
+
 ### V13.0.0 (已完成 - 安全与任务闭环)
 - ✅ **状态机统一**: ReplaceProgressManager 使用 TaskPhase 枚举替代字符串 phase，消除歧义，终态包含 COMPLETED/FAILURE/CANCELLED
 - ✅ **目标身份模型**: 新增 TargetApp/TargetLocation 领域模型，带包名校验，消除空包名兜底与默认包名回退
@@ -263,12 +274,14 @@ IoOptimizer (IO 优化)
 - ✅ CI/CD：GitHub Actions 自动化流水线
 - ✅ 覆盖率验证：Jacoco 80% 目标建立
 
-## 8. 未来演进愿景 (V14 - V18)
-详细计划见 [`docs/plans/下一步改进指南.md`](docs/plans/下一步改进指南.md)（V14-V18 完整落地路线，含引擎融合、UI 重构、测试补全、任务控制重构、跨设备、AI 与 KMP）
+## 8. 未来演进愿景 (V16 - V20)
+详细计划见 [`docs/plans/下一步改进指南.md`](docs/plans/下一步改进指南.md)（V16-V20 完整落地路线，含文件浏览器、跨设备协作、AI 智能助手、KMP 跨平台、极致性能）
 
-- **V14 (Advanced Stealth)**: 隐匿性增强，防范厂商侦测，Phantom Stealth 2.0。
-- **V15 (AI Agent Integration)**: 集成端侧大模型，实现自然语言管理文件。
-- **V16 (Universal Core)**: 跨平台核心库 (KMP)，支持除 Android 外的更多系统管理。
+- **V16 (文件浏览器引擎)**: 目录浏览、搜索排序、批量操作、国际化支持。
+- **V17 (跨设备协作与安全)**: 备份同步、云集成、WAL 加密、审计日志。
+- **V18 (AI 智能助手)**: ONNX Runtime 端侧 AI、文件分类、异常检测、自动化规则引擎。
+- **V19 (KMP 跨平台核心)**: 跨平台核心库，支持桌面平台适配。
+- **V20 (极致性能)**: 多线程 mmap、直接 I/O 优化、全链路基准测试。
 
 ### 难点 1: Android 11+ 的分区存储限制
 

@@ -5,6 +5,7 @@
 ### 架构
 - 新增 TaskController 接口 (domain 层) + TaskControllerImpl 实现 (core 层)
 - ReplaceProgressManager 全局单例标记 @Deprecated，8 个文件迁移至 TaskController
+- **UI 层 3 个文件 ReplaceProgressManager 引用全部迁移**：MainActivity / FloatingBallManager / MainViewModel
 - 新增 IoEngine.acquireBuffer/releaseBuffer 缓冲区管理接口
 - ExtractManager/UniversalExtractor 缓冲区管理迁移至 IoEngine.bufferManager
 
