@@ -31,7 +31,7 @@ class UniversalExtractor private constructor() {
     companion object {
         private const val TAG = "UniversalExtractor"
         private val BUFFER_SIZE: Int
-            get() = com.example.tfgwj.utils.IoOptimizer.getOptimalBufferSize()
+            get() = com.example.tfgwj.performance.IoEngine.bufferManager.getCurrentBufferSize()
 
         // 支持的格式
         val SUPPORTED_EXTENSIONS =
@@ -216,11 +216,10 @@ class UniversalExtractor private constructor() {
                 BufferedInputStream(fis).use { bis ->
                     ZipInputStream(bis).use { zis ->
                         var entry = zis.nextEntry
-                        val buffer = com.example.tfgwj.utils.IoOptimizer.acquireBuffer()
+                        val buffer = ByteArray(com.example.tfgwj.performance.IoEngine.bufferManager.getCurrentBufferSize())
                         var totalWrittenBytes = 0L
 
-                        try {
-                            while (entry != null) {
+                        while (entry != null) {
                                 // 1. 检查暂停
                                 kotlinx.coroutines.runBlocking { PauseControl.waitIfPaused() }
 
@@ -264,12 +263,9 @@ class UniversalExtractor private constructor() {
                                 zis.closeEntry()
                                 entry = zis.nextEntry
                             }
-                        } finally {
-                            com.example.tfgwj.utils.IoOptimizer.releaseBuffer(buffer)
                         }
                     }
                 }
-            }
 
             ExtractResult(true, outputDir, extractedCount)
         } catch (e: Exception) {
@@ -540,26 +536,22 @@ class UniversalExtractor private constructor() {
                         outFile.mkdirs()
                     } else {
                         outFile.parentFile?.mkdirs()
-                        val buffer = com.example.tfgwj.utils.IoOptimizer.acquireBuffer()
-                        try {
-                            BufferedOutputStream(FileOutputStream(outFile)).use { bos ->
-                                var entryBytes = 0L
-                                var len = 0
-                                while (archiveIn.read(buffer).also { len = it } > 0) {
-                                    entryBytes += len
-                                    require(entryBytes <= ArchiveSafetyGuard.MAX_ENTRY_SIZE_BYTES) {
-                                        "压缩包单文件超过大小限制: ${entry.name}"
-                                    }
-                                    totalWrittenBytes = ArchiveSafetyGuard.addBytesWithinLimit(totalWrittenBytes, len.toLong())
-                                    bos.write(buffer, 0, len)
+                        val buffer = ByteArray(com.example.tfgwj.performance.IoEngine.bufferManager.getCurrentBufferSize())
+                        BufferedOutputStream(FileOutputStream(outFile)).use { bos ->
+                            var entryBytes = 0L
+                            var len = 0
+                            while (archiveIn.read(buffer).also { len = it } > 0) {
+                                entryBytes += len
+                                require(entryBytes <= ArchiveSafetyGuard.MAX_ENTRY_SIZE_BYTES) {
+                                    "压缩包单文件超过大小限制: ${entry.name}"
                                 }
-                                bos.flush()
+                                totalWrittenBytes = ArchiveSafetyGuard.addBytesWithinLimit(totalWrittenBytes, len.toLong())
+                                bos.write(buffer, 0, len)
                             }
-                        } finally {
-                            com.example.tfgwj.utils.IoOptimizer.releaseBuffer(buffer)
+                            bos.flush()
                         }
-                        count++
                     }
+                    count++
                     entry = archiveIn.nextEntry
                 }
             }

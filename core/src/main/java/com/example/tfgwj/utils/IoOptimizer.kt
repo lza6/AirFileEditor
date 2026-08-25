@@ -30,6 +30,7 @@ import java.util.concurrent.atomic.AtomicInteger
  * - Dynamic concurrency control
  * - Incremental update detection
  */
+@Deprecated("已由 IoEngine 替代，请使用 com.example.tfgwj.performance.IoEngine", ReplaceWith("IoEngine", "com.example.tfgwj.performance.IoEngine"))
 object IoOptimizer {
     private const val TAG = "IoOptimizer"
 
