@@ -3,7 +3,6 @@ package com.example.tfgwj.worker
 import android.content.Context
 import android.util.Log
 import com.example.tfgwj.domain.model.TaskPhase
-import com.example.tfgwj.manager.ReplaceProgressManager
 import com.example.tfgwj.utils.RootChecker
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -31,6 +30,8 @@ class RootCopyStrategy(
         private const val TAG = "RootCopyStrategy"
     }
 
+    private val taskController = TaskControllerImpl()
+
     override val strategyName: String = "ROOT_BATCH"
 
     /**
@@ -54,8 +55,8 @@ class RootCopyStrategy(
             Log.d(TAG, "源路径: ${sourceDir.absolutePath}")
 
             // Reset progress manager
-            ReplaceProgressManager.reset()
-            ReplaceProgressManager.startMeasure()
+            taskController.reset()
+            taskController.startMeasure()
 
             // Scan source files
             callback?.onProgress(0, 0, 0, "正在扫描源文件...", phase = TaskPhase.PREPARING)
@@ -78,7 +79,7 @@ class RootCopyStrategy(
             val verifiedCount = verifyFilesParallel(sourceDir, targetPackage, totalFiles)
 
             // Mark complete
-            ReplaceProgressManager.finish()
+            taskController.finish()
             Log.d(TAG, "所有任务完成")
 
             CopyStrategy.CopyResult.success(

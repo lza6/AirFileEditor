@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.asStateFlow
  *                ↓            ↓           ↓
  *                └──── FAILURE / CANCELLED ←┘
  */
+@Deprecated("已由 TaskController 替代，请使用 com.example.tfgwj.worker.TaskControllerImpl")
 object ReplaceProgressManager {
     data class ProgressState(
         val processed: Int = 0,

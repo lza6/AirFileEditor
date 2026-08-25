@@ -3,7 +3,6 @@ package com.example.tfgwj.worker
 import android.content.Context
 import android.util.Log
 import com.example.tfgwj.domain.model.TaskPhase
-import com.example.tfgwj.manager.ReplaceProgressManager
 import com.example.tfgwj.utils.IoOptimizer
 import com.example.tfgwj.utils.IoRateCalculator
 import com.example.tfgwj.utils.PauseControl
@@ -29,6 +28,8 @@ class NormalCopyStrategy(
     companion object {
         private const val TAG = "NormalCopyStrategy"
     }
+
+    private val taskController = TaskControllerImpl()
 
     override val strategyName: String = "NORMAL"
 
@@ -132,7 +133,7 @@ class NormalCopyStrategy(
             }
 
             Log.d(TAG, "普通模式完成")
-            ReplaceProgressManager.finish()
+            taskController.finish()
 
             CopyStrategy.CopyResult.success(
                 processedCount = processedCount.get(),

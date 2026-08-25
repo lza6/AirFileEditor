@@ -13,9 +13,9 @@ import com.example.tfgwj.worker.FileReplaceWorkerV2
 import com.example.tfgwj.worker.orchestrator.PathConstants
 import com.example.tfgwj.manager.ArchiveScanner
 import com.example.tfgwj.manager.ExtractManager
-import com.example.tfgwj.manager.ReplaceProgressManager
 import com.example.tfgwj.manager.MainPackManager
 import com.example.tfgwj.manager.PatchManager
+import com.example.tfgwj.worker.TaskControllerImpl
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -33,6 +33,7 @@ class ConfigRepositoryImpl(
 ) : ConfigRepository {
 
     private val _permissionStatus = MutableStateFlow(PermissionStatus())
+    private val taskController = TaskControllerImpl()
 
     override suspend fun checkEnvironment(packageName: String, forceRefresh: Boolean): PermissionStatus {
         val result = PermissionChecker.checkPermissionAccess(packageName, forceRefresh, context)
@@ -74,15 +75,15 @@ class ConfigRepositoryImpl(
     override suspend fun cancelReplace(): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
             WorkManager.getInstance(context).cancelUniqueWork(FileReplaceWorkerV2.UNIQUE_WORK_NAME)
-            ReplaceProgressManager.cancel()
+            taskController.cancel()
         }
     }
 
     override suspend fun dismissReplaceResult(): Result<Unit> = withContext(Dispatchers.IO) {
-        runCatching { ReplaceProgressManager.reset() }
+        runCatching { taskController.reset() }
     }
 
-    override fun getTaskProgress(): Flow<TaskProgress> = ReplaceProgressManager.progressState.map {
+    override fun getTaskProgress(): Flow<TaskProgress> = taskController.state.map {
         TaskProgress(
             processed = it.processed,
             total = it.total,
