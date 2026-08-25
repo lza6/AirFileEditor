@@ -7,7 +7,6 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.view.View
-import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
@@ -29,6 +28,7 @@ import com.example.tfgwj.ui.HelpDialog
 import com.example.tfgwj.ui.TimePickerHelper
 import com.example.tfgwj.ui.components.atoms.TaskStatus
 import com.example.tfgwj.ui.components.molecules.PermissionCard
+import com.example.tfgwj.ui.components.molecules.SnackbarManager
 import com.example.tfgwj.ui.components.organisms.HistoryScreen
 import com.example.tfgwj.ui.components.organisms.MainDashboard
 import com.example.tfgwj.ui.compose.TaskProgressOverlay
@@ -511,7 +511,7 @@ class MainActivity : AppCompatActivity() {
                     count: Int,
                     formatted: String,
                 ) {
-                    Toast.makeText(this@MainActivity, "已修改 $count 个文件", Toast.LENGTH_SHORT).show()
+                    SnackbarManager.show("已修改 $count 个文件")
                 }
 
                 override fun onApplyFailed(error: String) {}
@@ -527,12 +527,12 @@ class MainActivity : AppCompatActivity() {
             if (locked != null) {
                 preferencesManager.unlockTime()
                 replacingViewModel.handleIntent(ReplacingIntent.UnlockFileTime)
-                Toast.makeText(this@MainActivity, "🔓 已解锁时间", Toast.LENGTH_SHORT).show()
+                SnackbarManager.showSuccess("已解锁时间")
             } else {
                 FileTimeModifier.getFileTime(path)?.let {
                     preferencesManager.lockTime(it)
                     replacingViewModel.handleIntent(ReplacingIntent.LockFileTime(it))
-                    Toast.makeText(this@MainActivity, "✓ 已锁定时间: ${FileTimeModifier.formatTime(it)}", Toast.LENGTH_SHORT).show()
+                    SnackbarManager.showSuccess("已锁定时间")
                 }
             }
         }
@@ -547,7 +547,7 @@ class MainActivity : AppCompatActivity() {
                 ).setTitle("应用锁定时间").setMessage("将文件时间修改为锁定的时间: ${FileTimeModifier.formatTime(time)}?").setPositiveButton("确定") { _, _ ->
                     lifecycleScope.launch {
                         val (count, _) = FileTimeModifier.setCustomTime(path, time)
-                        Toast.makeText(this@MainActivity, "已修改 $count 个文件", Toast.LENGTH_LONG).show()
+                        SnackbarManager.show("已修改 $count 个文件")
                     }
                 }.setNegativeButton("取消", null).show()
             }
@@ -558,7 +558,7 @@ class MainActivity : AppCompatActivity() {
         val cm = getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
         val logs = replacingViewModel.uiState.value.logContent
         cm.setPrimaryClip(android.content.ClipData.newPlainText("Logs", logs))
-        Toast.makeText(this, "日志已复制", Toast.LENGTH_SHORT).show()
+        SnackbarManager.show("日志已复制")
     }
 
     private fun startReplaceToGame() {
@@ -569,7 +569,7 @@ class MainActivity : AppCompatActivity() {
             if (targetPackage.isBlank() ||
                 !com.example.tfgwj.worker.orchestrator.PathConstants.isValidPackageName(targetPackage)
             ) {
-                Toast.makeText(this@MainActivity, "请先选择有效的目标应用", Toast.LENGTH_LONG).show()
+                SnackbarManager.showError("请先选择有效的目标应用")
                 return@launch
             }
             val status = permissionManager.checkAllPermissions()
@@ -599,15 +599,15 @@ class MainActivity : AppCompatActivity() {
         lifecycleScope.launch {
             val pkg = preferencesManager.appPackageName.first()
             if (pkg.isBlank()) {
-                Toast.makeText(this@MainActivity, "请先选择目标应用", Toast.LENGTH_SHORT).show()
+                SnackbarManager.showError("请先选择目标应用")
                 return@launch
             }
             try {
                 packageManager.getLaunchIntentForPackage(pkg)?.let {
                     startActivity(it)
-                } ?: Toast.makeText(this@MainActivity, "未找到游戏", Toast.LENGTH_SHORT).show()
+                } ?: SnackbarManager.showError("未找到游戏")
             } catch (e: Exception) {
-                Toast.makeText(this@MainActivity, "启动失败", Toast.LENGTH_SHORT).show()
+                SnackbarManager.showError("启动失败")
             }
         }
     }
@@ -617,11 +617,11 @@ class MainActivity : AppCompatActivity() {
             lifecycleScope.launch {
                 val pkg = preferencesManager.appPackageName.first()
                 if (pkg.isBlank()) {
-                    Toast.makeText(this@MainActivity, "请先选择目标应用", Toast.LENGTH_SHORT).show()
+                    SnackbarManager.showError("请先选择目标应用")
                     return@launch
                 }
                 SmartCacheManager.cleanEnvironment(this@MainActivity, pkg, shizukuManager) { _, _, _ -> }
-                Toast.makeText(this@MainActivity, "✅ 清理完成", Toast.LENGTH_LONG).show()
+                SnackbarManager.showSuccess("清理完成")
             }
         }.setNegativeButton("取消", null).show()
     }
@@ -648,11 +648,7 @@ class MainActivity : AppCompatActivity() {
         lifecycleScope.launch {
             val archives = ArchiveScanner.getInstance().scanArchives()
             if (archives.isEmpty()) {
-                Toast.makeText(
-                    this@MainActivity,
-                    "未找到压缩包",
-                    Toast.LENGTH_SHORT,
-                ).show()
+                SnackbarManager.showError("未找到压缩包")
             } else {
                 MaterialAlertDialogBuilder(this@MainActivity).setTitle("选择压缩包解压").setItems(
                     archives.map {
@@ -674,12 +670,12 @@ class MainActivity : AppCompatActivity() {
             if (pkg.isBlank() ||
                 !com.example.tfgwj.worker.orchestrator.PathConstants.isValidPackageName(pkg)
             ) {
-                Toast.makeText(this@MainActivity, "请先选择有效的目标应用", Toast.LENGTH_LONG).show()
+                SnackbarManager.showError("请先选择有效的目标应用")
                 return@launch
             }
             val archives = ArchiveScanner.getInstance().scanArchives()
             if (archives.isEmpty()) {
-                Toast.makeText(this@MainActivity, "未找到压缩包", Toast.LENGTH_SHORT).show()
+                SnackbarManager.showError("未找到压缩包")
             } else {
                 MaterialAlertDialogBuilder(this@MainActivity).setTitle("选择压缩包解压到主包").setItems(
                     archives.map {
@@ -719,7 +715,7 @@ class MainActivity : AppCompatActivity() {
                             if (copyResult.success) {
                                 loadPatchVersions()
                             } else {
-                                Toast.makeText(this@MainActivity, "部分更新文件复制失败", Toast.LENGTH_LONG).show()
+                                SnackbarManager.showError("部分更新文件复制失败")
                             }
                         }
                     }
@@ -747,13 +743,13 @@ class MainActivity : AppCompatActivity() {
                                                 )
                                             when (result) {
                                                 is AppInstaller.InstallResult.Success ->
-                                                    Toast.makeText(this@MainActivity, "已发起安装 (${result.mode})", Toast.LENGTH_SHORT).show()
+                                                    SnackbarManager.showSuccess("已发起安装")
                                                 is AppInstaller.InstallResult.Failure ->
-                                                    Toast.makeText(this@MainActivity, "安装失败: ${result.reason}", Toast.LENGTH_LONG).show()
+                                                    SnackbarManager.showError("安装失败")
                                             }
                                         }
-                                        progress == -2 -> Toast.makeText(this@MainActivity, "更新包校验失败，已删除", Toast.LENGTH_LONG).show()
-                                        progress < 0 -> Toast.makeText(this@MainActivity, "更新下载失败", Toast.LENGTH_LONG).show()
+                                        progress == -2 -> SnackbarManager.showError("更新包校验失败，已删除")
+                                        progress < 0 -> SnackbarManager.showError("更新下载失败")
                                     }
                                 }
                             }
@@ -774,7 +770,7 @@ class MainActivity : AppCompatActivity() {
         ).setPrimaryClip(android.content.ClipData.newPlainText("微信号", id))
         try {
             packageManager.getLaunchIntentForPackage("com.tencent.mm")?.let { startActivity(it) }
-            Toast.makeText(this, "微信号已复制", Toast.LENGTH_LONG).show()
+            SnackbarManager.show("微信号已复制")
         } catch (e: Exception) {
         }
     }
