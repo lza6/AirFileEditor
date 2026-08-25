@@ -18,13 +18,16 @@ import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import com.example.tfgwj.R
 import com.example.tfgwj.domain.model.TaskPhase
+import com.example.tfgwj.domain.repository.TaskState
 import com.example.tfgwj.utils.AppLogger
 import com.example.tfgwj.utils.PauseControl
 import com.example.tfgwj.worker.FileReplaceWorkerV2
+import com.example.tfgwj.worker.TaskControllerImpl
 import com.google.android.material.progressindicator.CircularProgressIndicator
 import com.google.android.material.progressindicator.LinearProgressIndicator
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
@@ -283,15 +286,25 @@ class FloatingBallManager(private val context: Context) {
      * 启动实时进度监听
      */
     private fun startRealtimeProgressObserver() {
+        // V15 临时方案：从 TaskController 获取任务状态流，替代 ReplaceProgressManager.progressState
+        // 长期应改为通过 ConfigRepository 注入，避免直接实例化 TaskControllerImpl
+        val taskController = TaskControllerImpl()
+        observeProgress(taskController.state)
+    }
+
+    /**
+     * 订阅外部注入的任务进度流
+     */
+    fun observeProgress(flow: Flow<TaskState>) {
         scope.launch {
-            com.example.tfgwj.manager.ReplaceProgressManager.progressState.collectLatest { state ->
+            flow.collectLatest { state ->
                 if (state.total > 0 && state.isReplacing && isShowing) {
                     updateProgress(
                         progress = state.progress,
                         processed = state.processed,
                         total = state.total,
                         currentFile = state.currentFile,
-                        mode = "", // 实时管理器暂不带 mode，由 updateProgress 处理
+                        mode = "", // 实时控制器暂不带 mode，由 updateProgress 处理
                         speed = state.speed,
                         phase = state.phase,
                     )

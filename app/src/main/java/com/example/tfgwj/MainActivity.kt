@@ -93,8 +93,8 @@ class MainActivity : AppCompatActivity() {
         checkAllPermissions()
 
         lifecycleScope.launch {
-            ReplaceProgressManager.progressState.collectLatest { state ->
-                if (state.total > 0 && state.isReplacing && !floatingBallManager.isShowing()) {
+            replacingViewModel.uiState.collectLatest { state ->
+                if (state.totalFiles > 0 && state.isReplacing && !floatingBallManager.isShowing()) {
                     floatingBallManager.show()
                 } else if (!state.isReplacing && floatingBallManager.isShowing()) {
                     floatingBallManager.hide()
@@ -236,10 +236,9 @@ class MainActivity : AppCompatActivity() {
         binding.composeViewDashboard.setContent {
             TfgwjTheme {
                 val uiState by replacingViewModel.uiState.collectAsState()
-                val progressState by ReplaceProgressManager.progressState.collectAsState()
                 val ioStats =
                     PerformanceMonitor.getIOStats().let {
-                        if (progressState.speed > 0f) it.copy(avgSpeedMBps = progressState.speed.toDouble()) else it
+                        if (uiState.speedMBps > 0f) it.copy(avgSpeedMBps = uiState.speedMBps.toDouble()) else it
                     }
                 val taskStatus =
                     when {

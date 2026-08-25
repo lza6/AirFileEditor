@@ -5,8 +5,8 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.tfgwj.data.PreferencesManager
 import com.example.tfgwj.domain.model.TaskPhase
-import com.example.tfgwj.manager.*
 import com.example.tfgwj.performance.PerformanceMonitor
+import com.example.tfgwj.worker.TaskControllerImpl
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
@@ -63,7 +63,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun observeProgress() {
         viewModelScope.launch {
-            ReplaceProgressManager.progressState.collect { state ->
+            val taskController = TaskControllerImpl()
+            taskController.state.collect { state ->
                 _replaceProgress.value =
                     ReplaceProgressState(
                         progress = state.progress,
