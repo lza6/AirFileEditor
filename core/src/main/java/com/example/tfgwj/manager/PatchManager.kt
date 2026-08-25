@@ -1,5 +1,6 @@
 package com.example.tfgwj.manager
 
+import com.example.tfgwj.performance.IoEngine
 import com.example.tfgwj.utils.AppLogger
 import com.example.tfgwj.utils.PermissionChecker
 import kotlinx.coroutines.Dispatchers
@@ -197,7 +198,7 @@ class PatchManager private constructor() {
                 val total = allItems.size
 
                 val result =
-                    com.example.tfgwj.utils.IoOptimizer.parallelProcess(
+                    com.example.tfgwj.performance.IoEngine.parallelProcess(
                         items = allItems,
                         action = { item ->
                             var deleted = false
@@ -310,13 +311,13 @@ class PatchManager private constructor() {
                 val total = iniFiles.size
 
                 val result =
-                    com.example.tfgwj.utils.IoOptimizer.parallelProcess(
+                    com.example.tfgwj.performance.IoEngine.parallelProcess(
                         items = iniFiles,
                         action = { iniFile ->
                             val targetFile = File(configDir, iniFile.name)
                             // 增量更新检测
-                            if (com.example.tfgwj.utils.IoOptimizer.needsUpdate(iniFile, targetFile)) {
-                                com.example.tfgwj.utils.IoOptimizer.fastCopy(iniFile, targetFile)
+                            if (com.example.tfgwj.performance.IoEngine.needsUpdate(iniFile, targetFile)) {
+                                com.example.tfgwj.performance.IoEngine.fastCopy(iniFile, targetFile) > 0L
                             } else {
                                 true // 不需要更新也视为成功
                             }

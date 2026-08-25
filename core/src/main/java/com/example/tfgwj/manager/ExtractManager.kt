@@ -27,7 +27,7 @@ class ExtractManager private constructor() {
 
         // 智能计算的最佳缓冲区大小
         private val optimalBufferSize: Int
-            get() = com.example.tfgwj.utils.IoOptimizer.getOptimalBufferSize()
+            get() = com.example.tfgwj.performance.IoEngine.bufferManager.getCurrentBufferSize()
 
         @Volatile
         private var instance: ExtractManager? = null
@@ -282,14 +282,13 @@ class ExtractManager private constructor() {
             var lastTimeUpdate = 0L
             var entry = sevenZFile.nextEntry
 
-            // 使用 IoOptimizer 的缓冲区
+            // 使用 IoEngine 管理器缓冲区
             val bufferSize = optimalBufferSize
-            val buffer = com.example.tfgwj.utils.IoOptimizer.acquireBuffer()
+            val buffer = ByteArray(com.example.tfgwj.performance.IoEngine.bufferManager.getCurrentBufferSize())
 
             Log.d(TAG, "开始解压 7z 文件，缓冲区: ${buffer.size / 1024}KB")
 
-            try {
-                while (entry != null) {
+            while (entry != null) {
                     if (!entry.isDirectory) {
                         val outFile = ArchiveEntryValidator.resolveWithin(File(outputPath), entry.name)
                         outFile.parentFile?.mkdirs()
@@ -365,9 +364,6 @@ class ExtractManager private constructor() {
                     }
                     entry = sevenZFile.nextEntry
                 }
-            } finally {
-                com.example.tfgwj.utils.IoOptimizer.releaseBuffer(buffer)
-            }
 
             sevenZFile.close()
 
@@ -449,10 +445,9 @@ class ExtractManager private constructor() {
                     val outputFile = ArchiveEntryValidator.resolveWithin(destinationDir, header.fileName)
                     outputFile.parentFile?.mkdirs()
 
-                    // 使用 IoOptimizer 的缓冲区
-                    val buffer = com.example.tfgwj.utils.IoOptimizer.acquireBuffer()
-                    try {
-                        BufferedOutputStream(FileOutputStream(outputFile), buffer.size).use { bos ->
+                    // 使用 IoEngine 管理器缓冲区
+                    val buffer = ByteArray(com.example.tfgwj.performance.IoEngine.bufferManager.getCurrentBufferSize())
+                    BufferedOutputStream(FileOutputStream(outputFile), buffer.size).use { bos ->
                             val inputStream = zipFile.getInputStream(header)
                             var entryBytes = 0L
                             var len = 0
@@ -467,9 +462,6 @@ class ExtractManager private constructor() {
                             inputStream.close()
                             bos.flush()
                         }
-                    } finally {
-                        com.example.tfgwj.utils.IoOptimizer.releaseBuffer(buffer)
-                    }
 
                     extractedCount++
 

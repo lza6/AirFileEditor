@@ -4,7 +4,6 @@ import android.content.Context
 import android.util.Log
 import com.example.tfgwj.domain.model.TaskPhase
 import com.example.tfgwj.manager.ReplaceProgressManager
-import com.example.tfgwj.utils.IoOptimizer
 import com.example.tfgwj.utils.IoRateCalculator
 import com.example.tfgwj.utils.PauseControl
 import kotlinx.coroutines.Dispatchers
@@ -100,7 +99,7 @@ class NormalCopyStrategy(
                                     }
 
                                     // Execute Zero-Copy
-                                    val success = IoOptimizer.fastCopy(file, targetFile)
+                                    val success = com.example.tfgwj.performance.IoEngine.fastCopy(file, targetFile) > 0L
                                     val bytes = if (success) file.length() else 0L
 
                                     val currentBytes = totalBytesProcessed.addAndGet(bytes)
