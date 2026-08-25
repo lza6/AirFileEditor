@@ -16,16 +16,12 @@ import kotlinx.coroutines.launch
  * 3. 速度计算：基于时间窗口的文件处理速率
  * 4. 阶段管理：区分 REPLACING 和 VERIFYING 阶段
  *
- * 设计亮点：
- * - 线程安全：使用 AtomicLong 记录时间戳
- * - 可测试性：纯函数式速度计算，易于单元测试
- * - 零内存分配：重用回调对象，避免 GC 压力
- *
  * @version V8.0.0 - Architecture Evolution
  */
 class ProgressTracker(
     private val config: CopyConfig,
     private val scope: CoroutineScope,
+    private val clock: () -> Long = { System.currentTimeMillis() },
     private val onProgressUpdate: (progress: Int, processed: Int, total: Int, message: String, speed: Float, phase: TaskPhase) -> Unit,
 ) {
     companion object {
@@ -61,7 +57,7 @@ class ProgressTracker(
      */
     fun initialize(totalFiles: Int) {
         this.totalFiles = totalFiles
-        this.startTime = System.currentTimeMillis()
+        this.startTime = clock()
         this.lastWmUpdateTime = 0L
         this.lastUiUpdateTime = 0L
         speedCalculator.reset()
@@ -78,7 +74,7 @@ class ProgressTracker(
         phase: TaskPhase = TaskPhase.REPLACING,
     ) {
         currentPhase = phase
-        val currentTime = System.currentTimeMillis()
+        val currentTime = clock()
 
         // 计算进度百分比
         val progress =
@@ -111,7 +107,7 @@ class ProgressTracker(
      * 标记完成
      */
     fun markComplete() {
-        val finalTime = System.currentTimeMillis()
+        val finalTime = clock()
         val duration = finalTime - startTime
         val avgSpeed = if (duration > 0) totalFiles / (duration / 1000.0) else 0.0
 

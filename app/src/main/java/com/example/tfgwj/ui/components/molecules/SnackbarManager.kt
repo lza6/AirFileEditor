@@ -21,18 +21,26 @@ object SnackbarManager {
         val isError: Boolean = false,
     ) {
         class Show(message: String, actionLabel: String? = null) : SnackbarEvent(message, actionLabel)
+
         class Error(message: String, actionLabel: String? = null) : SnackbarEvent(message, actionLabel, isError = true)
+
         class Success(message: String) : SnackbarEvent(message)
     }
 
     private val _events = MutableSharedFlow<SnackbarEvent>(extraBufferCapacity = 10)
     val events: SharedFlow<SnackbarEvent> = _events.asSharedFlow()
 
-    fun show(message: String, actionLabel: String? = null) {
+    fun show(
+        message: String,
+        actionLabel: String? = null,
+    ) {
         _events.tryEmit(SnackbarEvent.Show(message, actionLabel))
     }
 
-    fun showError(message: String, actionLabel: String? = null) {
+    fun showError(
+        message: String,
+        actionLabel: String? = null,
+    ) {
         _events.tryEmit(SnackbarEvent.Error(message, actionLabel))
     }
 

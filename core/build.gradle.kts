@@ -33,13 +33,6 @@ android {
                     events("passed", "skipped", "failed")
                     setExceptionFormat("full")
                 }
-                // Windows 避免二进制锁问题：每次测试前清理结果目录
-                it.doFirst {
-                    val resultsDir = it.reports.junitXml.outputLocation.get().asFile
-                    if (resultsDir.exists()) {
-                        resultsDir.deleteRecursively()
-                    }
-                }
             }
         }
     }

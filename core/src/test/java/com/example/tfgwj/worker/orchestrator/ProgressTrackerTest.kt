@@ -16,7 +16,9 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
+import android.os.Looper
 
 @OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
@@ -35,6 +37,8 @@ class ProgressTrackerTest {
     private var lastSpeed = -1f
     private var lastPhase = TaskPhase.IDLE
 
+    private var virtualTime = 0L
+
     private lateinit var tracker: ProgressTracker
 
     @Before
@@ -46,25 +50,27 @@ class ProgressTrackerTest {
         every { Log.e(any<String>(), any<String>()) } returns 0
         every { Log.e(any<String>(), any<String>(), any<Throwable>()) } returns 0
 
-        mockkStatic(System::class)
-        // Set initial time
-        every { System.currentTimeMillis() } returns 1000L
-
+        virtualTime = 1000L
         progressCount = 0
-        tracker = ProgressTracker(config, testScope) { p: Int, pr: Int, t: Int, m: String, s: Float, ph: TaskPhase ->
-            progressCount++
-            lastProgress = p
-            lastProcessed = pr
-            lastTotal = t
-            lastMessage = m
-            lastSpeed = s
-            lastPhase = ph
-        }
+        tracker =
+            ProgressTracker(
+                config, testScope,
+                clock = { virtualTime },
+            ) { p, pr, t, m, s, ph ->
+                progressCount++
+                lastProgress = p
+                lastProcessed = pr
+                lastTotal = t
+                lastMessage = m
+                lastSpeed = s
+                lastPhase = ph
+            }
     }
 
     @After
     fun tearDown() {
         try {
+            shadowOf(Looper.getMainLooper()).idle()
             unmockkAll()
         } catch (e: Exception) {
             // Ignore unmockk errors during teardown
@@ -75,6 +81,7 @@ class ProgressTrackerTest {
     fun `initial update triggers callback`() = runTest {
         tracker.initialize(100)
         tracker.updateProgress(0, "Starting")
+        shadowOf(Looper.getMainLooper()).idle()
 
         assertEquals(1, progressCount)
         assertEquals(0, lastProgress)
@@ -87,19 +94,22 @@ class ProgressTrackerTest {
         tracker.initialize(100)
 
         // 1. First update (isInitial=true)
-        every { System.currentTimeMillis() } returns 2000L
+        virtualTime = 2000L
         tracker.updateProgress(0, "Update 1")
+        shadowOf(Looper.getMainLooper()).idle()
         assertEquals(1, progressCount)
 
-        // 2. Immediate update (processed=2, not initial anymore in test config threshold=1)
+        // 2. Immediate update (processed=2, not initial in test config threshold=1)
         // Interval is 200ms. Since we didn't wait, it should NOT trigger.
-        every { System.currentTimeMillis() } returns 2100L
+        virtualTime = 2100L
         tracker.updateProgress(2, "Update 2")
+        shadowOf(Looper.getMainLooper()).idle()
         assertEquals(1, progressCount) // Throttled
 
         // 3. Wait enough time (total 250ms elapsed since last success)
-        every { System.currentTimeMillis() } returns 2300L
+        virtualTime = 2300L
         tracker.updateProgress(3, "Update 3")
+        shadowOf(Looper.getMainLooper()).idle()
         assertEquals(2, progressCount) // Triggered
     }
 
@@ -108,13 +118,15 @@ class ProgressTrackerTest {
         tracker.initialize(100)
 
         // Even if we just updated and are throttled
-        every { System.currentTimeMillis() } returns 2000L
+        virtualTime = 2000L
         tracker.updateProgress(50, "Halfway")
+        shadowOf(Looper.getMainLooper()).idle()
         assertEquals(1, progressCount)
 
         // markComplete must always trigger regardless of throttle interval
-        every { System.currentTimeMillis() } returns 2050L
+        virtualTime = 2050L
         tracker.markComplete()
+        shadowOf(Looper.getMainLooper()).idle()
 
         assertEquals(2, progressCount)
         assertEquals(100, lastProgress)
@@ -124,7 +136,9 @@ class ProgressTrackerTest {
     @Test
     fun `phase is correctly propagated`() = runTest {
         tracker.initialize(100)
+        virtualTime = 2000L
         tracker.updateProgress(50, "Verifying...", TaskPhase.VERIFYING)
+        shadowOf(Looper.getMainLooper()).idle()
 
         assertEquals(TaskPhase.VERIFYING, lastPhase)
     }
@@ -132,8 +146,9 @@ class ProgressTrackerTest {
     @Test
     fun `progress is clamped to 100`() = runTest {
         tracker.initialize(100)
-        // markComplete internally calls updateProgress(totalFiles)
+        virtualTime = 2000L
         tracker.updateProgress(150, "Over")
+        shadowOf(Looper.getMainLooper()).idle()
 
         assertEquals(100, lastProgress)
     }

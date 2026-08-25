@@ -1,5 +1,30 @@
 # Changelog
 
+## 15.0.0 - 2026-08-26
+
+### 架构
+- 新增 TaskController 接口 (domain 层) + TaskControllerImpl 实现 (core 层)
+- ReplaceProgressManager 全局单例标记 @Deprecated，8 个文件迁移至 TaskController
+- 新增 IoEngine.acquireBuffer/releaseBuffer 缓冲区管理接口
+- ExtractManager/UniversalExtractor 缓冲区管理迁移至 IoEngine.bufferManager
+
+### UI
+- 创建 SnackbarManager 统一管理器，替换 MainActivity 中 19 处 Toast.makeText()
+- 修复 SnackbarHostWrapper 多参数签名 ktlint 格式违规
+
+### 测试
+- 新增 AdaptiveBufferManagerTest 10 个用例（缓冲区扩容/收缩/边界/并发）
+- 新增 TransactionWalManagerTest 9 个用例（持久化/回滚/清理/边界）
+- 新增 PathConstantsTest 20 个用例（包名校验/路径构建/穿越拒绝/映射）
+- 新增 CopyConfigTest 5 个用例（默认值/修改/边界）
+- 修复 ProgressTrackerTest StackOverflowError（mockkStatic 与 Dispatchers.Main 冲突）
+- 修复 Windows Gradle 文件锁问题（移除 doFirst 清理逻辑）
+
+### 工程
+- 修复 .kotlin/ 编译器缓存文件误追踪，更新 .gitignore
+- checkQuality 门禁通过（Detekt + Ktlint + JaCoCo）
+- 全量回归测试通过（:core 54+ 用例 / :domain 测试 / :app 测试）
+
 ## 14.1.0 - 2026-08-24
 
 ### 测试
