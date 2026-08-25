@@ -3,7 +3,6 @@ package com.example.tfgwj.worker
 import android.content.Context
 import android.util.Log
 import com.example.tfgwj.domain.model.TaskPhase
-import com.example.tfgwj.manager.ReplaceProgressManager
 import com.example.tfgwj.shizuku.ShizukuManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -31,6 +30,8 @@ class ShizukuCopyStrategy(
     companion object {
         private const val TAG = "ShizukuCopyStrategy"
     }
+
+    private val taskController = TaskControllerImpl()
 
     override val strategyName: String = "SHIZUKU_BATCH"
 
@@ -70,8 +71,8 @@ class ShizukuCopyStrategy(
             }
 
             // Reset progress
-            ReplaceProgressManager.reset()
-            ReplaceProgressManager.startMeasure()
+            taskController.reset()
+            taskController.startMeasure()
 
             // Scan files
             val totalFiles = countFilesRoot(sourceDir)
@@ -87,7 +88,7 @@ class ShizukuCopyStrategy(
             Log.d(TAG, "启用 Shizuku 递归极速复制")
             executeShizukuRecursiveCopy(sourceDir, targetPackage, totalFiles, callback)
 
-            ReplaceProgressManager.finish()
+            taskController.finish()
             Log.d(TAG, "Shizuku 任务完成")
 
             CopyStrategy.CopyResult.success(

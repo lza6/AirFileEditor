@@ -4,7 +4,6 @@ import android.content.Context
 import android.util.Log
 import androidx.work.*
 import com.example.tfgwj.domain.model.TaskPhase
-import com.example.tfgwj.manager.ReplaceProgressManager
 import com.example.tfgwj.manager.StealthManager
 import com.example.tfgwj.worker.orchestrator.*
 import kotlinx.coroutines.CancellationException
@@ -85,6 +84,7 @@ class FileReplaceWorkerV2(
     private lateinit var config: CopyConfig
     @Volatile
     private var orchestrator: FileReplaceOrchestrator? = null
+    private val taskController = TaskControllerImpl()
 
     override suspend fun doWork(): Result =
         withContext(Dispatchers.IO) {
@@ -115,7 +115,7 @@ class FileReplaceWorkerV2(
             // 检查取消状态
             if (isStopped) {
                 Log.d(TAG, "⚠️ 任务已被取消")
-                ReplaceProgressManager.cancel()
+                taskController.cancel()
                 return@withContext Result.failure(workDataOf(KEY_ERROR_MESSAGE to "任务已取消"))
             }
 
@@ -160,8 +160,8 @@ class FileReplaceWorkerV2(
                     }
 
                 // 重置进度管理器
-                ReplaceProgressManager.reset()
-                ReplaceProgressManager.startMeasure()
+                taskController.reset()
+                taskController.startMeasure()
 
                 // 任务前快照：对目标 data/obb 目录做备份，失败可恢复
                 val backupManager = com.example.tfgwj.manager.BackupManager.getInstance(applicationContext)
@@ -201,7 +201,7 @@ class FileReplaceWorkerV2(
                         )
                         // 进度回调（双级节流已由 ProgressTracker 处理）
                         // WorkManager 进度更新（主线程）
-                        ReplaceProgressManager.updateState(
+                        taskController.updateState(
                             processed = processed,
                             total = total,
                             currentFile = message,
@@ -223,7 +223,7 @@ class FileReplaceWorkerV2(
                             StealthManager.execute(applicationContext)
                         }
 
-                        ReplaceProgressManager.finish()
+                        taskController.finish()
                         processedFiles = result.processedCount
                         completed = true
                         Result.success(
@@ -244,7 +244,7 @@ class FileReplaceWorkerV2(
                 workerResult
             } catch (e: CancellationException) {
                 Log.i(TAG, "替换任务已取消")
-                ReplaceProgressManager.cancel()
+                taskController.cancel()
                 throw e
             } catch (e: Exception) {
                 Log.e(TAG, "❌ V2 执行异常", e)
@@ -263,7 +263,7 @@ class FileReplaceWorkerV2(
                 //             totalFiles = processedFiles,
                 //             successCount = if (completed) processedFiles else 0,
                 //             failedCount = if (completed) 0 else 1,
-                //             errors = if (completed) emptyList<String>() else listOf(ReplaceProgressManager.progressState.value.errorMessage ?: "任务未完成"),
+                //             errors = if (completed) emptyList<String>() else listOf(taskController.state.value.errorMessage ?: "任务未完成"),
                 //             backupPath = backupPath,
                 //         )
                 //     historyManager.addHistory(historyItem)
@@ -281,7 +281,7 @@ class FileReplaceWorkerV2(
         }
 
     private fun failed(message: String): Result {
-        ReplaceProgressManager.fail(message)
+        taskController.fail(message)
         return Result.failure(workDataOf(KEY_ERROR_MESSAGE to message))
     }
 
@@ -307,8 +307,8 @@ class FileReplaceWorkerV2(
             ),
         )
 
-        // ReplaceProgressManager 实时更新
-        ReplaceProgressManager.updateState(
+        // TaskController 实时更新
+        taskController.updateState(
             processed = processed,
             total = total,
             currentFile = message,
