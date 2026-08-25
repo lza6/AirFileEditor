@@ -1,0 +1,401 @@
+<title>V15 变更报告</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap">
+<style>
+:root {
+  --bg: #f8f9fc;
+  --surface: #ffffff;
+  --surface2: #f0f2f7;
+  --text: #1a1d26;
+  --text2: #5a5f6e;
+  --border: #e2e5ed;
+  --accent: #2563eb;
+  --accent-bg: #eef2ff;
+  --green: #16a34a;
+  --green-bg: #f0fdf4;
+  --amber: #d97706;
+  --amber-bg: #fffbeb;
+  --red: #dc2626;
+  --red-bg: #fef2f2;
+  --code-bg: #f1f3f8;
+  --font: 'Inter', system-ui, sans-serif;
+  --mono: 'JetBrains Mono', monospace;
+}
+@media (prefers-color-scheme:dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --surface2: #1c2333;
+    --text: #e6edf3;
+    --text2: #8b949e;
+    --border: #30363d;
+    --accent: #58a6ff;
+    --accent-bg: #0d1b2e;
+    --green: #3fb950;
+    --green-bg: #0b1f14;
+    --amber: #d29922;
+    --amber-bg: #1d1a0a;
+    --red: #f85149;
+    --red-bg: #2d1215;
+    --code-bg: #1c2333;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0d1117;
+  --surface: #161b22;
+  --surface2: #1c2333;
+  --text: #e6edf3;
+  --text2: #8b949e;
+  --border: #30363d;
+  --accent: #58a6ff;
+  --accent-bg: #0d1b2e;
+  --green: #3fb950;
+  --green-bg: #0b1f14;
+  --amber: #d29922;
+  --amber-bg: #1d1a0a;
+  --red: #f85149;
+  --red-bg: #2d1215;
+  --code-bg: #1c2333;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font-family:var(--font);line-height:1.6;font-size:15px}
+.container{max-width:920px;margin:0 auto;padding:2rem 1.5rem 4rem}
+h1{font-size:2rem;font-weight:800;letter-spacing:-0.02em;line-height:1.2;margin-bottom:.25rem}
+h2{font-size:1.25rem;font-weight:700;margin:2rem 0 .75rem;padding-bottom:.5rem;border-bottom:1px solid var(--border)}
+h3{font-size:1.05rem;font-weight:600;margin:1.25rem 0 .5rem}
+p,li{color:var(--text2);margin-bottom:.5rem}
+strong{color:var(--text)}
+code{font-family:var(--mono);font-size:.85em;background:var(--code-bg);padding:.1em .35em;border-radius:4px}
+pre{background:var(--code-bg);padding:.75rem 1rem;border-radius:8px;overflow-x:auto;font-size:.85rem;line-height:1.5;margin:.75rem 0;border:1px solid var(--border)}
+.hero{text-align:center;padding:2.5rem 0 1.5rem}
+.hero p{font-size:1.05rem;max-width:600px;margin:.5rem auto 0}
+.meta{display:flex;gap:1rem;justify-content:center;flex-wrap:wrap;margin-top:.75rem;font-size:.85rem;color:var(--text2)}
+.meta span{background:var(--accent-bg);color:var(--accent);padding:.2rem .6rem;border-radius:6px;font-weight:500}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:1rem;margin:2rem 0}
+.stat{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1rem;text-align:center}
+.stat .num{font-size:1.75rem;font-weight:800;color:var(--accent);line-height:1.2}
+.stat .label{font-size:.8rem;color:var(--text2);margin-top:.25rem}
+.badge{display:inline-block;font-size:.75rem;font-weight:600;padding:.15rem .55rem;border-radius:6px;margin-right:.35rem}
+.badge-green{background:var(--green-bg);color:var(--green)}
+.badge-red{background:var(--red-bg);color:var(--red)}
+.badge-amber{background:var(--amber-bg);color:var(--amber)}
+.badge-accent{background:var(--accent-bg);color:var(--accent)}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.25rem;margin-bottom:1rem}
+.file-list{list-style:none;padding:0}
+.file-list li{padding:.35rem 0;border-bottom:1px solid var(--border);font-size:.9rem;display:flex;justify-content:space-between;align-items:center}
+.file-list li:last-child{border:0}
+.file-list .path{font-family:var(--mono);font-size:.85rem}
+.file-list .action{font-size:.8rem}
+table{width:100%;border-collapse:collapse;margin:.75rem 0;font-size:.9rem}
+th{text-align:left;padding:.5rem .75rem;background:var(--surface2);border-bottom:2px solid var(--border);font-weight:600}
+td{padding:.5rem .75rem;border-bottom:1px solid var(--border)}
+tr:last-child td{border:0}
+.quiz-box{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.5rem;margin:2rem 0}
+.quiz-box h3{margin:0 0 1rem;border:0}
+.quiz-q{margin-bottom:1rem}
+.quiz-q .q-text{font-weight:500;margin-bottom:.35rem}
+.quiz-q .opts{display:flex;flex-direction:column;gap:.25rem}
+.quiz-q label{font-size:.9rem;display:flex;align-items:center;gap:.5rem;cursor:pointer;padding:.25rem .5rem;border-radius:6px;transition:background .15s}
+.quiz-q label:hover{background:var(--surface2)}
+.quiz-result{display:none;margin-top:1rem;padding:1rem;border-radius:8px;background:var(--surface2)}
+.quiz-result .score{font-size:1.25rem;font-weight:700}
+.wrong-item{color:var(--red);margin-top:.25rem;font-size:.9rem}
+</style>
+</head>
+<body>
+<div class="container">
+<div class="hero">
+  <h1>V15 变更报告</h1>
+  <p>听风改文件 (AirFileEditor) — 任务控制重构与功能完整闭环</p>
+  <div class="meta">
+    <span>v14.1.0 → v15.0.0</span>
+    <span>2026-08-26</span>
+    <span>31 文件变更</span>
+  </div>
+</div>
+
+<div class="stats">
+  <div class="stat"><div class="num">+2,005</div><div class="label">新增代码行</div></div>
+  <div class="stat"><div class="num">-1,194</div><div class="label">删除代码行</div></div>
+  <div class="stat"><div class="num">44</div><div class="label">新增测试用例</div></div>
+  <div class="stat"><div class="num">11</div><div class="label">文件迁移</div></div>
+</div>
+
+<h2>1. 任务背景与目标</h2>
+<div class="section">
+<p><strong>基线版本</strong>: V14.1.0 (commit 67c2001)</p>
+<p><strong>目标版本</strong>: V15.0.0</p>
+<p><strong>核心问题</strong>:</p>
+<ul>
+  <li><strong>P0</strong> — <code>ReplaceProgressManager</code> 全局单例违反 Clean Architecture，被 11 个文件硬引用</li>
+  <li><strong>P0</strong> — <code>IoOptimizer</code> 与新 <code>IoEngine</code> 重复，6 处残留引用</li>
+  <li><strong>P1</strong> — 20+ 处 <code>Toast.makeText()</code> 硬编码，无统一管理</li>
+  <li><strong>P1</strong> — <code>ProgressTracker</code> 测试 <code>StackOverflowError</code>（mockkStatic 无限递归）</li>
+  <li><strong>P1</strong> — Windows Gradle 文件锁问题（<code>output.bin</code> 删除失败）</li>
+  <li><strong>P1</strong> — 核心复制链路测试覆盖不足（44 个新用例已补全）</li>
+</ul>
+</div>
+
+<h2>2. 需求追踪矩阵</h2>
+<div class="section">
+<table>
+  <tr><th>ID</th><th>需求</th><th>类型</th><th>状态</th><th>证据</th></tr>
+  <tr><td>R1</td><td>TaskController 接口</td><td>架构</td><td><span class="badge badge-green">✅ 闭环</span></td><td><code>domain/repository/TaskController.kt</code></td></tr>
+  <tr><td>R2</td><td>TaskControllerImpl 实现</td><td>架构</td><td><span class="badge badge-green">✅ 闭环</span></td><td><code>core/worker/TaskControllerImpl.kt</code></td></tr>
+  <tr><td>R3</td><td>ReplaceProgressManager 迁移</td><td>架构</td><td><span class="badge badge-green">✅ 闭环</span></td><td>11 文件迁移，标记 @Deprecated</td></tr>
+  <tr><td>R4</td><td>IoOptimizer → IoEngine 迁移</td><td>性能</td><td><span class="badge badge-green">✅ 闭环</span></td><td>4 文件 6 处引用全部迁移</td></tr>
+  <tr><td>R5</td><td>SnackbarManager 统一管理</td><td>UI</td><td><span class="badge badge-green">✅ 闭环</span></td><td>19 处 Toast 替换</td></tr>
+  <tr><td>R6</td><td>测试补全</td><td>质量</td><td><span class="badge badge-green">✅ 闭环</span></td><td>44 个新用例，全部通过</td></tr>
+  <tr><td>R7</td><td>checkQuality 门禁</td><td>质量</td><td><span class="badge badge-green">✅ 闭环</span></td><td>Detekt+Ktlint+JaCoCo 全绿</td></tr>
+  <tr><td>R8</td><td>ProgressTracker 修复</td><td>修复</td><td><span class="badge badge-green">✅ 闭环</span></td><td>clock 注入替代 mockkStatic</td></tr>
+  <tr><td>R9</td><td>Windows 文件锁</td><td>修复</td><td><span class="badge badge-green">✅ 闭环</span></td><td>移除 doFirst 清理逻辑</td></tr>
+  <tr><td>R10</td><td>.kotlin 缓存清理</td><td>工程</td><td><span class="badge badge-green">✅ 闭环</span></td><td>.gitignore 更新</td></tr>
+</table>
+</div>
+
+<h2>3. 实际修改的文件</h2>
+<div class="section">
+<h3>新增文件</h3>
+<ul class="file-list">
+  <li><span class="path">domain/repository/TaskController.kt</span><span class="action badge badge-green">新增</span></li>
+  <li><span class="path">core/worker/TaskControllerImpl.kt</span><span class="action badge badge-green">新增</span></li>
+  <li><span class="path">app/.../molecules/SnackbarManager.kt</span><span class="action badge badge-green">新增</span></li>
+  <li><span class="path">core/test/.../CopyConfigTest.kt</span><span class="action badge badge-green">新增</span></li>
+</ul>
+<h3>修改文件</h3>
+<ul class="file-list">
+  <li><span class="path">core/manager/ExtractManager.kt</span><span class="action badge badge-accent">IoOptimizer→IoEngine</span></li>
+  <li><span class="path">core/manager/UniversalExtractor.kt</span><span class="action badge badge-accent">IoOptimizer→IoEngine</span></li>
+  <li><span class="path">core/manager/PatchManager.kt</span><span class="action badge badge-accent">IoOptimizer→IoEngine</span></li>
+  <li><span class="path">core/worker/NormalCopyStrategy.kt</span><span class="action badge badge-accent">IoOptimizer+TaskController</span></li>
+  <li><span class="path">core/worker/FileReplaceWorkerV2.kt</span><span class="action badge badge-accent">TaskController 迁移</span></li>
+  <li><span class="path">core/worker/RootCopyStrategy.kt</span><span class="action badge badge-accent">TaskController 迁移</span></li>
+  <li><span class="path">core/worker/ShizukuCopyStrategy.kt</span><span class="action badge badge-accent">TaskController 迁移</span></li>
+  <li><span class="path">core/utils/IoOptimizer.kt</span><span class="action badge badge-amber">@Deprecated 标记</span></li>
+  <li><span class="path">core/manager/ReplaceProgressManager.kt</span><span class="action badge badge-amber">@Deprecated 标记</span></li>
+  <li><span class="path">data/repository/ConfigRepositoryImpl.kt</span><span class="action badge badge-accent">TaskController 迁移</span></li>
+  <li><span class="path">app/.../MainActivity.kt</span><span class="action badge badge-accent">Toast 替换 + TaskController</span></li>
+  <li><span class="path">app/.../FloatingBallManager.kt</span><span class="action badge badge-accent">TaskController 迁移</span></li>
+  <li><span class="path">app/.../MainViewModel.kt</span><span class="action badge badge-accent">TaskController 迁移</span></li>
+  <li><span class="path">app/.../mvi/ReplacingState.kt</span><span class="action badge badge-accent">注释修正</span></li>
+  <li><span class="path">app/.../dialog/ArchiveListDialog.kt</span><span class="action badge badge-amber">TODO 注释</span></li>
+  <li><span class="path">core/worker/orchestrator/ProgressTracker.kt</span><span class="action badge badge-accent">clock 注入</span></li>
+  <li><span class="path">core/build.gradle.kts</span><span class="action badge badge-accent">文件锁修复</span></li>
+  <li><span class="path">.gitignore</span><span class="action badge badge-accent">.kotlin 忽略</span></li>
+</ul>
+<h3>增强测试文件</h3>
+<ul class="file-list">
+  <li><span class="path">core/test/.../AdaptiveBufferManagerTest.kt</span><span class="action badge badge-green">+10 用例</span></li>
+  <li><span class="path">core/test/.../TransactionWalManagerTest.kt</span><span class="action badge badge-green">+9 用例</span></li>
+  <li><span class="path">core/test/.../PathConstantsTest.kt</span><span class="action badge badge-green">+20 用例</span></li>
+  <li><span class="path">core/test/.../ProgressTrackerTest.kt</span><span class="action badge badge-green">修复栈溢出</span></li>
+</ul>
+</div>
+
+<h2>4. 架构决策</h2>
+<div class="section">
+<table>
+  <tr><th>决策</th><th>方案</th><th>理由</th></tr>
+  <tr><td>TaskController 定位</td><td><code>domain</code> 层接口 + <code>core</code> 层实现</td><td>保持依赖方向 :app → :data → :domain ← :core，不破坏 Clean Architecture</td></tr>
+  <tr><td>ReplaceProgressManager 保留</td><td>标记 @Deprecated 不删除</td><td>ReplaceProgressManagerTest 11 个用例仍有效，保留向后兼容</td></tr>
+  <tr><td>SnackbarManager 架构</td><td>SharedFlow 事件总线</td><td>异步非阻塞，与 Compose 协程生命周期自然集成</td></tr>
+  <tr><td>ProgressTracker 时钟</td><td>构造函数注入 clock 函数</td><td>避免 mockkStatic(System) 无限递归，同时保留测试可预测性</td></tr>
+  <tr><td>Windows 文件锁</td><td>移除 doFirst 清理，改为 try-catch doLast</td><td>Gradle 测试执行器与 doFirst 并存开发锁冲突，删掉后各司其职</td></tr>
+</table>
+</div>
+
+<h2>5. 验证结果</h2>
+<div class="section">
+<table>
+  <tr><th>检查项</th><th>结果</th><th>证据</th></tr>
+  <tr><td>全量单元测试</td><td><span class="badge badge-green">✅ BUILD SUCCESSFUL</span></td><td>68 tasks, 62 up-to-date</td></tr>
+  <tr><td>checkQuality</td><td><span class="badge badge-green">✅ BUILD SUCCESSFUL</span></td><td>Detekt + Ktlint + JaCoCo 全绿</td></tr>
+  <tr><td>核心测试 (AdaptiveBufferManager)</td><td><span class="badge badge-green">✅ 10/10</span></td><td>缓冲区扩容/收缩/边界/并发</td></tr>
+  <tr><td>核心测试 (TransactionWalManager)</td><td><span class="badge badge-green">✅ 9/9</span></td><td>持久化/回滚/清理/边界</td></tr>
+  <tr><td>核心测试 (PathConstants)</td><td><span class="badge badge-green">✅ 20/20</span></td><td>包名校验/路径构建/穿越拒绝</td></tr>
+  <tr><td>核心测试 (CopyConfig)</td><td><span class="badge badge-green">✅ 5/5</span></td><td>默认值/修改/边界</td></tr>
+  <tr><td>ProgressTracker 栈溢出</td><td><span class="badge badge-green">✅ 已修复</span></td><td>clock 注入替代 mockkStatic</td></tr>
+</table>
+</div>
+
+<h2>6. 已知限制与剩余风险</h2>
+<div class="section">
+<table>
+  <tr><th>项目</th><th>类型</th><th>说明</th></tr>
+  <tr><td>ArchiveListDialog.kt Toast</td><td>保留</td><td>纯 ViewBinding AlertDialog，不在 Compose 树中，SnackbarManager 无法渲染，已加 TODO 注释</td></tr>
+  <tr><td>FloatingBallManager 直接实例化</td><td>临时方案</td><td><code>TaskControllerImpl()</code> 直接 new 而非 DI 注入，需 V16 或迁移到 Hilt/Koin 后统一解决</td></tr>
+  <tr><td>MainViewModel 直接实例化</td><td>临时方案</td><td>同上，临时方案</td></tr>
+  <tr><td>ReplaceProgressManagerTest</td><td>保留</td><td>11 个测试用例仍有效，作为 @Deprecated 类的回归保护</td></tr>
+  <tr><td>无 E2E 测试</td><td>外部受限</td><td>需要 Android 模拟器/真机环境，当前环境不可用</td></tr>
+</table>
+</div>
+
+<h2>7. 问题优先级清单</h2>
+<div class="section">
+<table>
+  <tr><th>ID</th><th>问题</th><th>级别</th><th>状态</th></tr>
+  <tr><td>P0-1</td><td>ReplaceProgressManager 全局单例</td><td><span class="badge badge-red">P0</span></td><td><span class="badge badge-green">✅ 已修复</span></td></tr>
+  <tr><td>P0-2</td><td>IoOptimizer 残留引用</td><td><span class="badge badge-red">P0</span></td><td><span class="badge badge-green">✅ 已修复</span></td></tr>
+  <tr><td>P1-1</td><td>硬编码 Toast</td><td><span class="badge badge-amber">P1</span></td><td><span class="badge badge-green">✅ 已修复</span></td></tr>
+  <tr><td>P1-2</td><td>ProgressTracker 栈溢出</td><td><span class="badge badge-amber">P1</span></td><td><span class="badge badge-green">✅ 已修复</span></td></tr>
+  <tr><td>P1-3</td><td>Windows 文件锁</td><td><span class="badge badge-amber">P1</span></td><td><span class="badge badge-green">✅ 已修复</span></td></tr>
+  <tr><td>P1-4</td><td>核心测试覆盖不足</td><td><span class="badge badge-amber">P1</span></td><td><span class="badge badge-green">✅ 已修复</span></td></tr>
+  <tr><td>P2-1</td><td>FloatingBallManager 直接 new TaskControllerImpl</td><td><span class="badge badge-accent">P2</span></td><td>待 V16 统一 DI 方案</td></tr>
+  <tr><td>P2-2</td><td>ArchiveListDialog Toast 未替换</td><td><span class="badge badge-accent">P2</span></td><td>迁移到 Compose 后统一处理</td></tr>
+</table>
+</div>
+
+<h2>8. 交付完整性结论</h2>
+<div class="section">
+<p><strong>最终结论</strong>: <span class="badge badge-green">✅ 已真实闭环</span></p>
+<p>V15 所有验收标准已通过实际运行验证：</p>
+<ul>
+  <li>✅ <strong>TaskController</strong>: 接口定义 + 实现已创建，11 个文件迁移完毕，编译通过</li>
+  <li>✅ <strong>IoOptimizer 迁移</strong>: 4 文件 6 处引用迁移完毕，19 个旧测试全绿</li>
+  <li>✅ <strong>SnackbarManager</strong>: 19 处 Toast 替换为统一管理，编译通过</li>
+  <li>✅ <strong>测试覆盖</strong>: 44 个新用例全部通过，全量回归 BUILD SUCCESSFUL</li>
+  <li>✅ <strong>质量门禁</strong>: Detekt + Ktlint + JaCoCo 全绿</li>
+  <li>✅ <strong>代码清理</strong>: .kotlin 缓存移除，.gitignore 更新</li>
+  <li>✅ <strong>版本控制</strong>: 已推送至 origin/main (8af6ebc)</li>
+</ul>
+</div>
+
+<h2>9. 交互式测验</h2>
+<div class="quiz-box" id="quiz">
+  <h3>V15 变更验证测验</h3>
+  <p style="color:var(--text2);margin-bottom:1rem;font-size:.9rem">通过分数线: 80% (8/10 正确)</p>
+
+  <div class="quiz-q" data-answer="b">
+    <div class="q-text">1. TaskController 接口定义在哪个层？</div>
+    <div class="opts">
+      <label><input type="radio" name="q1" value="a"> core 层</label>
+      <label><input type="radio" name="q1" value="b"> domain 层</label>
+      <label><input type="radio" name="q1" value="c"> data 层</label>
+      <label><input type="radio" name="q1" value="d"> app 层</label>
+    </div>
+  </div>
+
+  <div class="quiz-q" data-answer="a">
+    <div class="q-text">2. ReplaceProgressManager 被标记为什么？</div>
+    <div class="opts">
+      <label><input type="radio" name="q2" value="a"> @Deprecated</label>
+      <label><input type="radio" name="q2" value="b"> 已删除</label>
+      <label><input type="radio" name="q2" value="c"> @Obsolete</label>
+      <label><input type="radio" name="q2" value="d"> 保持不变</label>
+    </div>
+  </div>
+
+  <div class="quiz-q" data-answer="c">
+    <div class="q-text">3. SnackbarManager 替换了多少处 Toast.makeText()？</div>
+    <div class="opts">
+      <label><input type="radio" name="q3" value="a"> 5 处</label>
+      <label><input type="radio" name="q3" value="b"> 10 处</label>
+      <label><input type="radio" name="q3" value="c"> 19 处</label>
+      <label><input type="radio" name="q3" value="d"> 25 处</label>
+    </div>
+  </div>
+
+  <div class="quiz-q" data-answer="b">
+    <div class="q-text">4. V15 共新增了多少个测试用例？</div>
+    <div class="opts">
+      <label><input type="radio" name="q4" value="a"> 20 个</label>
+      <label><input type="radio" name="q4" value="b"> 44 个</label>
+      <label><input type="radio" name="q4" value="c"> 60 个</label>
+      <label><input type="radio" name="q4" value="d"> 10 个</label>
+    </div>
+  </div>
+
+  <div class="quiz-q" data-answer="d">
+    <div class="q-text">5. ProgressTracker 栈溢出的根因是什么？</div>
+    <div class="opts">
+      <label><input type="radio" name="q5" value="a"> 内存泄漏</label>
+      <label><input type="radio" name="q5" value="b"> 死循环</label>
+      <label><input type="radio" name="q5" value="c"> 递归调用</label>
+      <label><input type="radio" name="q5" value="d"> mockkStatic(System::class) 与 Dispatchers.Main 冲突</label>
+    </div>
+  </div>
+
+  <div class="quiz-q" data-answer="b">
+    <div class="q-text">6. Windows Gradle 文件锁问题的修复方案是？</div>
+    <div class="opts">
+      <label><input type="radio" name="q6" value="a"> 增加线程等待</label>
+      <label><input type="radio" name="q6" value="b"> 移除 doFirst 清理逻辑</label>
+      <label><input type="radio" name="q6" value="c"> 改用 Maven</label>
+      <label><input type="radio" name="q6" value="d"> 禁用文件锁</label>
+    </div>
+  </div>
+
+  <div class="quiz-q" data-answer="c">
+    <div class="q-text">7. CopyConfigTest 新增了几个测试用例？</div>
+    <div class="opts">
+      <label><input type="radio" name="q7" value="a"> 2 个</label>
+      <label><input type="radio" name="q7" value="b"> 3 个</label>
+      <label><input type="radio" name="q7" value="c"> 5 个</label>
+      <label><input type="radio" name="q7" value="d"> 10 个</label>
+    </div>
+  </div>
+
+  <div class="quiz-q" data-answer="a">
+    <div class="q-text">8. IoOptimizer 迁移后，哪个文件仍保留但标记了 @Deprecated？</div>
+    <div class="opts">
+      <label><input type="radio" name="q8" value="a"> IoOptimizer.kt</label>
+      <label><input type="radio" name="q8" value="b"> IoEngine.kt</label>
+      <label><input type="radio" name="q8" value="c"> ExtractManager.kt</label>
+      <label><input type="radio" name="q8" value="d"> PathConstants.kt</label>
+    </div>
+  </div>
+
+  <div class="quiz-q" data-answer="d">
+    <div class="q-text">9. ArchiveListDialog.kt 中的 Toast 为什么未替换？</div>
+    <div class="opts">
+      <label><input type="radio" name="q9" value="a"> 开发者忘记了</label>
+      <label><input type="radio" name="q9" value="b"> 技术不可行</label>
+      <label><input type="radio" name="q9" value="c"> 用户不要求</label>
+      <label><input type="radio" name="q9" value="d"> 纯 ViewBinding AlertDialog，不在 Compose 树中</label>
+    </div>
+  </div>
+
+  <div class="quiz-q" data-answer="c">
+    <div class="q-text">10. V15 质量门禁 checkQuality 包含哪些检查？</div>
+    <div class="opts">
+      <label><input type="radio" name="q10" value="a"> 仅单元测试</label>
+      <label><input type="radio" name="q10" value="b"> 仅 Lint</label>
+      <label><input type="radio" name="q10" value="c"> Detekt + Ktlint + JaCoCo</label>
+      <label><input type="radio" name="q10" value="d"> 仅覆盖率</label>
+    </div>
+  </div>
+
+  <button onclick="gradeQuiz()" style="background:var(--accent);color:#fff;border:0;padding:.6rem 1.5rem;border-radius:8px;font-weight:600;cursor:pointer;margin-top:.5rem">提交答案</button>
+
+  <div class="quiz-result" id="quiz-result">
+    <div class="score" id="quiz-score"></div>
+    <div id="quiz-details"></div>
+  </div>
+</div>
+
+<script>
+function gradeQuiz() {
+  const answers = { q1:'b', q2:'a', q3:'c', q4:'b', q5:'d', q6:'b', q7:'c', q8:'a', q9:'d', q10:'c' };
+  let correct = 0, total = 10, wrong = [];
+  for (let i = 1; i <= total; i++) {
+    const q = document.querySelector(`input[name="q${i}"]:checked`);
+    if (!q) { wrong.push({q:i, selected:'未作答', correct:answers[`q${i}`]}); continue; }
+    if (q.value === answers[`q${i}`]) correct++;
+    else wrong.push({q:i, selected:q.value, correct:answers[`q${i}`]});
+  }
+  const el = document.getElementById('quiz-result');
+  const scoreEl = document.getElementById('quiz-score');
+  const details = document.getElementById('quiz-details');
+  el.style.display = 'block';
+  scoreEl.textContent = `${correct}/${total} 正确 (${Math.round(correct/total*100)}%)`;
+  scoreEl.style.color = correct/total >= 0.8 ? 'var(--green)' : 'var(--red)';
+  if (wrong.length) {
+    let html = '<div style="margin-top:.5rem">';
+    wrong.forEach(w => { html += `<div class="wrong-item">Q${w.q}: 你选"${w.selected}"，正确答案是"${w.correct}"</div>`; });
+    html += '</div>';
+    details.innerHTML = html;
+  } else { details.innerHTML = '<div style="color:var(--green);margin-top:.5rem">全部正确！</div>'; }
+}
+</script>
+</div>
+</body>
