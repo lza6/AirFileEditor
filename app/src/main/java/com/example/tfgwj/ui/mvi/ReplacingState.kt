@@ -10,7 +10,7 @@ import com.example.tfgwj.utils.PermissionChecker
  * 整合 MainActivity 所有状态
  *
  * V13 收口：isReplacing 改为基于 phase 的计算属性，
- * 消除与 ReplaceProgressManager.isReplacing 的歧义。
+ * 消除与 TaskController.isReplacing 的歧义。
  */
 data class ReplacingState(
     // 替换任务状态

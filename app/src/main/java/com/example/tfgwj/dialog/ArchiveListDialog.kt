@@ -54,6 +54,8 @@ class ArchiveListDialog(
         // 自动密码按钮
         binding?.btnAutoPassword?.setOnClickListener {
             useAutoPassword = true
+            // TODO-V15: 迁移到 Compose 后统一替换。此处为纯 ViewBinding 的 AlertDialog，
+            // 上下文不在 Compose 树中，SnackbarManager 无法渲染，故保留 Toast。
             Toast.makeText(context, R.string.auto_fill_password, Toast.LENGTH_SHORT).show()
         }
 
