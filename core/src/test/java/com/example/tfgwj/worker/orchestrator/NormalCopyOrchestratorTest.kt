@@ -142,8 +142,8 @@ class NormalCopyOrchestratorTest {
                 progressCallback = this@NormalCopyOrchestratorTest::progressCallback,
             )
 
-            // 验证 IoEngine.fastCopy 被调用过
-            verify(atLeast = 0) { IoEngine.fastCopy(any<File>(), any<File>()) }
+            // 验证 IoEngine.fastCopy 被调用过（源目录含 1 个文件且 needsUpdate=true）
+            verify(atLeast = 1) { IoEngine.fastCopy(any<File>(), any<File>()) }
         } finally {
             sourceDir.deleteRecursively()
             unmockkAll()

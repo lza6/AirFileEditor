@@ -11,6 +11,7 @@ import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -80,37 +81,31 @@ class RootCopyOrchestratorTest {
     }
 
     @Test
-    fun `execute returns Failure when no root available`() = runTest {
-        // 不 mock RootChecker，executeRootCommand 在测试环境返回 null
-        val emptyDir = File(context.cacheDir, "root_empty_${System.nanoTime()}")
+    fun `execute returns Failure when no root available and source has files`() = runTest {
+        // 创建一个含 1 个文件的源目录（非空），Root 模式下 RootChecker 不可用应导致失败路径
+        val sourceDir = File(context.cacheDir, "root_source_${System.nanoTime()}")
+        sourceDir.mkdirs()
+        File(sourceDir, "test.txt").writeText("hello")
         try {
             val orchestrator = RootCopyOrchestrator(context, config)
             val result = orchestrator.execute(
-                androidDir = emptyDir,
+                androidDir = sourceDir,
                 targetPackage = "com.example.test",
                 incrementalUpdate = false,
                 progressCallback = { _, _, _, _, _ -> },
             )
-            // 无 Root 环境下，文件统计降级到 Native，空目录应返回 Success
-            val isSuccess = result is OrchestratorResult.Success
-            val isFailure = result is OrchestratorResult.Failure
-            assert(isSuccess || isFailure) { "结果应为 Success 或 Failure" }
-            if (isSuccess) {
-                assertEquals(0, (result as OrchestratorResult.Success).processedCount)
-            }
+            // 无 Root 环境下 executeRootCommand 返回 null → 复制失败 → Failure
+            assertTrue("无 Root 且源非空应返回 Failure", result is OrchestratorResult.Failure)
         } finally {
-            emptyDir.deleteRecursively()
+            sourceDir.deleteRecursively()
         }
     }
 
     @Test
-    fun `verify returns count`() = runTest {
+    fun `verify does not throw and returns non-negative`() = runTest {
+        // verify 是纯转发接口；在未执行 execute 时返回守卫值（≥0），不应抛异常
         val orchestrator = RootCopyOrchestrator(context, config)
-        // 验证接口可用，不抛出异常
-        try {
-            orchestrator.verify(0)
-        } catch (_: Exception) {
-            // 未初始化时可能抛出异常，不做要求
-        }
+        val result = orchestrator.verify(0)
+        assertTrue("verify 应返回非负计数", result >= 0)
     }
 }

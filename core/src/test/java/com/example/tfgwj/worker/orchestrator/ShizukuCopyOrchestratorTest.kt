@@ -14,6 +14,7 @@ import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -84,7 +85,7 @@ class ShizukuCopyOrchestratorTest {
     }
 
     @Test
-    fun `execute returns Success when source directory is empty`() = runTest {
+    fun `execute returns Failure when source directory is empty`() = runTest {
         every { shizukuManager.isAuthorized } returns MutableStateFlow(true)
         every { shizukuManager.isServiceConnected } returns MutableStateFlow(true)
         every { shizukuManager.executeCommandWithOutput(any<String>()) } returns "0"
@@ -98,22 +99,18 @@ class ShizukuCopyOrchestratorTest {
                 incrementalUpdate = false,
                 progressCallback = { _, _, _, _, _ -> },
             )
-            // 空目录或无文件时可能返回 Success 或 Failure
-            val isSuccess = result is OrchestratorResult.Success
-            val isFailure = result is OrchestratorResult.Failure
-            assert(isSuccess || isFailure) { "结果应为 Success 或 Failure" }
+            // 生产行为：Shizuku 模式空源目录时统计 totalFiles=0，直接返回 Failure("源目录为空")
+            assertTrue("空目录应返回 Failure（生产行为：源目录为空即失败）", result is OrchestratorResult.Failure)
         } finally {
             emptyDir.deleteRecursively()
         }
     }
 
     @Test
-    fun `verify returns count`() = runTest {
+    fun `verify does not throw and returns non-negative`() = runTest {
+        // verify 是纯转发接口；在未执行 execute 时返回守卫值（≥0），不应抛异常
         val orchestrator = ShizukuCopyOrchestrator(context, config, shizukuManager)
-        try {
-            orchestrator.verify(0)
-        } catch (_: Exception) {
-            // 未初始化时可能抛出异常，不做要求
-        }
+        val result = orchestrator.verify(0)
+        assertTrue("verify 应返回非负计数", result >= 0)
     }
 }

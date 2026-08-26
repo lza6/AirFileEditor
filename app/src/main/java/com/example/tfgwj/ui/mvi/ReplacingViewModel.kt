@@ -9,6 +9,7 @@ import com.example.tfgwj.domain.repository.ConfigRepository
 import com.example.tfgwj.domain.usecase.*
 import com.example.tfgwj.performance.MetricCollector
 import com.example.tfgwj.performance.MetricNames
+import com.example.tfgwj.utils.AppLogger
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
@@ -26,6 +27,14 @@ class ReplacingViewModel(
     private val _uiState = MutableStateFlow(ReplacingState())
     val uiState: StateFlow<ReplacingState> = _uiState.asStateFlow()
     private var lastReplaceIntent: ReplacingIntent.StartReplace? = null
+
+    companion object {
+        /** 日志控制台最多显示的行数（上限，防止 logContent 无限增长） */
+        const val MAX_LOG_LINES = 200
+
+        /** 首屏预填充的历史日志条数 */
+        private const val INITIAL_LOG_COUNT = 50
+    }
 
     init {
         // 1. 订阅任务进度 — 直接使用 TaskPhase 枚举，消除字符串转换
@@ -55,6 +64,32 @@ class ReplacingViewModel(
                 }
             }
         }
+
+        // 3. 订阅日志事件流（替代 startLogUpdates 每秒轮询）— V16 修复：接入真实日志推送
+        // 先灌入历史日志补足首屏，再增量订阅新日志
+        val initialLogs = AppLogger.getRecentLogs(INITIAL_LOG_COUNT)
+        if (initialLogs.isNotEmpty()) {
+            _uiState.update { it.copy(logContent = initialLogs.joinToString("\n"), logSize = AppLogger.getLogSize()) }
+        }
+        viewModelScope.launch {
+            AppLogger.logFlow.collect { logLine ->
+                _uiState.update {
+                    it.copy(
+                        logContent = it.logContent.appendLogLine(logLine),
+                        logSize = AppLogger.getLogSize(),
+                    )
+                }
+            }
+        }
+    }
+
+    /**
+     * 追加单行日志，仅保留最近 [MAX_LOG_LINES] 行，避免 logContent 无限增长
+     */
+    private fun String.appendLogLine(newLine: String): String {
+        val updated = if (this.isEmpty()) newLine else "$this\n$newLine"
+        val lines = updated.split("\n")
+        return if (lines.size > MAX_LOG_LINES) lines.takeLast(MAX_LOG_LINES).joinToString("\n") else updated
     }
 
     fun handleIntent(intent: ReplacingIntent) {
