@@ -36,7 +36,13 @@ class ConfigRepositoryImpl(
     private val taskController = TaskControllerImpl()
 
     override suspend fun checkEnvironment(packageName: String, forceRefresh: Boolean): PermissionStatus {
-        val result = PermissionChecker.checkPermissionAccess(packageName, forceRefresh, context)
+        val result =
+            PermissionChecker.checkPermissionAccess(
+                packageName = packageName,
+                stopAppFirst = forceRefresh,
+                context = context,
+                forceRefresh = forceRefresh,
+            )
         val status = PermissionStatus(
             hasStoragePermission = true,
             hasShizukuPermission = shizukuManager.isAuthorized.value,

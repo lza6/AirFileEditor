@@ -1,159 +1,109 @@
 package com.example.tfgwj.utils
 
 import android.util.Log
-import java.io.BufferedReader
-import java.io.DataOutputStream
 import java.io.File
-import java.io.InputStreamReader
+import java.util.concurrent.TimeUnit
 
 /**
  * Root 权限检测工具类
  */
 object RootChecker {
     private const val TAG = "RootChecker"
+    private const val COMMAND_TIMEOUT_MS = 5_000L
+
+    internal data class CommandResult(
+        val stdout: String,
+        val stderr: String,
+        val exitCode: Int,
+        val timedOut: Boolean = false,
+    )
+
+    internal fun interface CommandRunner {
+        fun run(arguments: List<String>): CommandResult
+    }
 
     private var cachedIsRooted: Boolean? = null
-    private var rootCheckFailedCount = 0
+    private var commandPrefix: List<String>? = null
+    private var commandRunner: CommandRunner = CommandRunner(::runProcess)
 
-    /**
-     * 检测是否具有 Root 权限
-     * 增加缓存和真机执行测试
-     */
-    fun isRooted(): Boolean {
-        // 如果连续失败超过 3 次且检测为无 Root，则不再重复尝试昂贵的操作
-        if (cachedIsRooted == false && rootCheckFailedCount > 3) {
-            return false
-        }
+    internal fun setCommandRunnerForTest(runner: CommandRunner?) {
+        commandRunner = runner ?: CommandRunner(::runProcess)
+        refresh()
+    }
 
-        cachedIsRooted?.let { return it }
-
-        // 优先尝试执行测试，这是最准的
-        val isTrulyRooted = checkRootCommand()
-        if (isTrulyRooted) {
-            cachedIsRooted = true
-            return true
-        }
-
-        // 备选：检查文件
-        if (checkRootFiles()) {
-            cachedIsRooted = true
-            return true
-        }
-
-        Log.d(TAG, "Root 检测: 未检测到有效 Root 权限")
-        cachedIsRooted = false
-        rootCheckFailedCount++
-        return false
+    fun refresh() {
+        cachedIsRooted = null
+        commandPrefix = null
     }
 
     /**
-     * 检查是否可以执行指定命令
+     * 检测当前 App 是否真正具备 Root 能力。
+     *
+     * 仅凭 `/system/xbin/su` 等文件存在不能证明当前 App 能提权，
+     * 因此必须以实际命令执行成功为准。
      */
-    private fun canExecuteCommand(command: String): Boolean {
-        return try {
-            Runtime.getRuntime().exec(arrayOf("which", command))
-            true
-        } catch (e: Exception) {
-            false
-        }
-    }
+    fun isRooted(forceRefresh: Boolean = false): Boolean {
+        synchronized(this) {
+            if (forceRefresh) refresh()
+            cachedIsRooted?.let { return it }
 
-    /**
-     * 检查常见的 Root 相关文件
-     */
-    private fun checkRootFiles(): Boolean {
-        val rootFiles =
-            arrayOf(
-                "/system/app/Superuser.apk",
-                "/sbin/su",
-                "/system/bin/su",
-                "/system/xbin/su",
-                "/data/local/xbin/su",
-                "/data/local/bin/su",
-                "/system/sd/xbin/su",
-                "/system/bin/failsafe/su",
-                "/data/local/su",
-                "/su/bin/su",
-                "/magisk/.core/bin/su",
-            )
-
-        for (file in rootFiles) {
-            if (File(file).exists()) {
-                Log.d(TAG, "发现 Root 文件: $file")
-                return true
+            val prefix = ROOT_COMMAND_PREFIXES.firstOrNull { candidate ->
+                val result = commandRunner.run(candidate + listOf("id", "-u"))
+                result.exitCode == 0 && !result.timedOut && result.stdout.trim() == "0"
             }
-        }
-
-        return false
-    }
-
-    /**
-     * 尝试执行需要 root 的命令
-     */
-    private fun checkRootCommand(): Boolean {
-        return try {
-            val process = Runtime.getRuntime().exec(arrayOf("su", "-c", "id"))
-            val reader = BufferedReader(InputStreamReader(process.inputStream))
-            val output = reader.readText()
-            reader.close()
-            process.waitFor()
-
-            // 检查输出中是否包含 uid=0
-            output.contains("uid=0")
-        } catch (e: java.io.IOException) {
-            if (e.message?.contains("Operation not permitted") == true) {
-                Log.w(TAG, "su 执行受限: Operation not permitted")
-            }
-            false
-        } catch (e: Exception) {
-            false
+            commandPrefix = prefix
+            cachedIsRooted = prefix != null
+            if (prefix == null) Log.d(TAG, "Root 检测: 当前 App 无有效 Root 能力")
+            return prefix != null
         }
     }
+
+    private val ROOT_COMMAND_PREFIXES =
+        listOf(
+            listOf("su", "-c"),
+            // AOSP userdebug/toybox su 采用 UID + command 形式；真实 Magisk 通常命中上一候选。
+            listOf("su", "0", "sh", "-c"),
+        )
 
     fun executeRootCommand(command: String): String? {
-        // 如果已知没有权限或受限，不再尝试
-        if (cachedIsRooted == false) return null
+        if (!isRooted()) return null
+        val prefix = commandPrefix ?: return null
+        val result = commandRunner.run(prefix + listOf(command))
+        if (result.timedOut || result.exitCode != 0) {
+            cachedIsRooted = false
+            commandPrefix = null
+            if (result.stderr.isNotBlank()) Log.w(TAG, "Root 命令失败: ${result.stderr.trim()}")
+            return null
+        }
+        if (result.stderr.isNotBlank()) Log.w(TAG, "Root 命令输出: ${result.stderr.trim()}")
+        return result.stdout
+    }
 
+    private fun runProcess(arguments: List<String>): CommandResult {
         return try {
-            val process = Runtime.getRuntime().exec("su")
-            val outputStream = DataOutputStream(process.outputStream)
-            val inputStream = BufferedReader(InputStreamReader(process.inputStream))
-            val errorStream = BufferedReader(InputStreamReader(process.errorStream))
+            val process = ProcessBuilder(arguments).redirectErrorStream(false).start()
+            val stdout = StringBuilder()
+            val stderr = StringBuilder()
+            val stdoutThread = Thread {
+                process.inputStream.bufferedReader().use { stdout.append(it.readText()) }
+            }.apply { isDaemon = true }
+            val stderrThread = Thread {
+                process.errorStream.bufferedReader().use { stderr.append(it.readText()) }
+            }.apply { isDaemon = true }
+            stdoutThread.start()
+            stderrThread.start()
 
-            outputStream.write(command.toByteArray())
-            outputStream.write("\nexit\n".toByteArray())
-            outputStream.flush()
-
-            val output = StringBuilder()
-            var line: String?
-            while (inputStream.readLine().also { line = it } != null) {
-                output.append(line).append("\n")
+            if (!process.waitFor(COMMAND_TIMEOUT_MS, TimeUnit.MILLISECONDS)) {
+                process.destroyForcibly()
+                stdoutThread.join(200)
+                stderrThread.join(200)
+                return CommandResult(stdout.toString(), stderr.toString(), -1, timedOut = true)
             }
-
-            val error = StringBuilder()
-            while (errorStream.readLine().also { line = it } != null) {
-                error.append(line).append("\n")
-            }
-
-            outputStream.close()
-            inputStream.close()
-            errorStream.close()
-            process.waitFor()
-
-            if (error.isNotEmpty()) {
-                Log.w(TAG, "Root 命令输出(错误/警告): $error")
-            }
-
-            output.toString()
-        } catch (e: java.io.IOException) {
-            if (e.message?.contains("Operation not permitted") == true) {
-                Log.e(TAG, "执行 Root 命令失败: 权限不足 (Operation not permitted)")
-                cachedIsRooted = false // 修正缓存
-            }
-            null
+            stdoutThread.join(200)
+            stderrThread.join(200)
+            CommandResult(stdout.toString(), stderr.toString(), process.exitValue())
         } catch (e: Exception) {
-            Log.e(TAG, "执行 Root 命令异常", e)
-            null
+            CommandResult("", e.message ?: e.javaClass.simpleName, -1)
         }
     }
 
@@ -167,15 +117,13 @@ object RootChecker {
     }
 
     /**
-     * 获取 Root 管理器类型
+     * 获取 Root 管理器类型；不能仅凭一个 su 文件路径猜测具体管理器。
      */
     fun getRootManagerType(): String {
         return when {
+            !isRooted() -> "Unknown"
             isMagiskInstalled() -> "Magisk"
-            File("/system/app/Superuser.apk").exists() -> "SuperSU"
-            File("/system/xbin/su").exists() -> "Chainfire SuperSU"
-            File("/system/app/Supersu.apk").exists() -> "SuperSU"
-            else -> "Unknown"
+            else -> "Root"
         }
     }
 }

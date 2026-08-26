@@ -4,6 +4,7 @@ import android.content.Context
 import android.os.Build
 import android.util.Log
 import com.example.tfgwj.shizuku.ShizukuManager
+import com.example.tfgwj.worker.orchestrator.PathConstants
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -85,8 +86,10 @@ object PermissionChecker {
         packageName: String = PUBG_PACKAGE_NAME,
         stopAppFirst: Boolean = true,
         context: android.content.Context? = null,
+        forceRefresh: Boolean = false,
     ): CheckResult =
         withContext(Dispatchers.IO) {
+            require(PathConstants.isValidPackageName(packageName)) { "非法目标包名" }
             val androidVersion = Build.VERSION.SDK_INT
             val availableModes = mutableListOf<AccessMode>()
 
