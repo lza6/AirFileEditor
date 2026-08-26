@@ -16,23 +16,27 @@ import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.lifecycle.lifecycleScope
 import com.example.tfgwj.data.PreferencesManager
 import com.example.tfgwj.databinding.ActivityMainBinding
-import com.example.tfgwj.databinding.DialogHistoryContainerBinding
 import com.example.tfgwj.domain.model.TaskPhase
 import com.example.tfgwj.manager.*
 import com.example.tfgwj.performance.IoEngine
 import com.example.tfgwj.performance.PerformanceMonitor
 import com.example.tfgwj.security.ArchiveEntryValidator
 import com.example.tfgwj.shizuku.ShizukuManager
+import com.example.tfgwj.ui.FloatingBallController
 import com.example.tfgwj.ui.FloatingBallManager
 import com.example.tfgwj.ui.HelpDialog
+import com.example.tfgwj.ui.HistoryDialogController
+import com.example.tfgwj.ui.MainLifecycleCoordinator
+import com.example.tfgwj.ui.PermissionController
 import com.example.tfgwj.ui.TimePickerHelper
 import com.example.tfgwj.ui.components.atoms.TaskStatus
 import com.example.tfgwj.ui.components.molecules.PermissionCard
 import com.example.tfgwj.ui.components.molecules.SnackbarManager
-import com.example.tfgwj.ui.components.organisms.HistoryScreen
 import com.example.tfgwj.ui.components.organisms.MainDashboard
 import com.example.tfgwj.ui.compose.TaskProgressOverlay
-import com.example.tfgwj.ui.mvi.*
+import com.example.tfgwj.ui.mvi.ReplacingIntent
+import com.example.tfgwj.ui.mvi.ReplacingViewModel
+import com.example.tfgwj.ui.mvi.ReplacingViewModelFactory
 import com.example.tfgwj.ui.theme.TfgwjTheme
 import com.example.tfgwj.utils.*
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
@@ -40,7 +44,6 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.io.File
 
@@ -61,6 +64,12 @@ class MainActivity : AppCompatActivity() {
     private val replacingViewModel: ReplacingViewModel by viewModels {
         ReplacingViewModelFactory(applicationContext)
     }
+
+    // 控制器委派
+    private lateinit var permissionController: PermissionController
+    private lateinit var floatingBallController: FloatingBallController
+    private lateinit var lifecycleCoordinator: MainLifecycleCoordinator
+    private lateinit var historyDialogController: HistoryDialogController
 
     // 权限请求
     private val storagePermissionLauncher =
@@ -92,29 +101,8 @@ class MainActivity : AppCompatActivity() {
         setupObservers()
         checkAllPermissions()
 
-        lifecycleScope.launch {
-            replacingViewModel.uiState.collectLatest { state ->
-                if (state.totalFiles > 0 && state.isReplacing && !floatingBallManager.isShowing()) {
-                    floatingBallManager.show()
-                } else if (!state.isReplacing && floatingBallManager.isShowing()) {
-                    floatingBallManager.hide()
-                }
-            }
-        }
-
-        lifecycleScope.launch {
-            loadAppIcon()
-            loadWechatIcon()
-            loadLastMainPackPath()
-            delay(300)
-            if (replacingViewModel.uiState.value.selectedMainPackPath == null) loadMainPacks()
-            loadPatchVersions()
-            delay(1000)
-            checkEnvironment()
-            delay(2000)
-            checkForUpdates()
-            RuleEngine.fetchCloudRules()
-        }
+        floatingBallController.observeTaskState()
+        lifecycleCoordinator.launchStartupTasks()
     }
 
     override fun onResume() {
@@ -132,6 +120,16 @@ class MainActivity : AppCompatActivity() {
         patchManager = PatchManager.getInstance()
         mainPackManager = MainPackManager.getInstance()
         permissionManager = PermissionManager(applicationContext)
+        permissionController =
+            PermissionController(
+                this,
+                permissionManager,
+                manageStorageLauncher,
+                storagePermissionLauncher,
+            )
+        floatingBallController = FloatingBallController(this, replacingViewModel, floatingBallManager)
+        lifecycleCoordinator = MainLifecycleCoordinator(this, replacingViewModel)
+        historyDialogController = HistoryDialogController(this)
     }
 
     private fun createNotificationChannel() {
@@ -173,17 +171,6 @@ class MainActivity : AppCompatActivity() {
         setupMainPackCardCompose()
         setupPatchVersionCardCompose()
         setupLogConsoleCompose()
-        startLogUpdates()
-    }
-
-    private fun startLogUpdates() {
-        lifecycleScope.launch {
-            while (isActive) {
-                delay(1000)
-                val logs = AppLogger.getRecentLogs(50)
-                replacingViewModel.updateLogContent(if (logs.isEmpty()) "等待日志输出..." else logs.joinToString("\n"), AppLogger.getLogSize())
-            }
-        }
     }
 
     private fun setupObservers() {
@@ -202,10 +189,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun checkAllPermissions() {
-        lifecycleScope.launch {
-            val status = permissionManager.checkAllPermissions()
-            if (status.hasManageStorage) AppLogger.reInitAfterPermission(this@MainActivity)
-        }
+        permissionController.checkAllPermissions()
     }
 
     private fun setupPermissionCardCompose() {
@@ -343,18 +327,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun requestPermissions() {
-        lifecycleScope.launch {
-            val status = permissionManager.checkAllPermissions()
-            if (!status.hasManageStorage) {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                    permissionManager.requestManageStoragePermission(this@MainActivity, manageStorageLauncher)
-                } else {
-                    permissionManager.requestStoragePermission(storagePermissionLauncher)
-                }
-            } else if (status.bestMode == PermissionChecker.AccessMode.SHIZUKU && !status.hasShizukuPermission) {
-                permissionManager.requestShizukuPermission { if (it) checkAllPermissions() }
-            }
-        }
+        permissionController.requestPermissions()
     }
 
     private fun showAppSelectorDialog() {
@@ -398,17 +371,17 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun loadAppIcon() {
+    internal fun loadAppIcon() {
         lifecycleScope.launch { updateAppInfoDisplay(preferencesManager.appPackageName.first()) }
     }
 
-    private fun loadWechatIcon() {
+    internal fun loadWechatIcon() {
         lifecycleScope.launch {
             AppIconHelper.getWechatIcon(this@MainActivity)?.let { binding.toolbar.menu.findItem(R.id.action_wechat)?.icon = it }
         }
     }
 
-    private fun loadMainPacks() {
+    internal fun loadMainPacks() {
         replacingViewModel.handleIntent(ReplacingIntent.ScanMainPacks)
         lifecycleScope.launch {
             val targetPackage = preferencesManager.appPackageName.first()
@@ -429,7 +402,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun loadLastMainPackPath() {
+    internal fun loadLastMainPackPath() {
         lifecycleScope.launch {
             preferencesManager.lastMainPackPath.collectLatest { path ->
                 if (path != null && path.isNotEmpty() && File(path).exists()) {
@@ -444,7 +417,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun loadPatchVersions() {
+    internal fun loadPatchVersions() {
         replacingViewModel.handleIntent(ReplacingIntent.RefreshPatches)
     }
 
@@ -625,7 +598,7 @@ class MainActivity : AppCompatActivity() {
         }.setNegativeButton("取消", null).show()
     }
 
-    private fun checkEnvironment(forceRefresh: Boolean = false) {
+    internal fun checkEnvironment(forceRefresh: Boolean = false) {
         lifecycleScope.launch {
             if (forceRefresh) {
                 try {
@@ -723,7 +696,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun checkForUpdates() {
+    internal fun checkForUpdates() {
         lifecycleScope.launch {
             UpdateManager.checkUpdateAsync(this@MainActivity)?.let {
                 if (it.isUpdateAvailable) {
@@ -793,24 +766,7 @@ class MainActivity : AppCompatActivity() {
      * 全屏展示替换历史记录（基于 HistoryScreen Compose + AlertDialog 容器）
      */
     private fun showHistoryDialog() {
-        val historyViewModel: HistoryViewModel by viewModels {
-            HistoryViewModelFactory(application)
-        }
-        val dialog =
-            com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
-                .setCancelable(true)
-                .create()
-
-        val binding = DialogHistoryContainerBinding.inflate(layoutInflater)
-        dialog.setContentView(binding.root)
-
-        binding.composeViewHistory.setContent {
-            TfgwjTheme {
-                HistoryScreen(viewModel = historyViewModel, onDismiss = { dialog.dismiss() })
-            }
-        }
-
-        dialog.show()
+        historyDialogController.show()
     }
 
     data class AppInfo(val packageName: String, val name: String)

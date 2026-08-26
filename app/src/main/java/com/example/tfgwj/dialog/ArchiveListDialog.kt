@@ -4,7 +4,6 @@ import android.app.Dialog
 import android.content.Context
 import android.view.LayoutInflater
 import android.view.ViewGroup
-import android.widget.Toast
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.example.tfgwj.R
@@ -13,6 +12,7 @@ import com.example.tfgwj.databinding.DialogPasswordInputBinding
 import com.example.tfgwj.databinding.ItemArchiveBinding
 import com.example.tfgwj.model.ArchiveFile
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import com.google.android.material.snackbar.Snackbar
 
 class ArchiveListDialog(
     context: Context,
@@ -54,9 +54,9 @@ class ArchiveListDialog(
         // 自动密码按钮
         binding?.btnAutoPassword?.setOnClickListener {
             useAutoPassword = true
-            // TODO-V15: 迁移到 Compose 后统一替换。此处为纯 ViewBinding 的 AlertDialog，
-            // 上下文不在 Compose 树中，SnackbarManager 无法渲染，故保留 Toast。
-            Toast.makeText(context, R.string.auto_fill_password, Toast.LENGTH_SHORT).show()
+            dialog?.window?.decorView?.let { decorView ->
+                Snackbar.make(decorView, context.getString(R.string.auto_fill_password), Snackbar.LENGTH_SHORT).show()
+            }
         }
 
         // 取消按钮

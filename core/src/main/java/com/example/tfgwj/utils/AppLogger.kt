@@ -8,6 +8,9 @@ import android.util.Log
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import java.io.File
 import java.io.FileWriter
 import java.io.PrintWriter
@@ -36,6 +39,10 @@ object AppLogger {
 
     // 内存中的日志收集器（用于实时显示）
     private val memoryLogs = java.util.concurrent.ConcurrentLinkedQueue<String>()
+
+    // 事件日志流（供 LogConsole 订阅，无需轮询）
+    private val _logFlow = MutableSharedFlow<String>(extraBufferCapacity = 200)
+    val logFlow: SharedFlow<String> = _logFlow.asSharedFlow()
 
     // 使用 Channel 限制待写入日志数量（内存敏感）
     private val logChannel =
@@ -227,6 +234,11 @@ object AppLogger {
     }
 
     /**
+     * 获取事件日志流（供 LogConsole 订阅，无需轮询）
+     * 直接使用 logFlow 属性访问
+     */
+
+    /**
      * 获取最近的日志（指定数量）
      */
     fun getRecentLogs(count: Int = 100): List<String> {
@@ -330,6 +342,9 @@ object AppLogger {
         while (memoryLogs.size > MAX_MEMORY_LOGS) {
             memoryLogs.poll()
         }
+
+        // 发射到事件日志流（供 LogConsole 订阅）
+        _logFlow.tryEmit(logLineDisplay)
 
         // 文件日志通过 Channel 异步写入 (JSON 格式)
         logScope.launch {
