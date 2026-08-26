@@ -1,0 +1,110 @@
+<title>V15 E2E 模拟器验证报告</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;display=swap">
+<style>
+:root{--bg:#f8fafc;--surface:#fff;--text:#0f172a;--text2:#64748b;--border:#e2e8f0;--accent:#2563eb;--accent-bg:#eff6ff;--green:#16a34a;--green-bg:#f0fdf4;--red:#dc2626;--red-bg:#fef2f2;--amber:#d97706;--amber-bg:#fffbeb;--mono:'Consolas','JetBrains Mono',monospace}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0b1220;--surface:#111827;--text:#e5e7eb;--text2:#9ca3af;--border:#1f2a3a;--accent:#3b82f6;--accent-bg:#0f1e35;--green:#22c55e;--green-bg:#052e16;--red:#ef4444;--red-bg:#2d1215;--amber:#f59e0b;--amber-bg:#2d1a05}}
+:root[data-theme="dark"]{--bg:#0b1220;--surface:#111827;--text:#e5e7eb;--text2:#9ca3af;--border:#1f2a3a;--accent:#3b82f6;--accent-bg:#0f1e35;--green:#22c55e;--green-bg:#052e16;--red:#ef4444;--red-bg:#2d1215;--amber:#f59e0b;--amber-bg:#2d1a05}}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font-family:'Inter',system-ui,sans-serif;line-height:1.6;padding:2rem 1rem}
+.container{max-width:920px;margin:0 auto}
+h1{font-size:1.9rem;font-weight:800;letter-spacing:-.02em;margin-bottom:.25rem}
+.sub{color:var(--text2);margin-bottom:1.5rem}
+h2{font-size:1.2rem;font-weight:700;margin:2rem 0 .75rem;padding-bottom:.4rem;border-bottom:1px solid var(--border)}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.25rem;margin-bottom:1rem}
+.badge{display:inline-block;font-size:.75rem;font-weight:600;padding:.15rem .5rem;border-radius:6px;margin-right:.35rem}
+.ok{background:var(--green-bg);color:var(--green)}
+.fail{background:var(--red-bg);color:var(--red)}
+.warn{background:var(--amber-bg);color:var(--amber)}
+table{width:100%;border-collapse:collapse;font-size:.88rem;margin:.6rem 0}
+th{text-align:left;padding:.4rem .6rem;background:var(--surface);border-bottom:2px solid var(--border)}
+td{padding:.4rem .6rem;border-bottom:1px solid var(--border);color:var(--text2)}
+code{font-family:var(--mono);font-size:.85em;background:rgba(148,163,184,.15);padding:.1em .35em;border-radius:4px}
+pre{background:rgba(148,163,184,.1);border:1px solid var(--border);border-radius:8px;padding:.8rem;font-family:var(--mono);font-size:.82rem;overflow-x:auto;margin:.6rem 0}
+.steps{counter-reset:step;list-style:none}
+.steps li{counter-increment:step;padding:.4rem 0 .4rem 2.2rem;position:relative;color:var(--text2)}
+.steps li::before{content:counter(step);position:absolute;left:0;top:.4rem;width:1.6rem;height:1.6rem;border-radius:50%;background:var(--accent-bg);color:var(--accent);font-weight:700;font-size:.8rem;display:flex;align-items:center;justify-content:center}
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>V15 E2E 模拟器验证报告</h1>
+<div class="sub">听风改文件 (AirFileEditor) · Android 35 模拟器 · 真实用户路径验证 · 2026-08-26</div>
+
+<div class="card">
+<h2>验证结论</h2>
+<p><span class="badge ok">✅ 已通过</span> Release APK (V15.0.0) 在 Android 35 x86_64 模拟器上成功安装、启动、渲染，主界面全部 UI 元素加载正常。</p>
+</div>
+
+<h2>环境</h2>
+<div class="card">
+<table>
+<tr><th>组件</th><th>值</th><th>状态</th></tr>
+<tr><td>模拟器</td><td>emulator 37.2.6 (build 16138043)</td><td><span class="badge ok">✅</span></td></tr>
+<tr><td>设备</td><td>emulator-5554 · Android SDK built for x86_64 · API 35</td><td><span class="badge ok">✅</span></td></tr>
+<tr><td>加速</td><td>WHPX (10.0.19045) is installed and usable</td><td><span class="badge ok">✅</span></td></tr>
+<tr><td>APK</td><td>app-release.apk · 9.83 MB · versionCode=7 · versionName=15.0.0</td><td><span class="badge ok">✅</span></td></tr>
+<tr><td>签名</td><td>CN=AirFileEditor · SHA-256 f4a01089...</td><td><span class="badge ok">✅</span></td></tr>
+</table>
+</div>
+
+<h2>安装与启动</h2>
+<div class="card">
+<ol class="steps">
+<li>创建 AVD（克服 dl.google.com 404 → 手动下载 emulator-windows_x64 + system-image → 手工配置 AVD）</li>
+<li>启动模拟器（-no-window 无头模式 - gpu swiftshader_indirect）</li>
+<li>WHPX 加速确认可用 → 设备进入 online</li>
+<li><code>adb install -r app-release.apk</code> → Success</li>
+<li>跳转 Android 设置向导（模拟器上 com.android.settings 默认抢占前台）</li>
+<li><code>am start -n com.example.tfgwj/.MainActivity</code> → Status: ok, LaunchState: COLD</li>
+</ol>
+</div>
+
+<h2>E2E 验证结果</h2>
+<div class="card">
+<p><code>pidof com.example.tfgwj</code> → <strong>3140</strong>（进程稳定运行）</p>
+<p><code>dumpsys window</code> → <strong>mCurrentFocus = com.example.tfgwj/.MainActivity</strong></p>
+<p><code>uiautomator dump</code> → 完整 UI 层级渲染确认</p>
+</div>
+
+<h2>UI 层级验证（uiautomator）</h2>
+<div class="card">
+<h3>工具栏</h3>
+<p>"听风改文件" 标题 · 联系作者 · 开源仓库 · 使用说明 · More options</p>
+<h3>权限卡</h3>
+<p><strong>权限状态</strong> · "需要所有文件访问权限" · <strong>授权存储权限</strong> · <strong>手动选择模式</strong> · "推荐使用 Omni-Mode 智能检测"</p>
+<h3>系统性能看板</h3>
+<p><strong>系统性能看板</strong> · 状态: 空闲 · 平均速度: 0 KB/s · 已处理文件: 0 · 命中率: 0.0% · <strong>查看替换历史</strong></p>
+<h3>主包操作区</h3>
+<p>"未选择应用" · 环境状态: 验证失败 · 🔍 验证环境 · "未选择主包" · 修改文件时间 · 点击选择时间 · 🎲 一键随机时间 · <strong>开始替换</strong> · <strong>启动游戏</strong> · 清理环境</p>
+</div>
+
+<h2>发现并修复的问题</h2>
+<div class="card">
+<table>
+<tr><th>问题</th><th>严重度</th><th>修复</th></tr>
+<tr><td><code>ActivityNotFoundException: MANAGE_ALL_FILES_ACCESS_PERMISSION</code>（AOSP 模拟器无此设置页，启动即崩溃）</td><td><span class="badge fail">P0</span></td><td>PermissionManager.requestManageStoragePermission 双层 try-catch 降级，兼容 AOSP/模拟器（commit 4761d9d）</td></tr>
+</table>
+</div>
+
+<h2>交付状态</h2>
+<div class="card">
+<table>
+<tr><th>项</th><th>状态</th><th>证据</th></tr>
+<tr><td>Release APK 构建</td><td><span class="badge ok">✅ 闭环</span></td><td>BUILD SUCCESSFUL · 9.83MB</td></tr>
+<tr><td>APK 签名验证</td><td><span class="badge ok">✅ 闭环</span></td><td>apksigner verify --print-certs</td></tr>
+<tr><td>模拟器部署</td><td><span class="badge ok">✅ 闭环</span></td><td>adb install Success, 进程 3140 运行</td></tr>
+<tr><td>UI 渲染</td><td><span class="badge ok">✅ 闭环</span></td><td>uiautomator 完整层级</td></tr>
+<tr><td>PermissionManager 兼容修复</td><td><span class="badge ok">✅ 闭环</span></td><td>4761d9d 已推送</td></tr>
+<tr><td>全量单元测试</td><td><span class="badge ok">✅ 闭环</span></td><td>BUILD SUCCESSFUL</td></tr>
+</table>
+</div>
+
+<h2>记录文档</h2>
+<div class="card">
+<p>V15 完整交付状态已记录至记忆文件：<code>tfgwj-v15-release-pipeline.md</code></p>
+</div>
+
+</div>
+</body>
