@@ -89,7 +89,17 @@ object PermissionChecker {
         forceRefresh: Boolean = false,
     ): CheckResult =
         withContext(Dispatchers.IO) {
-            require(PathConstants.isValidPackageName(packageName)) { "非法目标包名" }
+            // fail-closed：空包名/非法包名不允许兜底，也不允许抛异常炸掉调用方协程，
+            // 统一收敛为 NONE 结果（如首次启动尚未选择目标应用的场景）。
+            if (!PathConstants.isValidPackageName(packageName)) {
+                Log.w(TAG, "目标包名为空或非法('$packageName')，fail-closed 返回 NONE")
+                return@withContext CheckResult(
+                    availableModes = emptyList(),
+                    bestMode = AccessMode.NONE,
+                    androidVersion = Build.VERSION.SDK_INT,
+                    message = "未选择有效的目标应用",
+                )
+            }
             val androidVersion = Build.VERSION.SDK_INT
             val availableModes = mutableListOf<AccessMode>()
 
