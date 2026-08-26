@@ -17,13 +17,22 @@ android {
         applicationId = "com.example.tfgwj"
         minSdk = 26
         targetSdk = 36
-        versionCode = 6
-        versionName = "14.1.0"
+        versionCode = 7
+        versionName = "15.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         ndk {
             abiFilters.addAll(listOf("armeabi-v7a", "arm64-v8a", "x86", "x86_64"))
+        }
+    }
+
+    signingConfigs {
+        create("release") {
+            storeFile = file("${System.getenv("LOCALAPPDATA")}/Android/Sdk/tfgwj-release-key.jks")
+            storePassword = "tfgwj2026"
+            keyAlias = "tfgwj"
+            keyPassword = "tfgwj2026"
         }
     }
 
@@ -34,7 +43,9 @@ android {
             enableAndroidTestCoverage = true
         }
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
+            signingConfig = signingConfigs.getByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
