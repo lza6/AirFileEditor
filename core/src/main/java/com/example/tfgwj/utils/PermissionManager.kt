@@ -307,6 +307,7 @@ class PermissionManager(private val context: Context) {
 
     /**
      * 请求所有文件访问权限
+     * V15: 兼容模拟器/AOSP 无 MANAGE_ALL_FILES_ACCESS_PERMISSION Activity 的场景
      */
     fun requestManageStoragePermission(
         activity: Activity,
@@ -314,12 +315,17 @@ class PermissionManager(private val context: Context) {
     ) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             try {
-                val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
-                intent.data = Uri.parse("package:${context.packageName}")
-                launcher.launch(intent)
+                val allFilesIntent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
+                allFilesIntent.data = Uri.parse("package:${context.packageName}")
+                launcher.launch(allFilesIntent)
             } catch (e: Exception) {
-                val intent = Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
-                launcher.launch(intent)
+                try {
+                    val genericIntent = Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
+                    launcher.launch(genericIntent)
+                } catch (e2: Exception) {
+                    // 模拟器/AOSP 可能没有该设置 Activity，跳过并提示用户手动授权
+                    Log.w(TAG, "设备不支持 MANAGE_ALL_FILES_ACCESS_PERMISSION 设置页（模拟器/AOSP），跳过权限请求")
+                }
             }
         }
     }
