@@ -8,6 +8,9 @@ import android.util.Log
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import java.io.File
 import java.io.FileWriter
 import java.io.PrintWriter
@@ -34,8 +37,14 @@ object AppLogger {
     private var printWriter: PrintWriter? = null
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
 
+    private var appContext: android.content.Context? = null
+
     // 内存中的日志收集器（用于实时显示）
     private val memoryLogs = java.util.concurrent.ConcurrentLinkedQueue<String>()
+
+    // 事件日志流（供 LogConsole 订阅，无需轮询）
+    private val _logFlow = MutableSharedFlow<String>(extraBufferCapacity = 200)
+    val logFlow: SharedFlow<String> = _logFlow.asSharedFlow()
 
     // 使用 Channel 限制待写入日志数量（内存敏感）
     private val logChannel =
@@ -55,6 +64,8 @@ object AppLogger {
      * @param context 用于获取备选路径
      */
     fun init(context: android.content.Context? = null) {
+        // 注册低内存回调使用 applicationContext，避免 Activity 泄漏
+        appContext = context?.applicationContext
         if (printWriter != null && logFile != null && logFile!!.absolutePath.contains("听风改文件")) {
             // 如果已经初始化在外部存储，直接返回
             return
@@ -86,8 +97,8 @@ object AppLogger {
             // 启动批量写入协程
             startBatchWriter()
 
-            // 注册低内存回调
-            context?.let { registerLowMemoryCallback(it) }
+            // 注册低内存回调（使用 applicationContext，避免持有 Activity 导致泄漏）
+            appContext?.let { registerLowMemoryCallback(it) }
 
             writeHeader()
             Log.d(TAG, "日志系统初始化: ${logFile!!.absolutePath}")
@@ -232,7 +243,6 @@ object AppLogger {
     fun getRecentLogs(count: Int = 100): List<String> {
         return memoryLogs.toList().takeLast(count)
     }
-
     /**
      * 清空内存日志
      */
@@ -330,6 +340,9 @@ object AppLogger {
         while (memoryLogs.size > MAX_MEMORY_LOGS) {
             memoryLogs.poll()
         }
+
+        // 发射到事件日志流（供 LogConsole 订阅）
+        _logFlow.tryEmit(logLineDisplay)
 
         // 文件日志通过 Channel 异步写入 (JSON 格式)
         logScope.launch {
