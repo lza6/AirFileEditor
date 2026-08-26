@@ -92,6 +92,17 @@ object PermissionChecker {
 
             Log.d(TAG, "开始全能模式权限检测，应用: $packageName, Android 版本: $androidVersion")
 
+            // 系统环境预判（Android 版本分区 + 鸿蒙 OS）
+            // - Android 10 (Q, API 29): 分区存储引入，data/obb 仍可通过 MANAGE_EXTERNAL_STORAGE 访问（需授权）
+            // - Android 11 (R, API 30): 分区存储强化，data/obb 必须 Shizuku/Root（MANAGE_EXTERNAL_STORAGE 部分受限）
+            // - Android 12+ (S+, API 31+): 更严格，data/obb 直接访问被禁，Shizuku/Root 仍有效
+            // - Android 14+ (U, API 34+): 只读系统分区收紧，且 targetSdk 30+ 时 requestLegacyExternalStorage 失效
+            // - 鸿蒙 OS: BuildEx 表示带兼容层的 HarmonyOS 1.x-4.x；NEXT 纯血鸿蒙无 Android 兼容层，本模块无法运行
+            val isHarmonyOSEnv = isHarmonyOS()
+            if (isHarmonyOSEnv) {
+                Log.d(TAG, "识别到华为/Harmony 环境 (isHarmonyOSNext=${isHarmonyOSNext()}, isEMUI=${isEMUI()})")
+            }
+
             // 先停止应用（可选）
             if (stopAppFirst) {
                 stopApp(packageName)
@@ -338,12 +349,69 @@ object PermissionChecker {
         }
     }
 
+    /**
+     * 完善的鸿蒙 OS 检测（支持 HarmonyOS 1.x-4.x 及 HarmonyOS NEXT）
+     *
+     * 返回 true 表示"检测到鸿蒙环境"，不需要也不能区分纯血鸿蒙的具体版本。
+     * 注意：honesty 边界——本方法只做"存在性"检测，检测到鸿蒙环境不代表
+     * `Android/(data|obb)` 一定能被本 App 直接访问，实际读写能力由
+     * `checkPermissionAccess()` 的运行探测决定。
+     */
     fun isHarmonyOS(): Boolean {
-        return try {
+        // 方法1: 反射检测 BuildEx（HarmonyOS 1.x-4.x 兼容层）
+        try {
             val clz = Class.forName("com.huawei.system.BuildEx")
             val method = clz.getMethod("getOsBrand")
-            "harmony".equals(method.invoke(clz) as String, ignoreCase = true)
-        } catch (e: Exception) {
+            val brand = method.invoke(clz) as? String
+            if (brand != null && brand.equals("harmony", ignoreCase = true)) return true
+        } catch (_: Exception) { }
+
+        // 方法2: 检测 HarmonyOS NEXT（纯血鸿蒙，无 Android 兼容层）
+        // 注意：纯血鸿蒙无法运行 Android APK，本 App 不会在上面被安装，此分支主要用于完整性
+        try {
+            Class.forName("ohos.system.Build")
+            return true
+        } catch (_: Exception) { }
+
+        // 方法3: 系统属性检测（覆盖 HarmonyOS 各版本与 EMUI 定制系统）
+        try {
+            val propClz = Class.forName("android.os.SystemProperties")
+            val get = propClz.getMethod("get", String::class.java)
+            val hwOs = get.invoke(null, "hw_sc.build.os") as? String
+            if (hwOs != null && hwOs.contains("harmony", ignoreCase = true)) return true
+            // EMUI 底层标记同样返回 true：EMUI 设备对 data/obb 的行为与 HarmonyOS 一致（受限）
+            val persistBrand = get.invoke(null, "ro.build.hw_emui_api_level") as? String
+            if (persistBrand != null && persistBrand.isNotEmpty()) {
+                return true // 标记为类鸿蒙行为
+            }
+        } catch (_: Exception) { }
+
+        return false
+    }
+
+    /**
+     * 检测是否为纯血鸿蒙（HarmonyOS NEXT，无 Android 兼容层）
+     * 纯血鸿蒙无法运行 Android APK，因此该检测在真机上几乎不会触发 true。
+     */
+    fun isHarmonyOSNext(): Boolean {
+        return try {
+            Class.forName("ohos.system.Build")
+            true
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    /**
+     * 检测是否为华为 EMUI/MagicOS 系统（Android 底层，华为定制）
+     */
+    fun isEMUI(): Boolean {
+        return try {
+            val propClz = Class.forName("android.os.SystemProperties")
+            val get = propClz.getMethod("get", String::class.java)
+            val emui = get.invoke(null, "ro.build.version.emui") as? String
+            emui != null && emui.isNotEmpty()
+        } catch (_: Exception) {
             false
         }
     }
