@@ -12,6 +12,20 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 
+/**
+ * AppInstaller — 全能安装器
+ *
+ * Android 版本兼容性说明：
+ * - Android 10- (API 29-): pm install 在 shell 权限下可用，Shizuku / Root 均可成功。
+ * - Android 11+ (API 30+): pm install 需 INSTALL_PACKAGES 权限，Shizuku 的 shell 权限在
+ *   部分设备上会因权限收紧而失败（需 `pm install -r --user 0` 绕过）。
+ * - Android 12+ (API 31+): 更严格，Shizuku 需 `pm install -r --user 0 --pkg` 参数。
+ * - Android 14+ (API 34+): 新增 `--dont-kill` 限制，前台服务安装受限。
+ * - HarmonyOS 1.x-4.x: 兼容层保留 pm install 能力，静默安装行为与 EMUI 11+ 一致。
+ * - HarmonyOS NEXT: 纯血鸿蒙不可运行 Android APK，本模块不适用。
+ *
+ * 安装策略：Root → Shizuku IPC → Native Intent（系统安装器，需用户确认）
+ */
 object AppInstaller {
     private const val TAG = "AppInstaller"
 

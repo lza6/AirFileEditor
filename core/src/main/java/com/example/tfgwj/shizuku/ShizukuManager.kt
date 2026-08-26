@@ -24,6 +24,14 @@ import rikka.shizuku.Shizuku.UserServiceArgs
 /**
  * Shizuku 管理器
  * 负责 Shizuku 权限管理和 UserService 绑定
+ *
+ * Android 版本兼容性说明：
+ * - 兼容 Android 历史版本及 HarmonyOS 1.x-4.x（含 Android 兼容层）。
+ * - 连接失败时不会硬崩溃：所有监听注册在 Shizuku 库内部完成，失效时 `checkAvailability()`
+ *   将 `_isAvailable` 置 false，UI 层据此降级到 Root / Native 模式（见 PermissionChecker 的降级策略）。
+ * - 鸿蒙兼容：HarmonyOS 兼容层保留了 android.app.Service 与 Binder 机制，Shizuku 库在
+ *   HarmonyOS 上按 Android 环境运行；若 Shizuku 服务不可用，本类所有方法返回 false / null，
+ *   不会抛异常。纯血鸿蒙（HarmonyOS NEXT）无 Android 兼容层，本模块不适用。
  */
 class ShizukuManager private constructor(private val context: Context) {
     // Watchdog Scope
