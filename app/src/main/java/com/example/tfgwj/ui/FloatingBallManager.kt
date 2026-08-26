@@ -22,7 +22,6 @@ import com.example.tfgwj.domain.repository.TaskState
 import com.example.tfgwj.utils.AppLogger
 import com.example.tfgwj.utils.PauseControl
 import com.example.tfgwj.worker.FileReplaceWorkerV2
-import com.example.tfgwj.worker.TaskControllerImpl
 import com.google.android.material.progressindicator.CircularProgressIndicator
 import com.google.android.material.progressindicator.LinearProgressIndicator
 import kotlinx.coroutines.CoroutineScope
@@ -284,11 +283,12 @@ class FloatingBallManager(private val context: Context) {
 
     /**
      * 启动实时进度监听
+     *
+     * 任务状态流统一由 ConfigRepository（经 TaskController）提供，不再在此直接实例化
+     * TaskControllerImpl，避免绕过 ConfigRepository 契约、便于注入与测试。
      */
     private fun startRealtimeProgressObserver() {
-        // V15 临时方案：从 TaskController 获取任务状态流，替代 ReplaceProgressManager.progressState
-        // 长期应改为通过 ConfigRepository 注入，避免直接实例化 TaskControllerImpl
-        val taskController = TaskControllerImpl()
+        val taskController = ConfigRepositoryProvider.getTaskController()
         observeProgress(taskController.state)
     }
 
