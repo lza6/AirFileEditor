@@ -34,7 +34,13 @@ class PermissionController(
                 } else {
                     permissionManager.requestStoragePermission(storagePermissionLauncher)
                 }
-            } else if (status.bestMode == PermissionChecker.AccessMode.SHIZUKU && !status.hasShizukuPermission) {
+            } else if (
+                !status.hasShizukuPermission &&
+                status.availableModes.contains(PermissionChecker.AccessMode.SHIZUKU)
+            ) {
+                // 与 PermissionCard 的"授权 Shizuku"按钮文案同源：availableModes 含 SHIZUKU
+                // 即可发起授权；不能只看 bestMode==SHIZUKU——未连接服务时 bestMode 恒为 NONE，
+                // 会导致按钮永远无响应。
                 permissionManager.requestShizukuPermission { if (it) checkAllPermissions() }
             }
         }
