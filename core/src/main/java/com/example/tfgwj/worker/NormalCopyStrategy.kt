@@ -28,7 +28,7 @@ class NormalCopyStrategy(
         private const val TAG = "NormalCopyStrategy"
     }
 
-    private val taskController = TaskControllerImpl()
+    private val taskController = TaskControllerProvider.get()
 
     override val strategyName: String = "NORMAL"
 

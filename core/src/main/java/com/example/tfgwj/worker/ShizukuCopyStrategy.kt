@@ -31,7 +31,7 @@ class ShizukuCopyStrategy(
         private const val TAG = "ShizukuCopyStrategy"
     }
 
-    private val taskController = TaskControllerImpl()
+    private val taskController = TaskControllerProvider.get()
 
     override val strategyName: String = "SHIZUKU_BATCH"
 

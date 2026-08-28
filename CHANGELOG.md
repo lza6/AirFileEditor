@@ -1,5 +1,50 @@
 # Changelog
 
+## 16.2.0 - 2026-08-29
+
+### 架构
+- 新增 `TaskControllerProvider`（:core），统一 `FileReplaceWorkerV2`（写入）、`ConfigRepositoryImpl`（读取/取消）、3 个 CopyStrategy、ConfigRepositoryProvider 为同一 TaskController 单例，修复任务进度状态源断裂（P0）
+- 删除孤儿死代码 `MainViewModel.kt`（无外部引用）
+
+### 测试
+- 新增 `TaskControllerProviderTest` 3 用例：单例一致性、状态机可推进、委托实现初始 IDLE
+- 新增 `ExtractManagerSecurityTest` 6 用例 + `ArchiveManagerSecurityTest` 7 用例（解压安全红线）
+
+### 工程
+- 版本号升至 16.2.0 / versionCode=10
+- 全量单测 `--rerun-tasks` 通过（:app/:core/:domain，224 @Test）
+- Jacoco 覆盖率门禁真实执行（行覆盖 ≥27%，分支 ≥30%，棘轮基线）
+
+## 16.1.1 - 2026-08-28
+
+### 架构
+- 授权按钮可用性：以 availableModes 代替 bestMode 判定（PermissionController.kt）
+- 冷启动空包名不再崩溃：fail-closed 收敛为 NONE 结果（PermissionChecker.kt）
+- 修复 Root 判定能力误报与命令协议兼容（RootChecker.kt）
+
+## 16.1.0 - 2026-08-27
+
+### 工程
+- 凭据外置：keystore.properties + 环境变量，去除 build.gradle 明文密码
+- 修复 Jacoco 覆盖率门禁真实执行
+
+### 测试
+- 补全解压安全链路测试
+
+## 16.0.0 - 2026-08-26
+
+### 架构
+- 任务引擎收口：MainActivity 拆分委派控制器
+- AppLogger 日志事件化：迁移至 SharedFlow
+
+### 工程
+- 删除 IoOptimizer/ReplaceProgressManager 残留
+- Toast 清零：消除 UI 层残留 Toast
+- versionCode=8
+
+### 测试
+- 补测试：覆盖任务引擎收口相关用例
+
 ## 15.0.0 - 2026-08-26
 
 ### 架构

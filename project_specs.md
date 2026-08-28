@@ -102,6 +102,24 @@ IoOptimizer (IO 优化)
 
 ## 6. 版本历史
 
+### V16.2.0 (已完成 - 任务状态源收敛与安全测试闭环)
+- ✅ **TaskController 单例化**: 新增 `core/.../TaskControllerProvider.kt`，统一 Worker/ConfigRepositoryImpl/3×CopyStrategy/ConfigRepositoryProvider 为同一控制器，修复进度状态源断裂（P0）
+- ✅ **死代码清理**: 删除无引用孤儿 `MainViewModel.kt`
+- ✅ **解压安全测试**: `ExtractManagerSecurityTest`(6) + `ArchiveManagerSecurityTest`(7)
+- ✅ **V16.2.0 收口**: versionCode=10
+
+### V16.1.1 (已完成 - 授权/冷启动/Root兼容)
+- ✅ 授权按钮可用性（availableModes 代替 bestMode 判定）
+- ✅ 冷启动空包名 fail-closed 收敛为 NONE
+- ✅ Root 判定能力误报与命令协议兼容
+
+### V16.0.0 (已完成 - 任务引擎收口)
+- ✅ MainActivity 拆分委派控制器（Permission/FloatingBall/LifecycleCoordinator/HistoryDialog）
+- ✅ AppLogger 日志事件化（SharedFlow 替代轮询）
+- ✅ 删除 IoOptimizer/ReplaceProgressManager 残留 + Toast 清零
+- ✅ 任务控制、日志、残留清理
+- ✅ versionCode=8
+
 ### V15.0.0 (已完成 - 任务控制重构与功能完整闭环)
 - ✅ **TaskController 接口与实现**: 新增 `TaskController` 接口（domain 层）+ `TaskControllerImpl`（core 层），替代 `ReplaceProgressManager` 全局单例
 - ✅ **ReplaceProgressManager 全面迁移**: 11 个文件全部迁移至 `TaskController`（Worker/Strategy/ConfigRepository/UI），原文件标记 `@Deprecated`
@@ -274,14 +292,15 @@ IoOptimizer (IO 优化)
 - ✅ CI/CD：GitHub Actions 自动化流水线
 - ✅ 覆盖率验证：Jacoco 80% 目标建立
 
-## 8. 未来演进愿景 (V16 - V20)
-详细计划见 [`docs/plans/下一步改进指南.md`](docs/plans/下一步改进指南.md)（V16-V20 完整落地路线，含文件浏览器、跨设备协作、AI 智能助手、KMP 跨平台、极致性能）
+## 8. 未来演进愿景 (V16 - V21)
+详细计划见 [`docs/plans/下一步改进指南.md`](docs/plans/下一步改进指南.md)（V16-V21 完整落地路线，含文件浏览器、跨设备协作、AI 智能助手、KMP 跨平台、极致性能）
 
-- **V16 (文件浏览器引擎)**: 目录浏览、搜索排序、批量操作、国际化支持。
-- **V17 (跨设备协作与安全)**: 备份同步、云集成、WAL 加密、审计日志。
-- **V18 (AI 智能助手)**: ONNX Runtime 端侧 AI、文件分类、异常检测、自动化规则引擎。
-- **V19 (KMP 跨平台核心)**: 跨平台核心库，支持桌面平台适配。
-- **V20 (极致性能)**: 多线程 mmap、直接 I/O 优化、全链路基准测试。
+- **V16 (任务引擎收口 - 已完成)**: 任务控制重构（MainActivity 拆分委派控制器）、日志事件化（AppLogger SharedFlow）、清零残留（IoOptimizer/ReplaceProgressManager、Toast）。已在 16.0.0 落地。
+- **V17 (文件浏览器引擎)**: 目录浏览、搜索排序、批量操作、国际化支持。
+- **V18 (跨设备协作与安全)**: 备份同步、云集成、WAL 加密、审计日志。
+- **V19 (AI 智能助手)**: ONNX Runtime 端侧 AI、文件分类、异常检测、自动化规则引擎。
+- **V20 (KMP 跨平台核心)**: 跨平台核心库，支持桌面平台适配。
+- **V21 (极致性能)**: 多线程 mmap、直接 I/O 优化、全链路基准测试。
 
 ### 难点 1: Android 11+ 的分区存储限制
 

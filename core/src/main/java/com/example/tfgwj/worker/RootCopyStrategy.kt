@@ -30,7 +30,7 @@ class RootCopyStrategy(
         private const val TAG = "RootCopyStrategy"
     }
 
-    private val taskController = TaskControllerImpl()
+    private val taskController = TaskControllerProvider.get()
 
     override val strategyName: String = "ROOT_BATCH"
 

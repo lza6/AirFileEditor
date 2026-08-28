@@ -84,7 +84,7 @@ class FileReplaceWorkerV2(
     private lateinit var config: CopyConfig
     @Volatile
     private var orchestrator: FileReplaceOrchestrator? = null
-    private val taskController = TaskControllerImpl()
+    private val taskController = TaskControllerProvider.get()
 
     override suspend fun doWork(): Result =
         withContext(Dispatchers.IO) {

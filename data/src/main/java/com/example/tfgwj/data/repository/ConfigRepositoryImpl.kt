@@ -15,7 +15,7 @@ import com.example.tfgwj.manager.ArchiveScanner
 import com.example.tfgwj.manager.ExtractManager
 import com.example.tfgwj.manager.MainPackManager
 import com.example.tfgwj.manager.PatchManager
-import com.example.tfgwj.worker.TaskControllerImpl
+import com.example.tfgwj.worker.TaskControllerProvider
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -33,7 +33,7 @@ class ConfigRepositoryImpl(
 ) : ConfigRepository {
 
     private val _permissionStatus = MutableStateFlow(PermissionStatus())
-    private val taskController = TaskControllerImpl()
+    private val taskController: com.example.tfgwj.domain.repository.TaskController = TaskControllerProvider.get()
 
     override suspend fun checkEnvironment(packageName: String, forceRefresh: Boolean): PermissionStatus {
         val result =
