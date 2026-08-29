@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>V17.0.0 变更报告</title>
+<style>
+:root{
+  --bg:#f6f7f9;--card:#ffffff;--ink:#1c2333;--mut:#5b6472;--line:#e3e7ee;
+  --acc:#2f6fed;--ok:#1a9d5c;--warn:#d97706;--err:#d0342c;--code:#0f2a52;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.7 "Segoe UI","PingFang SC","Microsoft YaHei",system-ui,sans-serif}
+.wrap{max-width:960px;margin:0 auto;padding:32px 20px 80px}
+h1{font-size:28px;margin:0 0 4px}
+h2{font-size:20px;margin:36px 0 12px;padding-bottom:8px;border-bottom:2px solid var(--line)}
+h3{font-size:16px;margin:22px 0 8px}
+p{margin:8px 0}
+.meta{color:var(--mut);font-size:13px;margin-bottom:8px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px 20px;margin:14px 0}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:720px){.grid2{grid-template-columns:1fr}}
+table{border-collapse:collapse;width:100%;margin:10px 0;font-size:13.5px}
+th,td{border:1px solid var(--line);padding:7px 10px;text-align:left;vertical-align:top}
+th{background:#eef1f6;font-weight:600}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;font-weight:600;white-space:nowrap}
+.tag-ok{background:#e3f5ec;color:var(--ok)}
+.tag-warn{background:#fdf0dc;color:var(--warn)}
+.tag-err{background:#fce6e5;color:var(--err)}
+.tag-info{background:#e8eefb;color:var(--acc)}
+code{background:#eef1f6;border-radius:4px;padding:1px 5px;font:13px Consolas,Menlo,monospace;color:var(--code)}
+pre{background:#0f1b33;color:#dce6f5;padding:14px 16px;border-radius:10px;overflow-x:auto;font:13px/1.6 Consolas,Menlo,monospace}
+ul{margin:8px 0;padding-left:22px}
+li{margin:4px 0}
+.file{font-family:Consolas,Menlo,monospace;font-size:12.5px;color:var(--acc)}
+/* quiz */
+.quiz{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:20px;margin-top:8px}
+.q{margin:16px 0;padding:12px;border:1px solid var(--line);border-radius:8px}
+.q-title{font-weight:600;margin-bottom:8px}
+label{display:block;margin:5px 0;cursor:pointer}
+.quiz-btn{background:var(--acc);color:#fff;border:0;padding:10px 22px;border-radius:8px;font-size:15px;cursor:pointer;margin-top:10px}
+.quiz-btn:hover{opacity:.9}
+#quizResult{margin-top:14px;font-weight:600}
+.wrong{background:#fdf0f0;border-color:#f2b8b5}
+.correct{background:#f0faf4;border-color:#b7e6cc}
+.hidden{display:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>听风改文件 (tfgwj) V17.0.0 变更报告</h1>
+<div class="meta">任务：生产终审 · 基线：16.2.0 (versionCode=10) → 17.0.0 (versionCode=11) → 17.0.1 审查修复<br>
+日期：2026-08-29 · 提交：<code>bc79f4b</code>（V17.0.0）+ <code>4713a2f</code>（V17.0.1 审查闭环）</div>
+
+<div class="card">
+<h3>一、任务背景与目标</h3>
+<p>本次交付在 <code>docs/plans/下一步改进指南.md</code> 规划的 V17→V30 路线上，用户选定落地边界为 <b>V17 屎山清理 + V18 性能引擎 2.0 + V20 安全纵深</b>，并要求：真实 E2E 验证、独立审查、提交推送、打 tag、创建 GitHub Release。</p>
+<p>目标：在不重构骨架、不造轮子前提下，清除历史残留、升级性能引擎、纵深安全防线，并将"有代码"提升到"真接入、可验证、已闭环"。</p>
+</div>
+
+<div class="card">
+<h3>二、原始问题（事实重建）</h3>
+<ul>
+<li><b>重复造轮子</b>：<span class="file">HighPerformanceIoEngine.kt</span>（123 行）与 <span class="file">IoEngine.kt</span>（302 行）功能几乎完全重复，V14"引擎融合"只改了名字没删旧件。</li>
+<li><b>硬编码包名残留</b>：<span class="file">AppConstants.kt:14,17</span> 的腾讯包名常量全仓 0 引用，违反"目标包名禁止回退"红线。</li>
+<li><b>MVI 死契约</b>：<span class="file">ReplacingIntent.kt</span> 14 个 Intent 在 <code>handleIntent()</code> 落入 <code>else -&gt; {}</code> 空分支（无消费方）。</li>
+<li><b>死代码</b>：<span class="file">FileReplaceWorkerV2.kt</span> 注释历史块 + 无引用的 <code>updateProgressState</code>；<span class="file">ArchiveManager.kt</span> 未使用的 <code>Toast</code> import。</li>
+<li><b>性能隐患</b>：mmap 一次性 <code>map(0,size)</code> 在低内存设备可能 OOM；小文件逐文件 IO；缓冲无内存水位联动。</li>
+<li><b>安全缺口</b>：解压无压缩炸弹检测；路径校验只到 <code>data|obb</code> 前缀、未收窄到单包目录（symlink 逃逸纵深缺失）。</li>
+</ul>
+</div>
+
+<div class="card">
+<h3>三、需求追踪摘要</h3>
+<table>
+<tr><th>ID</th><th>需求</th><th>类型</th><th>实现证据</th><th>验证证据</th><th>状态</th></tr>
+<tr><td>R-01</td><td>删除重复引擎 HighPerformanceIoEngine</td><td>显式</td><td><span class="file">IoEngine.kt:23</span> 注释仅提及，运行时 0 引用</td><td>rg 0 命中 + 编译通过</td><td><span class="tag tag-ok">已闭环</span></td></tr>
+<tr><td>R-02</td><td>删除硬编码包名常量</td><td>显式</td><td><span class="file">AppConstants.kt</span> 移除两常量</td><td>rg 0 命中</td><td><span class="tag tag-ok">已闭环</span></td></tr>
+<tr><td>R-03</td><td>删除 14 个死 Intent，MVI 契约最小化</td><td>显式</td><td><span class="file">ReplacingIntent.kt</span> 12 分支穷尽无 else</td><td>编译通过 + 审查确认</td><td><span class="tag tag-ok">已闭环</span></td></tr>
+<tr><td>R-04</td><td>删除 Worker 死代码</td><td>显式</td><td><span class="file">FileReplaceWorkerV2.kt</span> 注释块 + updateProgressState 移除</td><td>编译通过</td><td><span class="tag tag-ok">已闭环</span></td></tr>
+<tr><td>R-05</td><td>:data 模块测试从 0 补足</td><td>非功能</td><td><span class="file">ConfigRepositoryContractTest.kt</span> 5 用例</td><td>:data:testDebugUnitTest 通过</td><td><span class="tag tag-ok">已闭环</span></td></tr>
+<tr><td>R-06</td><td>分块 mmap 防大文件 OOM</td><td>非功能</td><td><span class="file">IoEngine.kt:46-47,120-159</span> MMAP_CHUNK_SIZE 64MB + 2GB 超限 channelCopy</td><td>IoEngineTest 3 用例</td><td><span class="tag tag-ok">已闭环</span></td></tr>
+<tr><td>R-07</td><td>内存水位守卫</td><td>非功能</td><td><span class="file">MemoryPressureGuard.kt</span> + <span class="file">IoEngine.kt:103</span> 接线 + Worker 任务前刷新</td><td>MemoryPressureGuardTest 7 + IoEngineTest 2</td><td><span class="tag tag-ok">已闭环</span></td></tr>
+<tr><td>R-08</td><td>压缩炸弹检测</td><td>隐式</td><td><span class="file">ArchiveSafetyGuard.kt:30-52</span> validateBomb，接入 ExtractManager/UniversalExtractor 5 处</td><td>ArchiveSafetyGuardBombTest 6</td><td><span class="tag tag-ok">已闭环</span></td></tr>
+<tr><td>R-09</td><td>symlink 逃逸防护收窄到单包</td><td>隐式</td><td><span class="file">AbstractShellOrchestrator.kt:158</span> + Root/Shizuku/Verification 三处接线</td><td>IsSafeTargetPathTest 3 + 审查确认接线</td><td><span class="tag tag-ok">已闭环</span></td></tr>
+<tr><td>R-10</td><td>E2E 三态验证不崩溃</td><td>验收</td><td>模拟器 Android 15：NATIVE 受限 / SHIZUKU 未连接 / bestMode=NONE fail-closed</td><td>进程存活 + 截图 docs/reports/e2e_v17_*.png</td><td><span class="tag tag-ok">已闭环</span></td></tr>
+<tr><td>R-11</td><td>发布交付</td><td>验收</td><td>main 提交 bc79f4b + 4713a2f + tag v17.0.0 + Release</td><td>gh release 资产 app-release.apk</td><td><span class="tag tag-ok">已闭环</span></td></tr>
+</table>
+</div>
+
+<div class="card">
+<h3>四、架构与数据流直觉</h3>
+<pre>权限通道:  PermissionChecker → availableModes → Root/Shizuku/Native Orchestrator
+                ↓ isSafeTargetPathForPackage(单包边界,symlink解析)
+传输效率:  IoEngine.fastCopy → 分块mmap(64MB/块) | channelCopy(&gt;2GB) | 自适应流
+                ↑ MemoryPressureGuard(内存水位: HIGH跳过mmap+收缩缓冲)
+数据安全:  ArchiveEntryValidator(条目) → ArchiveSafetyGuard.validateBomb(炸弹) → staging先校验后写入
+任务编排:  FileReplaceWorkerV2 → refreshMemoryPressure → 复制 → VerificationManager.verify(强制)
+                ↑ TaskController(唯一权威状态源) → TaskControllerProvider(单例)</pre>
+<p>V17 清理降低了维护面；V18 让大文件复制具备 OOM 防线；V20 让每次写入/验证都先通过单包边界与炸弹检测。</p>
+</div>
+
+<div class="card">
+<h3>五、修改前后的行为对比</h3>
+<table>
+<tr><th>维度</th><th>修改前 (16.2.0)</th><th>修改后 (17.0.x)</th></tr>
+<tr><td>复制引擎</td><td>IoEngine + HighPerformanceIoEngine 双份</td><td>单引擎 IoEngine，统一入口</td></tr>
+<tr><td>大文件复制</td><td>一次性 map(0,size)，低内存可能 OOM</td><td>分块映射 + 超限流式写 + 高压力自动降级</td></tr>
+<tr><td>路径安全</td><td>仅校验在 data|obb 下</td><td>校验在 data|obb/&lt;targetPackage&gt;/ 下（canonicalPath 防 symlink 逃逸）</td></tr>
+<tr><td>解压安全</td><td>防穿越/超限</td><td>+ 压缩炸弹检测（条目数&gt;10万、压缩率&gt;100x 拒绝）</td></tr>
+<tr><td>MVI 契约</td><td>14 个无消费 Intent</td><td>12 个全消费 Intent，无 else 空分支</td></tr>
+<tr><td>:data 测试</td><td>0 测试，不进 CI</td><td>5 测试，CI 增加 :data:testDebugUnitTest</td></tr>
+</table>
+</div>
+
+<div class="card">
+<h3>六、修改的文件与模块</h3>
+<ul>
+<li><span class="file">core/performance/IoEngine.kt</span> — 分块 mmap + channelCopy + 内存水位接线（+22/-20）</li>
+<li><span class="file">core/performance/MemoryPressureGuard.kt</span>（新增）— 内存水位评估</li>
+<li><span class="file">core/performance/SmallFileBatchWriter.kt</span>（新增）— 小文件聚合组件（能力预留）</li>
+<li><span class="file">core/security/ArchiveSafetyGuard.kt</span> — validateBomb 压缩炸弹检测</li>
+<li><span class="file">core/worker/orchestrator/AbstractShellOrchestrator.kt</span> — isSafeTargetPathForPackage</li>
+<li><span class="file">core/worker/orchestrator/RootCopyOrchestrator.kt / ShizukuCopyOrchestrator.kt / VerificationManager.kt</span> — 三处接线</li>
+<li><span class="file">core/manager/ExtractManager.kt / UniversalExtractor.kt</span> — validateBomb 接入 5 处</li>
+<li><span class="file">core/utils/AppConstants.kt / HighPerformanceIoEngine.kt(删) / worker/FileReplaceWorkerV2.kt</span> — 清理</li>
+<li><span class="file">app/ui/mvi/ReplacingIntent.kt / ReplacingViewModel.kt / MainActivity.kt</span> — 死 Intent 清理</li>
+<li><span class="file">data/build.gradle.kts + data/src/test/.../ConfigRepositoryContractTest.kt</span> — :data 测试</li>
+<li><span class="file">.github/workflows/ci.yml</span> — CI 纳入 :data 测试</li>
+<li><span class="file">app/build.gradle.kts / CHANGELOG.md / README.md / db_structure.md / workflow_status.md / project_specs.md</span> — 版本+文档同步</li>
+</ul>
+</div>
+
+<div class="card">
+<h3>七、关键设计决策</h3>
+<ul>
+<li><b>分块 mmap 阈值</b>：64MB/块 + 2GB 上限走 channelCopy — 平衡映射虚存与 syscall 次数；2GB 以上 mmap 收益有限且内存风险高。</li>
+<li><b>内存水位注入方式</b>：Worker 任务前 <code>refreshMemoryPressure</code> 一次性刷新 + IoEngine 内部 <code>@Volatile</code> 状态 — 避免每次复制都读 ActivityManager（性能），又不失动态性。</li>
+<li><b>单包边界校验</b>：isSafeTargetPathForPackage 用 canonicalPath 解析 symlink 后收窄前缀 — 比笼统 data|obb 前缀更精确，横向越权写他包目录被拒。</li>
+<li><b>压缩炸弹口径</b>：仅在解压总量 ≥512MB 时检查压缩率（避免小文件误判），条目数恒上限 10 万。</li>
+<li><b>MVI 最小化</b>：删 Intent 而非补假实现 — 保持契约与真实能力一致，避免"有按钮无能力"。</li>
+</ul>
+</div>
+
+<div class="card">
+<h3>八、测试与运行证据</h3>
+<table>
+<tr><th>项</th><th>结果</th></tr>
+<tr><td>全量单测 @Test</td><td>259 个全绿（V17.0.1 后重新统计）</td></tr>
+<tr><td>checkQuality (Detekt+Ktlint+JaCoCo)</td><td>BUILD SUCCESSFUL</td></tr>
+<tr><td>assembleDebug / assembleRelease</td><td>BUILD SUCCESSFUL</td></tr>
+<tr><td>Release APK 签名</td><td>CN=AirFileEditor（apksigner verify）</td></tr>
+<tr><td>E2E 模拟器 (Android 15)</td><td>安装/启动/进程存活，三态 fail-closed 不崩溃，截图留存</td></tr>
+<tr><td>channelCopy NIO 契约</td><td>独立 JVM probe：3GB 完整拷贝、read==0/write==0 均未发生（死循环排除）</td></tr>
+</table>
+</div>
+
+<div class="card">
+<h3>九、Reviewer 发现及修复情况</h3>
+<table>
+<tr><th>级别</th><th>发现</th><th>修复（V17.0.1）</th><th>状态</th></tr>
+<tr><td><span class="tag tag-err">Blocking</span></td><td>channelCopy 失败可能残留截断文件并被误判成功</td><td>读侧 read&gt;0、写侧 drain 循环、失败删半成品返 0</td><td><span class="tag tag-ok">已修复</span></td></tr>
+<tr><td><span class="tag tag-err">Blocking</span></td><td>isSafeTargetPathForPackage 未接入真实路径</td><td>Root/Shizuku/Verification 三处接线</td><td><span class="tag tag-ok">已修复</span></td></tr>
+<tr><td><span class="tag tag-warn">Required</span></td><td>MemoryPressureGuard 0 生产引用（伪功能）</td><td>IoEngine.fastCopy + Worker 任务前接线</td><td><span class="tag tag-ok">已修复</span></td></tr>
+<tr><td><span class="tag tag-warn">Required</span></td><td>:data 测试不进 CI/门禁</td><td>ci.yml 增加 :data:testDebugUnitTest</td><td><span class="tag tag-ok">已修复</span></td></tr>
+<tr><td><span class="tag tag-warn">Required</span></td><td>SmallFileBatchWriter 声明与 wiring 不符</td><td>明确为能力预留组件，文档措辞修正</td><td><span class="tag tag-ok">已修复</span></td></tr>
+<tr><td><span class="tag tag-info">Verify</span></td><td>validateBomb 对 tar 压缩率口径语义不当</td><td>已评估：tar ratio≈1 不会误拒，维持双重校验（风险已披露）</td><td><span class="tag tag-warn">部分</span></td></tr>
+</table>
+</div>
+
+<div class="card">
+<h3>十、兼容性、迁移与回滚</h3>
+<ul>
+<li><b>向后兼容</b>：无公共 API 破坏性变更；删除项均为 0 引用的死代码（rg 实证）。</li>
+<li><b>数据</b>：无数据库迁移；DataStore 键未增删。</li>
+<li><b>回滚</b>：完整保留 V16.2.0 tag；如遇问题 <code>git revert 4713a2f bc79f4b</code> 即可。</li>
+<li><b>版本</b>：versionCode 10→11；Release 资产 app-release.apk（SHA-256 见 Release notes）。</li>
+</ul>
+</div>
+
+<div class="card">
+<h3>十一、已知限制与剩余风险</h3>
+<ul>
+<li><b>verify 待补</b>：data/obb 目标目录 rename-then-delete 原子性未在 JVM 层单测覆盖（走 Shell Orchestrator 真实链路），已披露为待验证。</li>
+<li><b>validateBomb 口径</b>：对未压缩 TAR 压缩率恒≈1 不触发，压缩率维度仅对 zip/7z 有效；tar 类依赖条目数+总量（16GB）上限。</li>
+<li><b>E2E 三态</b>：模拟器无 Root/Shizuku 服务连接，故 Root/Shizuku 的真实复制链路未在设备端实测，仅验证了 fail-closed 与权限判定逻辑。</li>
+<li><b>SmallFileBatchWriter</b>：独立组件已测试但未接入 fastCopy 小文件分支（现有 Native 复制用 partition+batchFiles 等效），属能力预留。</li>
+</ul>
+</div>
+
+<div class="card">
+<h3>十二、使用者与维护者须知</h3>
+<ul>
+<li>构建/测试/门禁：<code>.\gradlew.bat testDebugUnitTest :domain:test :data:testDebugUnitTest checkQuality assembleDebug</code></li>
+<li>新加安全能力：所有解压路径（ExtractManager/UniversalExtractor/ArchiveManager）必须先过 <code>ArchiveSafetyGuard</code> 再写 staging。</li>
+<li>复制路径必须过 <code>isSafeTargetPathForPackage(path, targetPackage)</code>（canonicalPath 解析），不要再退回到笼统 data|obb 前缀。</li>
+<li>内存水位在 Worker 任务前自动刷新；若新增非 Worker 的 IO 入口，需同步调用 <code>IoEngine.refreshMemoryPressure</code>。</li>
+</ul>
+</div>
+
+<h2>十三、交互式测验</h2>
+<div class="card quiz" id="quiz">
+<p>回答以下问题检验对本次变更的理解（通过线 80%）。</p>
+
+<div class="q" data-ans="0">
+<div class="q-title">1. V17.0.0 删除哪个重复引擎？</div>
+<label><input type="radio" name="q1" value="0">A. HighPerformanceIoEngine（并入 IoEngine）</label>
+<label><input type="radio" name="q1" value="1">B. IoOptimizer（并入 IoEngine）</label>
+<label><input type="radio" name="q1" value="2">C. ArchiveSafetyGuard</label>
+</div>
+
+<div class="q" data-ans="1">
+<div class="q-title">2. IoEngine 分块 mmap 的单块大小与超限阈值是？</div>
+<label><input type="radio" name="q2" value="0">A. 16MB/块，512MB 超限</label>
+<label><input type="radio" name="q2" value="1">B. 64MB/块，2GB 超限走 channelCopy</label>
+<label><input type="radio" name="q2" value="2">C. 1MB/块，1GB 超限</label>
+</div>
+
+<div class="q" data-ans="2">
+<div class="q-title">3. isSafeTargetPathForPackage 比旧 isSafeTargetPath 更严格在哪？</div>
+<label><input type="radio" name="q3" value="0">A. 校验速度更快</label>
+<label><input type="radio" name="q3" value="1">B. 增加磁盘空间检查</label>
+<label><input type="radio" name="q3" value="2">C. 收窄到 data|obb/&lt;targetPackage&gt;/ 内并用 canonicalPath 防 symlink 逃逸</label>
+</div>
+
+<div class="q" data-ans="1">
+<div class="q-title">4. validateBomb 拒绝压缩炸弹的两个判据是？</div>
+<label><input type="radio" name="q4" value="0">A. 文件名长度、条目重复</label>
+<label><input type="radio" name="q4" value="1">B. 条目数&gt;10万 或 解压&gt;512MB且压缩率&gt;100x</label>
+<label><input type="radio" name="q4" value="2">C. 文件大小&gt;4GB、总大小&gt;16GB</label>
+</div>
+
+<div class="q" data-ans="0">
+<div class="q-title">5. MemoryPressureGuard 在 V17.0.1 中如何真实生效？</div>
+<label><input type="radio" name="q5" value="0">A. Worker 任务前 refreshMemoryPressure → fastCopy 高压力跳过 mmap + 缓冲 clamp</label>
+<label><input type="radio" name="q5" value="1">B. 仅提供接口，未接入复制路径</label>
+<label><input type="radio" name="q5" value="2">C. 在 UI 层弹窗提示内存不足</label>
+</div>
+
+<div class="q" data-ans="2">
+<div class="q-title">6. :data 模块测试在 V17 中的关键改进是？</div>
+<label><input type="radio" name="q6" value="0">A. 从 5 个测试删到 0 个</label>
+<label><input type="radio" name="q6" value="1">B. 仍然不进 CI</label>
+<label><input type="radio" name="q6" value="2">C. 从 0 补到 5 个测试并纳入 CI 流水线</label>
+</div>
+
+<div class="q" data-ans="0">
+<div class="q-title">7. MVI 清理后 ReplacingIntent 的状态是？</div>
+<label><input type="radio" name="q7" value="0">A. 12 个 Intent 全部有消费方，when 穷尽无 else</label>
+<label><input type="radio" name="q7" value="1">B. 保留 14 个死 Intent 供扩展</label>
+<label><input type="radio" name="q7" value="2">C. 新增更多无消费 Intent</label>
+</div>
+
+<div class="q" data-ans="1">
+<div class="q-title">8. channelCopy 的 NIO 契约验证结论是？</div>
+<label><input type="radio" name="q8" value="0">A. while(read&gt;=0) 会死循环</label>
+<label><input type="radio" name="q8" value="1">B. 本地文件阻塞通道不会返回 0；已用 3GB probe 证实完整拷贝，无死循环</label>
+<label><input type="radio" name="q8" value="2">C. 必须用 transferTo 才安全</label>
+</div>
+
+<button class="quiz-btn" onclick="gradeQuiz()">提交测验</button>
+<div id="quizResult"></div>
+</div>
+
+</div>
+<script>
+function gradeQuiz(){
+  var qs=document.querySelectorAll('.q');
+  var correct=0,total=qs.length,wrong=[];
+  qs.forEach(function(q,i){
+    var ans=q.dataset.ans;
+    var sel=q.querySelector('input:checked');
+    var isRight = sel && sel.value===ans;
+    if(isRight){correct++;q.classList.add('correct')}else{q.classList.add('wrong')}
+    if(!isRight){wrong.push(i+1)}
+  });
+  var pct=Math.round(correct/total*100);
+  var pass=pct>=80;
+  var el=document.getElementById('quizResult');
+  el.innerHTML='得分：'+correct+'/'+total+'（'+pct+'%），'+(pass?'<span style="color:var(--ok)">通过</span>':'<span style="color:var(--err)">未通过（通过线 80%）</span>')+(wrong.length?'；错题：第 '+wrong.join('、')+' 题（已标红，请对照上文内容）':'');
+}
+</script>
+</body>
+</html>
