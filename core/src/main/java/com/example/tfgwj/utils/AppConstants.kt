@@ -10,18 +10,6 @@ object AppConstants {
     // 解压目录名称
     const val EXTRACT_DIR_NAME = "extracted"
 
-    // 和平精英默认包名
-    const val DEFAULT_GAME_PACKAGE_NAME = "com.tencent.tmgp.pubgmhd"
-
-    // 备用包名
-    val ALTERNATIVE_GAME_PACKAGE_NAMES =
-        arrayOf(
-            "com.tencent.tmgp.pubgmhd",
-            "com.pubg.krmobile",
-            "com.rekoo.pubgm",
-            "com.tencent.ig",
-        )
-
     // 支持的压缩包格式
     val SUPPORTED_ARCHIVE_FORMATS =
         listOf(

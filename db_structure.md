@@ -1,6 +1,7 @@
 # Database Structure: tfgwj (Jetpack DataStore)
 
-## 1. 偏好设置 (Preferences - DataStore)
+> V17 更新：对齐真实 `PreferencesManager` 键，删除已废弃的 `IoOptimizer` 描述。
+```
 采用 Jetpack DataStore 进行高性能、非阻塞式的配置存储。
 
 | 键名 (Key) | 类型 (Type) | 默认值 (Default) | 说明 (Description) |

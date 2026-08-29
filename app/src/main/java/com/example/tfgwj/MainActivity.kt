@@ -382,7 +382,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     internal fun loadMainPacks() {
-        replacingViewModel.handleIntent(ReplacingIntent.ScanMainPacks)
         lifecycleScope.launch {
             val targetPackage = preferencesManager.appPackageName.first()
             val selectedPath = replacingViewModel.uiState.value.selectedMainPackPath

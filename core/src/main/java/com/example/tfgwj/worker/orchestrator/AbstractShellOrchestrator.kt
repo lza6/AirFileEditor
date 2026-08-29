@@ -135,13 +135,32 @@ abstract class AbstractShellOrchestrator(
     // ==================== 路径安全 ====================
 
     /**
-     * 校验目标路径是否在允许目录内
+     * 校验目标路径是否在允许目录内（V20 加固：拒绝符号链接逃逸）
+     *
+     * 先解析目标路径的 canonical 形式，再检查起点是否仍在
+     * /storage/emulated/0/Android/(data|obb)/ 下。canonicalPath 会解析符号链接，
+     * 因此若目标路径经 symlink 指向允许目录之外，解析后起点将不匹配而返回 false。
      */
     protected fun isSafeTargetPath(path: String): Boolean {
         return try {
-            val normalized = File(path).canonicalPath
-            normalized.startsWith("/storage/emulated/0/Android/data/") ||
-                normalized.startsWith("/storage/emulated/0/Android/obb/")
+            val canonical = java.io.File(path).canonicalPath
+            canonical.startsWith("/storage/emulated/0/Android/data/") ||
+                canonical.startsWith("/storage/emulated/0/Android/obb/")
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    /**
+     * 校验目标路径是否在指定包目录内（V20：针对单包替换的精确边界校验）
+     * 解析 symlink 后仍须落在 /storage/emulated/0/Android/(data|obb)/<targetPackage>/ 下。
+     */
+    protected fun isSafeTargetPathForPackage(path: String, targetPackage: String): Boolean {
+        return try {
+            val canonical = java.io.File(path).canonicalPath
+            val dataPrefix = "/storage/emulated/0/Android/data/$targetPackage/"
+            val obbPrefix = "/storage/emulated/0/Android/obb/$targetPackage/"
+            canonical.startsWith(dataPrefix) || canonical.startsWith(obbPrefix)
         } catch (e: Exception) {
             false
         }

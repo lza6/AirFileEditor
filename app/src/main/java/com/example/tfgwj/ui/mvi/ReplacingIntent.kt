@@ -1,10 +1,11 @@
 package com.example.tfgwj.ui.mvi
 
-import com.example.tfgwj.utils.PermissionChecker
-
 /**
  * V11.0.0 用户意图 (完整版)
  * 覆盖 MainActivity 所有用户交互
+ *
+ * V17 收口：删除无消费方的死 Intent（落入 else -> {} 空分支），
+ * 保持 MVI 契约最小化。仅保留有真实实体逻辑的交互。
  */
 sealed class ReplacingIntent {
     // 替换任务控制
@@ -21,24 +22,7 @@ sealed class ReplacingIntent {
     object ResumeReplace : ReplacingIntent()
 
     // 权限与模式
-    data class UpdateMode(val mode: PermissionChecker.AccessMode) : ReplacingIntent()
-
-    object RefreshEnvironment : ReplacingIntent()
-
-    object RequestStoragePermission : ReplacingIntent()
-
-    object RequestShizukuPermission : ReplacingIntent()
-
-    // 主包管理
-    data class SelectMainPack(val path: String) : ReplacingIntent()
-
-    object ScanMainPacks : ReplacingIntent()
-
     object CheckEnvironment : ReplacingIntent()
-
-    object LaunchGame : ReplacingIntent()
-
-    object CleanEnvironment : ReplacingIntent()
 
     // 文件时间管理
     object RandomizeFileTime : ReplacingIntent()
@@ -47,24 +31,11 @@ sealed class ReplacingIntent {
 
     object UnlockFileTime : ReplacingIntent()
 
-    object ApplyLockedTime : ReplacingIntent()
-
     // 小包管理
-    object ScanArchives : ReplacingIntent()
-
     object RefreshPatches : ReplacingIntent()
 
     data class SelectPatch(val version: String) : ReplacingIntent()
 
-    object ExtractAndUpdate : ReplacingIntent()
-
     // 日志操作
-    object CopyLogs : ReplacingIntent()
-
     object ClearLogs : ReplacingIntent()
-
-    // OTA 更新
-    object CheckForUpdates : ReplacingIntent()
-
-    data class InstallUpdate(val apkPath: String) : ReplacingIntent()
 }

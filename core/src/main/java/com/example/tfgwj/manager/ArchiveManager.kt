@@ -2,7 +2,6 @@ package com.example.tfgwj.manager
 
 import android.content.Context
 import android.util.Log
-import android.widget.Toast
 import com.example.tfgwj.model.ArchiveFile
 import com.example.tfgwj.security.ArchiveEntryMetadata
 import com.example.tfgwj.security.ArchiveEntryValidator

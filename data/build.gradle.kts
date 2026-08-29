@@ -28,4 +28,9 @@ dependencies {
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.work.runtime.ktx)
     implementation(libs.shizuku.api)
+
+    testImplementation(libs.junit)
+    testImplementation(libs.coroutines.test)
+    testImplementation(libs.mockk)
+    testImplementation(libs.robolectric)
 }

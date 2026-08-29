@@ -1,5 +1,36 @@
 # Changelog
 
+## 17.0.0 - 2026-08-29
+
+### 架构
+- V17 屎山清理：删除双引擎 `HighPerformanceIoEngine`（能力并入 `IoEngine`），收敛重复代码
+- 删除硬编码包名 `AppConstants.DEFAULT_GAME_PACKAGE_NAME` / `ALTERNATIVE_GAME_PACKAGE_NAMES`
+- 删除无消费方死 Intent（`UpdateMode`/`RefreshEnvironment`/`RequestStoragePermission`/`RequestShizukuPermission`/`SelectMainPack`/`ScanMainPacks`/`LaunchGame`/`CleanEnvironment`/`ApplyLockedTime`/`ScanArchives`/`ExtractAndUpdate`/`CopyLogs`/`CheckForUpdates`/`InstallUpdate`），MVI 契约最小化
+- 删除 `FileReplaceWorkerV2` 注释死代码 + `updateProgressState` 无用方法
+- 删除 `:core` 层 `android.widget.Toast` import（净化方向）
+- 密码学默认包名回溯语义保留（`:core` 探测语义，非任务回退）
+
+### 性能引擎 2.0 (V18)
+- `IoEngine.mmapCopy` 改为**分块 mmap**：`MMAP_CHUNK_SIZE` 64MB/块 + `MMAP_MAX_FILE_SIZE` 2GB 超限走 `channelCopy` 流式写，防大文件 OOM
+- 新增 `MemoryPressureGuard`：内存水位评估 LOW/MEDIUM/HIGH，动态降并发/禁用 mmap
+- 新增 `SmallFileBatchWriter`：小文件攒批同刷，减少系统调用
+- `AdaptiveBufferManager.setBufferSize` 显式 clamp 到 [min,max]，与内存水位联动
+
+### 安全纵深 (V20)
+- `ArchiveSafetyGuard.validateBomb`：压缩炸弹检测（条目数>10万拒绝；解压>512MB且压缩率>100x 拒绝）；接入 ExtractManager / UniversalExtractor 全部解压路径
+- `AbstractShellOrchestrator.isSafeTargetPath` 加固 + 新增 `isSafeTargetPathForPackage` 单包边界校验（symlink 逃逸防护）
+
+### 测试
+- `:data` 模块补足测试（此前 0 测试）：`ConfigRepositoryContractTest` 5 用例
+- 新增 `MemoryPressureGuardTest`(7) / `SmallFileBatchWriterTest`(6) / `ArchiveSafetyGuardBombTest`(6) / `IsSafeTargetPathTest`(3)
+- `TaskControllerImplTest` 补终态交叉用例(2) / `AdaptiveBufferManagerTest` 补 clamp 用例(4) / `IoEngineTest` 补 mmap 常量用例(3)
+- 全量单测 `@Test` 数：259
+
+### 工程
+- 版本号升至 17.0.0 / versionCode=11
+- `checkQuality`（Detekt+Ktlint+JaCoCo）全绿通过
+- E2E 模拟器（Android 15）三态验证通过：NATIVE 受限 / SHIZUKU 潜在方案未连接 / bestMode=NONE fail-closed 不崩溃
+
 ## 16.2.0 - 2026-08-29
 
 ### 架构

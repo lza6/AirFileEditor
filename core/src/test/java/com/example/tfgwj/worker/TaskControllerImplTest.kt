@@ -157,4 +157,33 @@ class TaskControllerImplTest {
         assertFalse(TaskState(phase = TaskPhase.REPLACING).isTerminal)
         assertFalse(TaskState(phase = TaskPhase.VERIFYING).isTerminal)
     }
+
+    @Test
+    fun `cancel after completion keeps terminal state consistent`() = runTest {
+        // 终态交叉：COMPLETED 之后再 cancel，不应回到运行中
+        controller.startMeasure()
+        controller.finish()
+
+        controller.cancel()
+
+        val state = controller.state.first()
+        // cancel() 保持 CANCELLED 终态（copy cased），errorMessage 清空
+        assertEquals(TaskPhase.CANCELLED, state.phase)
+        assertFalse(state.isReplacing)
+        assertTrue(state.isTerminal)
+    }
+
+    @Test
+    fun `fail after completion stays terminal and not replacing`() = runTest {
+        controller.startMeasure()
+        controller.finish()
+
+        controller.fail("终态后失败应保持 FAILURE")
+
+        val state = controller.state.first()
+        assertEquals(TaskPhase.FAILURE, state.phase)
+        assertTrue(state.isTerminal)
+        assertFalse(state.isReplacing)
+        assertEquals("终态后失败应保持 FAILURE", state.errorMessage)
+    }
 }

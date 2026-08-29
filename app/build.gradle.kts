@@ -33,8 +33,8 @@ android {
         applicationId = "com.example.tfgwj"
         minSdk = 26
         targetSdk = 36
-        versionCode = 10
-        versionName = "16.2.0"
+        versionCode = 11
+        versionName = "17.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 

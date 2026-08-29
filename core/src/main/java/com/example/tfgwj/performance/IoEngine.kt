@@ -20,7 +20,7 @@ import java.util.concurrent.atomic.AtomicInteger
 /**
  * 统一高性能 IO 引擎 (V14 引擎融合)
  *
- * 融合 IoOptimizer 与 HighPerformanceIoEngine 的核心能力，
+ * 统一高性能复制引擎（融合 IoOptimizer 与旧 HighPerformanceIoEngine 的核心能力），
  * 根据文件大小自动选择最优复制策略：
  *
  * - 大文件 (>= 16MB): mmap 零拷贝，受 Semaphore(16) 限流保护
@@ -41,6 +41,10 @@ object IoEngine {
     const val SMALL_FILE_THRESHOLD = 32L * 1024   // 32KB
     const val SAMPLING_THRESHOLD = 1024 * 1024     // 1MB (抽样哈希门槛)
     const val FULL_MD5_THRESHOLD = 5L * 1024 * 1024 // 5MB (全量 MD5 门槛)
+
+    // V18 分块 mmap：单块映射上限，防止大文件一次性映射导致 OOM / TransactionTooLarge
+    const val MMAP_CHUNK_SIZE = 64L * 1024 * 1024 // 64MB/块
+    const val MMAP_MAX_FILE_SIZE = 2L * 1024 * 1024 * 1024 // 2GB 上限，超限走流式写
 
     // mmap 并发限流
     private val mmapLimiter = Semaphore(16)
@@ -70,7 +74,7 @@ object IoEngine {
         return when {
             // 策略 1: 极小文件 — 直接缓冲区复制
             size in 1..SMALL_FILE_THRESHOLD -> smallFileCopy(source, target)
-            // 策略 2: 大文件 — mmap 零拷贝
+            // 策略 2: 大文件 — 分块 mmap 零拷贝（防 OOM）
             size >= MMAP_THRESHOLD -> mmapCopy(source, target)
             // 策略 3: 常规文件 — 自适应缓冲区流
             else -> adaptiveBufferCopy(source, target)
@@ -107,9 +111,20 @@ object IoEngine {
     }
 
     /**
-     * mmap 零拷贝（大文件受 Semaphore 限流）
+     * mmap 零拷贝（V18：分块映射，防大文件 OOM）
+     *
+     * 对 >=16MB 文件按 [MMAP_CHUNK_SIZE] 分块映射，块内 put 后 sync，
+     * 避免一次性 map(0, size) 在低内存设备上造成 OOM。文件超过 [MMAP_MAX_FILE_SIZE]
+     * 时降级到流式写（[channelCopy]）。任何失败均降级到自适应缓冲区流。
      */
     private fun mmapCopy(source: File, target: File): Long {
+        val size = source.length()
+
+        // 超限文件走流式写（大文件 mmap 收益有限且内存风险高）
+        if (size > MMAP_MAX_FILE_SIZE) {
+            return channelCopy(source, target)
+        }
+
         if (!mmapLimiter.tryAcquire()) {
             // 超过并发限制，降级到自适应缓冲区流
             return adaptiveBufferCopy(source, target)
@@ -119,21 +134,55 @@ object IoEngine {
                 RandomAccessFile(target, "rw").use { dstRaf ->
                     val srcCh = srcRaf.channel
                     val dstCh = dstRaf.channel
-                    val size = srcCh.size()
-                    dstRaf.setLength(size)
+                    val fileSize = srcCh.size()
+                    dstRaf.setLength(fileSize)
 
-                    val srcBuf = srcCh.map(FileChannel.MapMode.READ_ONLY, 0, size)
-                    val dstBuf = dstCh.map(FileChannel.MapMode.READ_WRITE, 0, size)
-                    dstBuf.put(srcBuf)
-                    dstBuf.force()
-                    size
+                    // 逐块映射：每次读取并写入 [MMAP_CHUNK_SIZE]，块间 sync 强制落盘
+                    var offset = 0L
+                    while (offset < fileSize) {
+                        val chunkLen = minOf(MMAP_CHUNK_SIZE, fileSize - offset)
+                        val srcBuf = srcCh.map(FileChannel.MapMode.READ_ONLY, offset, chunkLen)
+                        val dstBuf = dstCh.map(FileChannel.MapMode.READ_WRITE, offset, chunkLen)
+                        dstBuf.put(srcBuf)
+                        dstBuf.force()
+                        offset += chunkLen
+                    }
+                    fileSize
                 }
             }
         } catch (e: Exception) {
-            AppLogger.w(TAG, "mmap 复制失败，降级至自适应流: ${e.message}")
+            AppLogger.w(TAG, "分块 mmap 复制失败，降级至自适应流: ${e.message}")
             adaptiveBufferCopy(source, target)
         } finally {
             mmapLimiter.release()
+        }
+    }
+
+    /**
+     * 大文件流式写（超过 mmap 上限时的兜底）
+     * 使用 Channel 绕过分页缓存，避免一次性载入内存。
+     */
+    private fun channelCopy(source: File, target: File): Long {
+        val buffer = java.nio.ByteBuffer.allocateDirect(1024 * 1024)
+        return try {
+            FileInputStream(source).use { ins ->
+                FileOutputStream(target).use { out ->
+                    val srcCh = ins.channel
+                    val dstCh = out.channel
+                    var total = 0L
+                    while (srcCh.read(buffer) >= 0) {
+                        buffer.flip()
+                        val written = dstCh.write(buffer)
+                        total += written
+                        buffer.clear()
+                    }
+                    dstCh.force(false)
+                    total
+                }
+            }
+        } catch (e: Exception) {
+            AppLogger.w(TAG, "流式写失败: ${source.name}: ${e.message}")
+            0L
         }
     }
 
@@ -277,6 +326,20 @@ object IoEngine {
             failedCount = failedCount.get(),
             total = total,
         )
+    }
+
+    /**
+     * 从 Android ActivityManager 读取当前内存快照（外部调用方注入，便于单测与低耦合）
+     * @return [MemorySnapshot]，读取失败时返回 available=total=0（判级为 LOW）
+     */
+    fun readMemorySnapshot(activityManager: android.app.ActivityManager): MemorySnapshot {
+        return try {
+            val info = android.app.ActivityManager.MemoryInfo()
+            activityManager.getMemoryInfo(info)
+            MemorySnapshot(availMem = info.availMem, totalMem = info.totalMem)
+        } catch (e: Exception) {
+            MemorySnapshot(availMem = 0L, totalMem = 0L)
+        }
     }
 
     // ==================== 缓冲区池 ====================

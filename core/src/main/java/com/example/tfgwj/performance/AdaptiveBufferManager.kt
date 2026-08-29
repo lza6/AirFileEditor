@@ -16,6 +16,9 @@ interface AdaptiveBufferManager {
     fun recordIoDuration(bytesTransferred: Long, durationNanos: Long)
     fun getCurrentBufferSize(): Int
     fun reset(initialSize: Int = 512 * 1024)
+
+    /** V18：显式设置当前缓冲区大小（供内存水位联动，越界会被 clamp 到 [minSize,maxSize]） */
+    fun setBufferSize(size: Int)
 }
 
 class AdaptiveBufferManagerImpl(
@@ -64,6 +67,11 @@ class AdaptiveBufferManagerImpl(
     }
 
     override fun getCurrentBufferSize(): Int = currentSize.get()
+
+    @Synchronized
+    override fun setBufferSize(size: Int) {
+        currentSize.set(size.coerceIn(minSize, maxSize))
+    }
 
     @Synchronized
     override fun reset(initialSize: Int) {

@@ -250,24 +250,8 @@ class FileReplaceWorkerV2(
                 Log.e(TAG, "❌ V2 执行异常", e)
                 failed("执行异常: ${e.message ?: "未知错误"}")
             } finally {
-                // 审计闭环：历史记录写入由 :data 层 ConfigRepositoryImpl.startReplace 完成后处理，
+                // 历史记录写入由 :data 层 ConfigRepositoryImpl.startReplace 完成后处理，
                 // 不在 :core 层 Worker 中直接调用 :data 模块（依赖方向为 :data → :core）。
-                // runCatching {
-                //     val historyManager = com.example.tfgwj.data.ReplaceHistoryManager.getInstance(applicationContext)
-                //     val historyItem =
-                //         com.example.tfgwj.data.ReplaceHistoryItem(
-                //             timestamp = System.currentTimeMillis(),
-                //             packageName = targetPackage,
-                //             sourcePath = sourcePath,
-                //             targetPath = PathConstants.buildTargetDataPath(targetPackage),
-                //             totalFiles = processedFiles,
-                //             successCount = if (completed) processedFiles else 0,
-                //             failedCount = if (completed) 0 else 1,
-                //             errors = if (completed) emptyList<String>() else listOf(taskController.state.value.errorMessage ?: "任务未完成"),
-                //             backupPath = backupPath,
-                //         )
-                //     historyManager.addHistory(historyItem)
-                // }.onFailure { failure: Throwable -> Log.w(TAG, "⚠️ 写入替换历史失败", failure) }
                 Log.d(TAG, "替换任务结束: package=$targetPackage, source=$sourcePath, processed=$processedFiles, completed=$completed, backup=$backupPath")
 
                 com.example.tfgwj.performance.PerformanceMonitor.endTask(
@@ -283,38 +267,5 @@ class FileReplaceWorkerV2(
     private fun failed(message: String): Result {
         taskController.fail(message)
         return Result.failure(workDataOf(KEY_ERROR_MESSAGE to message))
-    }
-
-    /**
-     * 更新进度状态（双级节流）
-     * 保持与 V1 兼容的进度上报机制
-     */
-    private suspend fun updateProgressState(
-        progress: Int,
-        processed: Int,
-        total: Int,
-        message: String,
-        speed: Float,
-    ) {
-        // WorkManager 进度更新（setProgressAsync 内部已切线程，无需再包 Main dispatcher）
-        setProgressAsync(
-            workDataOf(
-                KEY_PROGRESS to progress,
-                KEY_PROCESSED to processed,
-                KEY_TOTAL to total,
-                KEY_CURRENT_FILE to message,
-                "speed" to speed,
-            ),
-        )
-
-        // TaskController 实时更新
-        taskController.updateState(
-            processed = processed,
-            total = total,
-            currentFile = message,
-            progress = progress,
-            speed = speed,
-            phase = TaskPhase.REPLACING,
-        )
     }
 }

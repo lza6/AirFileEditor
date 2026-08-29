@@ -295,6 +295,12 @@ class UniversalExtractor private constructor() {
                     ArchiveEntryMetadata(header.fileName, header.uncompressedSize)
                 },
             )
+            ArchiveSafetyGuard.validateBomb(
+                zipFile.fileHeaders.map { header ->
+                    ArchiveEntryMetadata(header.fileName, header.uncompressedSize)
+                },
+                File(path).length(),
+            )
 
             // 同步执行可向调用方传播异常，不能再由后台线程吞掉失败后伪装成功。
             zipFile.isRunInThread = false
@@ -335,6 +341,7 @@ class UniversalExtractor private constructor() {
                 probe.close()
             }
             ArchiveSafetyGuard.validateEntries(probeEntries)
+            ArchiveSafetyGuard.validateBomb(probeEntries, File(path).length())
             val totalEntries = probeEntries.size
 
             // 第二遍：真正写入。
@@ -391,7 +398,7 @@ class UniversalExtractor private constructor() {
         path: String,
         outputDir: String,
     ): ExtractResult {
-        return extractArchive(outputDir) { TarArchiveInputStream(FileInputStream(path)) }
+        return extractArchive(path, outputDir) { TarArchiveInputStream(FileInputStream(path)) }
     }
 
     /**
@@ -485,7 +492,7 @@ class UniversalExtractor private constructor() {
         path: String,
         outputDir: String,
     ): ExtractResult {
-        return extractArchive(outputDir) {
+        return extractArchive(path, outputDir) {
             TarArchiveInputStream(
                 GzipCompressorInputStream(BufferedInputStream(FileInputStream(path))),
             )
@@ -499,7 +506,7 @@ class UniversalExtractor private constructor() {
         path: String,
         outputDir: String,
     ): ExtractResult {
-        return extractArchive(outputDir) {
+        return extractArchive(path, outputDir) {
             TarArchiveInputStream(
                 XZCompressorInputStream(BufferedInputStream(FileInputStream(path))),
             )
@@ -510,6 +517,7 @@ class UniversalExtractor private constructor() {
      * 通用 Archive 解压：先重开流完成预检，再写入。
      */
     private fun extractArchive(
+        archivePath: String,
         outputDir: String,
         openStream: () -> ArchiveInputStream<*>,
     ): ExtractResult {
@@ -522,6 +530,7 @@ class UniversalExtractor private constructor() {
                     probe = probeIn.nextEntry
                 }
                 ArchiveSafetyGuard.validateEntries(entries)
+                ArchiveSafetyGuard.validateBomb(entries, java.io.File(archivePath).length())
             }
 
             var count = 0

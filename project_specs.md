@@ -1,4 +1,4 @@
-# Project Specifications: tfgwj (听风改文件) V13.0.0 (安全与任务闭环)
+# Project Specifications: tfgwj (听风改文件) V17.0.0 (清理+性能+安全闭环)
 
 ## 1. 项目愿景 (Vision)
 打造业界领先的 Android 文件自动化管理工具，专注于高效、安全、无痛的 `/Android/data` 目录文件替换与优化。
@@ -101,6 +101,13 @@ IoOptimizer (IO 优化)
 ```
 
 ## 6. 版本历史
+
+### V17.0.0 (已完成 - 清理+性能+安全闭环)
+- ✅ **屎山清理 (V17)**: 删双引擎 `HighPerformanceIoEngine`、硬编码包名、14个死Intent、Worker死代码、`:core` Toast
+- ✅ **性能引擎2.0 (V18)**: 分块mmap防OOM、`MemoryPressureGuard` 内存水位、`SmallFileBatchWriter` 小文件聚合、缓冲clamp
+- ✅ **安全纵深 (V20)**: `ArchiveSafetyGuard.validateBomb` 压缩炸弹检测、`isSafeTargetPathForPackage` symlink逃逸防护
+- ✅ **测试补足**: `:data` 0→5、MemoryPressureGuard 7、SmallFileBatchWriter 6、ArchiveSafetyGuardBomb 6、IsSafeTargetPath 3
+- ✅ **版本**: 17.0.0 / versionCode=11
 
 ### V16.2.0 (已完成 - 任务状态源收敛与安全测试闭环)
 - ✅ **TaskController 单例化**: 新增 `core/.../TaskControllerProvider.kt`，统一 Worker/ConfigRepositoryImpl/3×CopyStrategy/ConfigRepositoryProvider 为同一控制器，修复进度状态源断裂（P0）
@@ -293,7 +300,7 @@ IoOptimizer (IO 优化)
 - ✅ 覆盖率验证：Jacoco 80% 目标建立
 
 ## 8. 未来演进愿景 (V16 - V21)
-详细计划见 [`docs/plans/下一步改进指南.md`](docs/plans/下一步改进指南.md)（V16-V21 完整落地路线，含文件浏览器、跨设备协作、AI 智能助手、KMP 跨平台、极致性能）
+详细计划见 [`docs/plans/下一步改进指南.md`](docs/plans/下一步改进指南.md)（V17-V30 完整落地路线，含文件浏览器、跨设备协作、AI 智能助手、KMP 跨平台、极致性能）
 
 - **V16 (任务引擎收口 - 已完成)**: 任务控制重构（MainActivity 拆分委派控制器）、日志事件化（AppLogger SharedFlow）、清零残留（IoOptimizer/ReplaceProgressManager、Toast）。已在 16.0.0 落地。
 - **V17 (文件浏览器引擎)**: 目录浏览、搜索排序、批量操作、国际化支持。

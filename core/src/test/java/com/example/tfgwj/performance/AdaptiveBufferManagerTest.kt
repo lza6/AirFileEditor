@@ -226,4 +226,32 @@ class AdaptiveBufferManagerTest {
         assertNotEquals(512 * 1024, defaultManager.getCurrentBufferSize())
         assertTrue(defaultManager.getCurrentBufferSize() <= 8 * 1024 * 1024)
     }
+
+    // ==================== V18：显式 setBufferSize（内存水位联动 clamp） ====================
+
+    @Test
+    fun `setBufferSize clamps above max`() {
+        manager.setBufferSize(100 * 1024 * 1024)
+        assertEquals(8 * 1024 * 1024, manager.getCurrentBufferSize())
+    }
+
+    @Test
+    fun `setBufferSize clamps below min`() {
+        manager.setBufferSize(1)
+        assertEquals(16 * 1024, manager.getCurrentBufferSize())
+    }
+
+    @Test
+    fun `setBufferSize respects valid midrange value`() {
+        manager.setBufferSize(1024 * 1024)
+        assertEquals(1024 * 1024, manager.getCurrentBufferSize())
+    }
+
+    @Test
+    fun `setBufferSize then acquire returns clamped size`() {
+        manager.setBufferSize(4096)
+        assertEquals(16 * 1024, manager.acquireBuffer().size)
+        manager.setBufferSize(16 * 1024)
+        assertEquals(16 * 1024, manager.acquireBuffer().size)
+    }
 }

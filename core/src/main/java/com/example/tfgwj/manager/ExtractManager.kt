@@ -266,6 +266,7 @@ class ExtractManager private constructor() {
                 probeFile.close()
             }
             ArchiveSafetyGuard.validateEntries(probeEntries)
+            ArchiveSafetyGuard.validateBomb(probeEntries, file.length())
 
             // 第二遍：真正写入。
             @Suppress("DEPRECATION")
@@ -422,6 +423,12 @@ class ExtractManager private constructor() {
                 fileHeaders.map { header ->
                     ArchiveEntryMetadata(header.fileName, header.uncompressedSize)
                 },
+            )
+            ArchiveSafetyGuard.validateBomb(
+                fileHeaders.map { header ->
+                    ArchiveEntryMetadata(header.fileName, header.uncompressedSize)
+                },
+                archiveFile.length(),
             )
 
             Log.d(TAG, "共 $totalFiles 个文件需要解压（单线程模式）")

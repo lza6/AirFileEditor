@@ -177,7 +177,6 @@ class ReplacingViewModel(
             is ReplacingIntent.ClearLogs -> {
                 _uiState.update { it.copy(logContent = "", logSize = "0 KB") }
             }
-            else -> {}
         }
     }
 
