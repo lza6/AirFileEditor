@@ -282,4 +282,23 @@ class IoEngineTest {
         IoEngine.bufferManager.reset()
         assertTrue(IoEngine.bufferManager.getCurrentBufferSize() > 0)
     }
+
+    // ==================== V18 修复：内存水位接线 ====================
+
+    @Test
+    fun `refreshMemoryPressure with null activityManager falls back to LOW`() {
+        IoEngine.refreshMemoryPressure(null)
+        assertEquals(com.example.tfgwj.performance.MemoryPressureLevel.LOW, IoEngine.currentMemoryPressure())
+    }
+
+    @Test
+    fun `refreshMemoryPressure keeps buffer within bounds`() {
+        IoEngine.refreshMemoryPressure(null)
+        val normalSize = IoEngine.bufferManager.getCurrentBufferSize()
+        assertTrue(normalSize > 0)
+
+        // IoEngine 对外接口契约：currentMemoryPressure 默认 LOW 且可被刷新（null 降级）
+        assertEquals(com.example.tfgwj.performance.MemoryPressureLevel.LOW, IoEngine.currentMemoryPressure())
+        assertTrue(IoEngine.bufferManager.getCurrentBufferSize() in 16 * 1024..8 * 1024 * 1024)
+    }
 }

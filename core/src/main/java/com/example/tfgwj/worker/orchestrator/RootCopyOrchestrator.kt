@@ -209,8 +209,10 @@ class RootCopyOrchestrator(
      * 执行单个 cp 命令
      */
     private suspend fun runCpCommand(task: FileStatistics.CopyTask) {
-        if (!isSafeTargetPath(task.targetDir)) {
-            throw IllegalArgumentException("非法目标路径: ${task.targetDir}")
+        // V20 收窄：目标必须落在 /storage/emulated/0/Android/(data|obb)/<targetPackage>/ 下，
+        // 拒绝经 symlink 逃逸到其他包目录的写入（isSafeTargetPathForPackage 用 canonicalPath 解析）
+        if (!isSafeTargetPathForPackage(task.targetDir, targetPackage)) {
+            throw IllegalArgumentException("非法目标路径: ${task.targetDir}（不在目标包目录内）")
         }
 
         val sourcePath = task.sourceDir.canonicalPath

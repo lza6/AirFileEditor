@@ -135,6 +135,14 @@ class FileReplaceWorkerV2(
                     return@withContext failed("源文件夹中没有 Android 目录")
                 }
 
+                // V18 内存水位：任务开始前评估设备内存压力，联动并发/缓冲/mmap 决策
+                runCatching {
+                    com.example.tfgwj.performance.IoEngine.refreshMemoryPressure(
+                        applicationContext.getSystemService(android.content.Context.ACTIVITY_SERVICE)
+                            as? android.app.ActivityManager,
+                    )
+                }.onFailure { Log.w(TAG, "⚠️ 内存水位刷新失败（按 LOW 处理）: ${it.message}") }
+
                 // 检测环境并创建对应的 Orchestrator
                 val envStatus = com.example.tfgwj.utils.PermissionChecker.checkPermissionAccess(targetPackage, false)
                 val bestMode = envStatus.bestMode

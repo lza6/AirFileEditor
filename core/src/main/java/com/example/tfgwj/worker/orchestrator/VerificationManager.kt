@@ -235,18 +235,27 @@ class VerificationManager(
                 return null
             }
 
-        if (!isSafeTargetPath(targetPath)) {
-            Log.w(TAG, "跳过非法目标路径: $targetPath")
+        // V20 收窄：目标必须落在 /storage/emulated/0/Android/(data|obb)/<targetPackage>/ 下，
+        // 与复制路径使用同一安全校验（isSafeTargetPathForPackage 用 canonicalPath 解析 symlink）
+        if (!isSafeTargetPathForPackage(targetPath, targetPackage)) {
+            Log.w(TAG, "跳过非法目标路径: $targetPath（不在目标包目录内）")
             return null
         }
 
         return Pair(targetPath, srcFile.length())
     }
 
-    private fun isSafeTargetPath(path: String): Boolean {
+    /**
+     * 校验目标路径是否在指定包目录内（与 AbstractShellOrchestrator.isSafeTargetPathForPackage 同语义；
+     * VerificationManager 非 Shell 子类，故本地实现）。canonicalPath 解析符号链接，
+     * 拒绝经 symlink 逃逸到其他包目录的写入。
+     */
+    private fun isSafeTargetPathForPackage(path: String, targetPackage: String): Boolean {
         return try {
-            val normalized = File(path).canonicalPath
-            normalized.startsWith("/storage/emulated/0/Android/data/") || normalized.startsWith("/storage/emulated/0/Android/obb/")
+            val canonical = File(path).canonicalPath
+            val dataPrefix = "/storage/emulated/0/Android/data/$targetPackage/"
+            val obbPrefix = "/storage/emulated/0/Android/obb/$targetPackage/"
+            canonical.startsWith(dataPrefix) || canonical.startsWith(obbPrefix)
         } catch (e: Exception) {
             false
         }

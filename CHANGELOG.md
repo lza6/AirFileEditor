@@ -1,5 +1,15 @@
 # Changelog
 
+## 17.0.1 - 2026-08-29
+
+### 修复（独立 Critic 审查 V17.0.0 后闭环）
+- **Blocking**: `IoEngine.channelCopy` 读侧 `read>0` 排除理论 0 返回防自旋；写侧 drain 循环防部分写入截断；失败时删除半成品目标文件并返回 0（与 fastCopy 契约一致）
+- **Blocking**: `isSafeTargetPathForPackage` 单包边界校验**接线到真实路径**：RootCopyOrchestrator / ShizukuCopyOrchestrator / VerificationManager 三处从笼统 `data|obb` 前缀收窄为 `<targetPackage>/` 内（symlink 逃逸纵深真正生效）
+- **Required**: `MemoryPressureGuard` **接线到 I/O**：`IoEngine.fastCopy` 高压力跳过 mmap、`FileReplaceWorkerV2` 任务前 `refreshMemoryPressure` 联动缓冲 clamp；删除 `VerificationManager` 冗余旧 `isSafeTargetPath`
+- **Required**: `:data` 测试纳入 CI（`.github/workflows/ci.yml` 增加 `:data:testDebugUnitTest`）
+- **Required**: `SmallFileBatchWriter` 明确为能力预留组件（Native 复制已有等效分桶），CHANGELOG 措辞改为真实状态
+- **Verify**: 新增 `IoEngineTest` 内存水位接线测试（null 降级 LOW + 缓冲边界）
+
 ## 17.0.0 - 2026-08-29
 
 ### 架构
@@ -13,12 +23,13 @@
 ### 性能引擎 2.0 (V18)
 - `IoEngine.mmapCopy` 改为**分块 mmap**：`MMAP_CHUNK_SIZE` 64MB/块 + `MMAP_MAX_FILE_SIZE` 2GB 超限走 `channelCopy` 流式写，防大文件 OOM
 - 新增 `MemoryPressureGuard`：内存水位评估 LOW/MEDIUM/HIGH，动态降并发/禁用 mmap
-- 新增 `SmallFileBatchWriter`：小文件攒批同刷，减少系统调用
+- `MemoryPressureGuard` **已接线**：`IoEngine.fastCopy` 高压力下跳过 mmap 走自适应流；`IoEngine.refreshMemoryPressure` 由 `FileReplaceWorkerV2` 任务前调用并联动 `AdaptiveBufferManager.setBufferSize` clamp
+- `SmallFileBatchWriter`：小文件攒批刷盘组件（能力预留，当前 Native 复制已用 `partition(<1KB) + batchFiles` 等效分桶；独立组件保留供后续接入）
 - `AdaptiveBufferManager.setBufferSize` 显式 clamp 到 [min,max]，与内存水位联动
 
 ### 安全纵深 (V20)
 - `ArchiveSafetyGuard.validateBomb`：压缩炸弹检测（条目数>10万拒绝；解压>512MB且压缩率>100x 拒绝）；接入 ExtractManager / UniversalExtractor 全部解压路径
-- `AbstractShellOrchestrator.isSafeTargetPath` 加固 + 新增 `isSafeTargetPathForPackage` 单包边界校验（symlink 逃逸防护）
+- `isSafeTargetPathForPackage`（单包边界 + symlink 逃逸防护）**已接线到真实复制/验证路径**：RootCopyOrchestrator / ShizukuCopyOrchestrator / VerificationManager 三处校验从笼统 `data|obb` 前缀收窄为 `<targetPackage>/` 内
 
 ### 测试
 - `:data` 模块补足测试（此前 0 测试）：`ConfigRepositoryContractTest` 5 用例

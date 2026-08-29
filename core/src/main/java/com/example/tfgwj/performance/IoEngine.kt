@@ -49,6 +49,10 @@ object IoEngine {
     // mmap 并发限流
     private val mmapLimiter = Semaphore(16)
 
+    // V18 内存水位：由外部线程安全地刷新（setMemoryPressure），fastCopy/mmapCopy 读取
+    @Volatile
+    private var memoryPressure: MemoryPressureLevel = MemoryPressureLevel.LOW
+
     // 自适应缓冲区管理器
     val bufferManager: AdaptiveBufferManager = AdaptiveBufferManagerImpl()
 
@@ -70,6 +74,11 @@ object IoEngine {
         if (!source.exists()) return 0L
         target.parentFile?.mkdirs()
 
+        // V18 内存水位：高压力下优先小文件直写，避免 mmap 映射过多虚存
+        if (memoryPressure == MemoryPressureLevel.HIGH && source.length() >= MMAP_THRESHOLD) {
+            return adaptiveBufferCopy(source, target)
+        }
+
         val size = source.length()
         return when {
             // 策略 1: 极小文件 — 直接缓冲区复制
@@ -80,6 +89,29 @@ object IoEngine {
             else -> adaptiveBufferCopy(source, target)
         }
     }
+
+    /**
+     * 刷新内存水位（由 Worker/Manager 在任务前调用，注入当前 ActivityManager 快照）
+     * @param activityManager Android ActivityManager（读取失败按 LOW 处理，避免误降级）
+     */
+    fun refreshMemoryPressure(activityManager: android.app.ActivityManager?) {
+        if (activityManager == null) {
+            memoryPressure = MemoryPressureLevel.LOW
+            return
+        }
+        val snapshot = readMemorySnapshot(activityManager)
+        val level = MemoryPressureGuard.assess(snapshot)
+        memoryPressure = level
+        // 内存水位联动：高压力收缩缓冲上限、中压力适当收缩
+        when (level) {
+            MemoryPressureLevel.HIGH -> bufferManager.setBufferSize(16 * 1024)
+            MemoryPressureLevel.MEDIUM -> bufferManager.setBufferSize(256 * 1024)
+            MemoryPressureLevel.LOW -> bufferManager.reset()
+        }
+    }
+
+    /** 当前内存压力等级（测试/诊断用） */
+    fun currentMemoryPressure(): MemoryPressureLevel = memoryPressure
 
     /**
      * 小文件直接缓冲区复制
@@ -161,6 +193,12 @@ object IoEngine {
     /**
      * 大文件流式写（超过 mmap 上限时的兜底）
      * 使用 Channel 绕过分页缓存，避免一次性载入内存。
+     *
+     * 安全保证：
+     * - 读侧 `read(buffer) > 0` 显式排除理论上的 0 返回，杜绝无进展自旋
+     * - 写侧 drain 循环：write 返回 < remaining() 时继续写，防止部分写入被 clear() 丢弃
+     * - 任一环节失败：删除半成品目标文件并返回 0（与 fastCopy 契约"失败返回 0"一致），
+     *   避免残留截断文件被调用方误判成功
      */
     private fun channelCopy(source: File, target: File): Long {
         val buffer = java.nio.ByteBuffer.allocateDirect(1024 * 1024)
@@ -170,10 +208,16 @@ object IoEngine {
                     val srcCh = ins.channel
                     val dstCh = out.channel
                     var total = 0L
-                    while (srcCh.read(buffer) >= 0) {
+                    while (srcCh.read(buffer) > 0) {
                         buffer.flip()
-                        val written = dstCh.write(buffer)
-                        total += written
+                        // drain 写入：阻塞通道理论上一次写满，此处防御部分写入
+                        while (buffer.hasRemaining()) {
+                            val written = dstCh.write(buffer)
+                            if (written == 0) {
+                                throw java.io.IOException("channelCopy 写入无进展（目标分区可能已满）")
+                            }
+                            total += written
+                        }
                         buffer.clear()
                     }
                     dstCh.force(false)
@@ -182,6 +226,7 @@ object IoEngine {
             }
         } catch (e: Exception) {
             AppLogger.w(TAG, "流式写失败: ${source.name}: ${e.message}")
+            runCatching { if (target.exists()) target.delete() }
             0L
         }
     }

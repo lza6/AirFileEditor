@@ -34,8 +34,8 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-gradle-
     - name: Run Unit Tests
-      # 显式覆盖三模块测试 + 覆盖率门禁，确保 :core/:domain 也进流水线，且门禁基于真实 exec 执行
-      run: ./gradlew :app:testDebugUnitTest :core:testDebugUnitTest :domain:test jacocoTestReport jacocoTestCoverageVerification --stacktrace
+      # 显式覆盖四模块测试 + 覆盖率门禁（:data 于 V17 新增测试，纳入流水线），确保门禁基于真实 exec 执行
+      run: ./gradlew :app:testDebugUnitTest :core:testDebugUnitTest :domain:test :data:testDebugUnitTest jacocoTestReport jacocoTestCoverageVerification --stacktrace
     - name: Upload Test Results
       if: always()
       uses: actions/upload-artifact@v4
