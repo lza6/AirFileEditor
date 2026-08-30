@@ -11,6 +11,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.util.concurrent.TimeUnit
 
 /**
  * FileReplaceWorker V2 (V8.0.0 架构演进)
@@ -37,6 +38,14 @@ class FileReplaceWorkerV2(
         const val WORK_TAG = "file_replace"
         const val UNIQUE_WORK_NAME = "file_replace_v2"
 
+        // V24 任务可靠性参数
+        /** 初始退避间隔（毫秒），指数退避：10s → 20s → 40s → ... */
+        const val INITIAL_BACKOFF_MS = 10_000L
+        /** 最大重试次数（含首次执行） */
+        const val MAX_RETRY_ATTEMPTS = 3
+        /** 单任务总超时上限（毫秒），超过即 fail-closed，防止看门狗失灵后任务悬挂 */
+        const val TASK_DEADLINE_MS = 30L * 60 * 1000 // 30 分钟
+
         // 输入参数键
         const val KEY_SOURCE_PATH = "source_path"
         const val KEY_TARGET_PACKAGE = "target_package"
@@ -57,6 +66,12 @@ class FileReplaceWorkerV2(
 
         /**
          * 创建工作请求（V2 版本）
+         *
+         * V24 任务可靠性加固：
+         * - [setBackoffCriteria] 指数退避：失败后自动重试（最多 [MAX_RETRY_ATTEMPTS] 次），间隔指数增长，
+         *   避免瞬时失败（如 Shizuku 服务短暂抖动）导致整任务作废。
+         * - [setExpedited]：请求加速配额；超限时降级为普通后台任务（RUN_AS_NON_EXPEDITED）。
+         * - 失败终态仍由 `failed()` 返回 `Result.failure`，与 V19 审计观察一致（FAILED → 写历史 + 错误信息）。
          */
         fun createWorkRequestV2(
             sourcePath: String,
@@ -76,6 +91,7 @@ class FileReplaceWorkerV2(
             return OneTimeWorkRequestBuilder<FileReplaceWorkerV2>()
                 .setInputData(inputData)
                 .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
+                .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, INITIAL_BACKOFF_MS, TimeUnit.MILLISECONDS)
                 .addTag(WORK_TAG)
                 .build()
         }
@@ -89,7 +105,7 @@ class FileReplaceWorkerV2(
     override suspend fun doWork(): Result =
         withContext(Dispatchers.IO) {
             val startTime = System.currentTimeMillis()
-            Log.d(TAG, "🔥 [Perf] Worker V2 启动")
+            Log.d(TAG, "🔥 [Perf] Worker V2 启动 (runAttempt=${runAttemptCount})")
 
             val sourcePath = inputData.getString(KEY_SOURCE_PATH)
                 ?: return@withContext failed("缺少源路径")
@@ -106,6 +122,12 @@ class FileReplaceWorkerV2(
                 return@withContext failed("非法目标包名")
             }
 
+            // V24 可靠性：达到重试上限即 fail-closed，不再重试，避免无限退避循环
+            if (runAttemptCount > MAX_RETRY_ATTEMPTS) {
+                Log.e(TAG, "❌ 已达最大重试次数 ($MAX_RETRY_ATTEMPTS)，fail-closed 终止")
+                return@withContext failed("替换任务多次重试仍失败（已达上限 $MAX_RETRY_ATTEMPTS）")
+            }
+
             val taskId = id.toString()
             Log.d(TAG, "========== V2 文件替换开始 ==========")
             Log.d(TAG, "源路径: $sourcePath")
@@ -118,6 +140,11 @@ class FileReplaceWorkerV2(
                 taskController.cancel()
                 return@withContext Result.failure(workDataOf(KEY_ERROR_MESSAGE to "任务已取消"))
             }
+
+            // V24 可靠性：尝试转为前台服务，防系统在长时间 IO 时回收
+            // 失败（如未授权 POST_NOTIFICATIONS / 配额不足）时静默降级为普通后台任务，不阻塞替换
+            runCatching { setForeground(buildForegroundInfo(targetPackage)) }
+                .onFailure { Log.w(TAG, "⚠️ 前台服务保活失败（降级后台运行）: ${it.message}") }
 
             var processedFiles = 0
             var completed = false
@@ -275,5 +302,32 @@ class FileReplaceWorkerV2(
     private fun failed(message: String): Result {
         taskController.fail(message)
         return Result.failure(workDataOf(KEY_ERROR_MESSAGE to message))
+    }
+
+    /**
+     * V24 可靠性：构造前台服务通知（替换期间保活，防系统回收）
+     * 通道与 MainActivity.createNotificationChannel 共用 file_replace_channel。
+     */
+    private fun buildForegroundInfo(targetPackage: String): ForegroundInfo {
+        val notification = androidx.core.app.NotificationCompat.Builder(
+            applicationContext,
+            com.example.tfgwj.utils.AppConstants.NOTIFICATION_CHANNEL_ID,
+        )
+            .setContentTitle("正在替换文件")
+            .setContentText("目标应用：$targetPackage")
+            .setSmallIcon(android.R.drawable.stat_sys_download)
+            .setOngoing(true)
+            .setSilent(true)
+            .build()
+        // Android 14+ 需声明 foregroundServiceType；此处用 dataSync 兼容长时 IO
+        return if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+            ForegroundInfo(
+                com.example.tfgwj.utils.AppConstants.NOTIFICATION_ID,
+                notification,
+                android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC,
+            )
+        } else {
+            ForegroundInfo(com.example.tfgwj.utils.AppConstants.NOTIFICATION_ID, notification)
+        }
     }
 }

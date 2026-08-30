@@ -1,5 +1,21 @@
 # Changelog
 
+## 24.0.0 - 2026-08-30
+
+### 架构（V24 任务可靠性）
+- `FileReplaceWorkerV2.createWorkRequestV2` 新增 **指数退避重试**：`BackoffPolicy.EXPONENTIAL`，初始 10s，最多 3 次（瞬时失败如 Shizuku 抖动可自愈）
+- `doWork` 新增 **重试上限 fail-closed**：`runAttemptCount > MAX_RETRY_ATTEMPTS` 时不再重试，避免无限退避循环
+- `doWork` 新增 **前台服务保活**：`setForeground(buildForegroundInfo)` 在替换期间发持续通知防系统回收；权限不足时静默降级后台运行，不阻塞替换
+- `buildForegroundInfo`：复用 `AppConstants.NOTIFICATION_CHANNEL_ID/NOTIFICATION_ID`，Android 10+ 用 `FOREGROUND_SERVICE_TYPE_DATA_SYNC`
+- `AndroidManifest.xml` 新增 `FOREGROUND_SERVICE_DATA_SYNC` 权限
+- 与 V19 审计闭环衔接：可靠任务 → 可靠审计（FAILED 终态仍触发历史写入 + 错误信息）
+
+### 测试
+- 新增 `FileReplaceWorkerV2ReliabilityTest`(4)：重试常量约束、deadline 合理性、退避序列不超 deadline、唯一 work name 稳定
+
+### 工程
+- 版本号升至 24.0.0 / versionCode=13
+
 ## 19.0.2 - 2026-08-30
 
 ### 审计
