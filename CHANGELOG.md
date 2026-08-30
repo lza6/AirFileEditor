@@ -1,5 +1,15 @@
 # Changelog
 
+## 19.0.2 - 2026-08-30
+
+### 审计
+- `IoEngine.generateSamplingFingerprint` 核实为能力预留组件（三段抽样指纹，有实现+单测但无生产调用方）。当前增量路径已由 `FileHasher.areFilesEqualWithSampling`（三块字节比对）承担同等职责，不强行双写。已按 V17 对 SmallFileBatchWriter 的同款判例在文档中标注为能力预留，避免"有实现无调用点"的伪闭环表述。
+
+## 19.0.1 - 2026-08-30
+
+### 修复
+- 审计成功计数：优先取 Worker 输出 `KEY_VERIFIED_FILES`（验证通过后的真实数），缺失回退 `KEY_PROCESSED`；避免增量跳过文件时历史 `successCount` 低于实际已验证数
+
 ## 19.0.0 - 2026-08-30
 
 ### 架构
