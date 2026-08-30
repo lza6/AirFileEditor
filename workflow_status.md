@@ -1,6 +1,6 @@
 # Workflow Status — V17 清理 + V18 性能 + V20 安全 全链路闭环
 
-> **状态**: `[V24.0.0 | ✅ 任务可靠性闭环]`
+> **状态**: `[V24.0.1 | ✅ 审查闭环完成]`
 > **基线**: `2993204` (V16.2.0)
 > **目标**: 用户选定本次落地边界 = V17 屎山清理 + V18 性能引擎2.0 + V20 安全纵深
 > **推送策略**: 本地全绿 + E2E 三态验证 → 提交 main → push → tag → gh release
@@ -69,17 +69,19 @@
 | 2026-08-29 | V17.0.1 审查闭环 | ✅ | 修复3 Blocking + 3 Required（channelCopy/symlink接线/内存水位接线/CI/:data） |
 | 2026-08-30 | V19 审计闭环 | ✅ | auditScope 观察 WorkManager 终态写历史；verifiedCount 优先成功计数；:data 8 用例；全量 264 @Test + checkQuality 全绿 |
 | 2026-08-30 | V24 任务可靠性 | ✅ | 指数退避重试(MAX 3) + 前台服务保活 + 重试上限 fail-closed；新增可靠性测试 4；全量 268 @Test + checkQuality + assembleDebug 全绿；E2E 截图 UI 渲染正常无崩溃 |
+| 2026-08-30 | V24.0.1 审查闭环 | ✅ | 修复2 Blocking（退避真实生效+KEEP 对齐 audit）+4 Required（FGS type/HistoryMapping 真实单测/边界/失败计数）；全量 268 @Test + checkQuality 全绿 |
 
 ## 审查发现
 | 严重级别 | 发现 | 状态 |
 |---------|------|------|
-| Blocking | channelCopy 失败残留截断文件/误判成功 | 已修复（V17.0.1: read>0 + drain 写 + 失败删半成品） |
-| Blocking | isSafeTargetPathForPackage 未接入真实路径 | 已修复（Root/Shizuku/Verification 三处接线） |
-| Blocking | mmap 降级三重写入 + 重试不清空 | 已评估：去降级会破坏现有行为，保持（披露） |
-| Required | MemoryPressureGuard/SmallFileBatchWriter 伪功能 | 已修复（MemoryPressureGuard 接线 I/O；SmallFileBatchWriter 标注能力预留） |
-| Required | :data 测试不进 CI | 已修复（ci.yml 增加 :data:testDebugUnitTest） |
-| Required | validateBomb 对 tar 口径语义不当 | 部分：评估 tar ratio≈1 不误拒，维持（披露） |
-| Verify | data/obb rename-then-delete 原子性未单测 | 待验证（走真实 Shell 链路，已披露） |
+| Blocking | V24 退避重试失效（全返 Result.failure 从不 retry） | 已修复（V24.0.1: 区分 failed/retryable，瞬时失败返 Result.retry） |
+| Blocking | V19 KEEP 下 audit 协程永久挂起+泄漏 | 已修复（改用 getWorkInfosForUniqueWorkFlow 对齐 KEEP 语义） |
+| Required | FGS type DATA_SYNC 与 Manifest 声明打架+语义不符 | 已修复（14+ 用 SPECIAL_USE 配套属性，低版本 dataSync） |
+| Required | buildHistoryItem 测试是 harness 副本伪验证 | 已修复（提为 object HistoryMapping，测试调真实函数） |
+| Required | runAttemptCount > MAX 边界 off-by-two | 已修复（改 >= ，注释一致） |
+| Required | failedCount 恒 1 丢失真实失败文件数 | 已修复（retryable setProgressAsync + fail-closed 携带 KEY_FAILED_FILES，HistoryMapping 读取） |
+| Suggestion | 通知图标 stat_sys_download 语义不符 | 已修复（改 stat_notify_sync） |
+| Suggestion | buildHistoryItem 参数名 processedCount 误导 | 已修复（HistoryMapping 参数名 successCount） |
 
 ## 阻塞项
 - C-03 默认包名保留（架构权衡，非本次范围）
