@@ -2,6 +2,7 @@ package com.example.tfgwj.data.repository
 
 import android.content.Context
 import androidx.work.ExistingWorkPolicy
+import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import com.example.tfgwj.domain.model.*
 import com.example.tfgwj.domain.repository.*
@@ -16,8 +17,11 @@ import com.example.tfgwj.manager.ExtractManager
 import com.example.tfgwj.manager.MainPackManager
 import com.example.tfgwj.manager.PatchManager
 import com.example.tfgwj.worker.TaskControllerProvider
-import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 
@@ -31,6 +35,11 @@ class ConfigRepositoryImpl(
     private val patchManager: PatchManager,
     private val mainPackManager: MainPackManager
 ) : ConfigRepository {
+
+    // V19 审计写盘专用作用域：与主流程解耦，观察任务终态写历史；进程被杀时静默放弃
+    private val auditScope = kotlinx.coroutines.CoroutineScope(
+        kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO,
+    )
 
     private val _permissionStatus = MutableStateFlow(PermissionStatus())
     private val taskController: com.example.tfgwj.domain.repository.TaskController = TaskControllerProvider.get()
@@ -71,11 +80,87 @@ class ConfigRepositoryImpl(
                 ExistingWorkPolicy.KEEP,
                 workRequest,
             )
+            // V19: 一次替换 = 一次审计记录。工作线程返回后，用独立 auditScope 观察任务终态
+            // 并在其真正结束时（异步）写入替换历史，不阻塞 startReplace 的返回。
+            launchAudit(sourcePath, targetPackage, workRequest)
             Result.success(workRequest.id.toString())
             } catch (e: Exception) {
                 Result.failure(e)
             }
         }
+    }
+
+    /**
+     * V19 审计闭环：启动独立协程监听 [workRequest] 终态并把结果写入替换历史。
+     * 使用独立的 [auditScope]（SupervisorJob + Dispatchers.IO），不阻塞 startReplace 返回；
+     * 进程被杀/协程取消时静默放弃——历史不完整由下一次替换补齐，不影响替换本身。
+     */
+    private fun launchAudit(sourcePath: String, targetPackage: String, workRequest: androidx.work.OneTimeWorkRequest) {
+        auditScope.launch {
+            val workManager = WorkManager.getInstance(context)
+            val historyManager = com.example.tfgwj.data.ReplaceHistoryManager.getInstance(context)
+            val now = System.currentTimeMillis()
+
+            // 终态：SUCCEEDED / FAILED / CANCELLED
+            val info: WorkInfo = try {
+                workManager.getWorkInfoByIdFlow(workRequest.id)
+                    .first { it.state.isFinished }
+            } catch (e: Exception) {
+                // 观察协程被取消或 WorkManager 不可用 → 跳过本次历史写入（不影响替换本身）
+                return@launch
+            }
+
+            val succeeded = info.state == WorkInfo.State.SUCCEEDED
+            // Worker 成功时将 processed/total/verified/mode/backup 写进 outputData
+            val processedCount = info.outputData.getInt(FileReplaceWorkerV2.KEY_PROCESSED, 0)
+            val totalFiles = info.outputData.getInt(FileReplaceWorkerV2.KEY_TOTAL, 0)
+            val backupPath = info.outputData.getString(FileReplaceWorkerV2.KEY_BACKUP_PATH)
+            val errorMessage = info.outputData.getString(FileReplaceWorkerV2.KEY_ERROR_MESSAGE)
+
+            runCatching {
+                historyManager.addHistory(
+                    buildHistoryItem(
+                        sourcePath = sourcePath,
+                        targetPackage = targetPackage,
+                        now = now,
+                        succeeded = succeeded,
+                        processedCount = processedCount,
+                        totalFiles = totalFiles,
+                        backupPath = backupPath,
+                        errorMessage = errorMessage,
+                    ),
+                )
+            }.onFailure { failure ->
+                com.example.tfgwj.utils.AppLogger.w("ConfigRepositoryImpl", "写入替换历史失败: ${failure.message}")
+            }
+        }
+    }
+
+    /**
+     * V19 审计记录映射（纯函数，可 JVM 单测）：
+     * 把 Worker 终态输出映射为替换历史条目。成功写入 processed 计数、失败标记 1 个失败并附错误信息。
+     */
+    internal fun buildHistoryItem(
+        sourcePath: String,
+        targetPackage: String,
+        now: Long,
+        succeeded: Boolean,
+        processedCount: Int,
+        totalFiles: Int,
+        backupPath: String?,
+        errorMessage: String?,
+    ): com.example.tfgwj.data.ReplaceHistoryItem {
+        return com.example.tfgwj.data.ReplaceHistoryItem(
+            timestamp = now,
+            packageName = targetPackage,
+            sourcePath = sourcePath,
+            targetPath = PathConstants.buildTargetDataPath(targetPackage),
+            totalFiles = totalFiles,
+            successCount = processedCount,
+            failedCount = if (succeeded) 0 else 1,
+            errors = if (succeeded) emptyList() else listOfNotNull(errorMessage ?: "任务未成功完成", "WorkState=非成功"),
+            backupPath = backupPath,
+        )
     }
 
     override suspend fun cancelReplace(): Result<Unit> = withContext(Dispatchers.IO) {

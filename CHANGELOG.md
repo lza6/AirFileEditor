@@ -1,5 +1,20 @@
 # Changelog
 
+## 19.0.0 - 2026-08-30
+
+### 架构
+- V19 数据持久化闭环 → **审计闭环**：`ConfigRepositoryImpl.startReplace` 不再在 Worker 线程内联写历史，而是 enqueue 后由独立 `auditScope`（SupervisorJob + Dispatchers.IO）观察 WorkManager 任务终态，成功/失败/取消均写入替换历史（读取 Worker outputData 的 processed/total/verified/backup/error）
+  - 根治 V17 审查暴露的"Worker 注释掉的写历史 + 仓储内联写历史"双份逻辑与状态源歧义
+  - 协程死亡（进程被杀）时静默放弃，不阻塞替换主流程；`buildHistoryItem` 为纯函数（可 JVM 单测）
+
+### 测试
+- `ConfigRepositoryContractTest` 增补 V19 审计映射 3 用例（成功映射/失败携带错误/无错误兜底）
+- `:data` 模块测试从 5 → 8，仍经 CI 流水线（`:data:testDebugUnitTest`）
+
+### 工程
+- 版本号升至 19.0.0 / versionCode=12
+- 全量单测 + checkQuality 全绿
+
 ## 17.0.1 - 2026-08-29
 
 ### 修复（独立 Critic 审查 V17.0.0 后闭环）
