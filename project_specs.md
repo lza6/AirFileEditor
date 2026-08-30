@@ -1,4 +1,4 @@
-# Project Specifications: tfgwj (听风改文件) V17.0.0 (清理+性能+安全闭环)
+# Project Specifications: tfgwj (听风改文件) V19.0.0 (审计闭环)
 
 ## 1. 项目愿景 (Vision)
 打造业界领先的 Android 文件自动化管理工具，专注于高效、安全、无痛的 `/Android/data` 目录文件替换与优化。
