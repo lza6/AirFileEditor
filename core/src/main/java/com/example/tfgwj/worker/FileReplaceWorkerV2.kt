@@ -41,7 +41,7 @@ class FileReplaceWorkerV2(
         // V24 任务可靠性参数
         /** 初始退避间隔（毫秒），指数退避：10s → 20s → 40s → ... */
         const val INITIAL_BACKOFF_MS = 10_000L
-        /** 最大重试次数（含首次执行） */
+        /** 最大执行次数（含首次执行；runAttemptCount 达此值即 fail-closed） */
         const val MAX_RETRY_ATTEMPTS = 3
         /** 单任务总超时上限（毫秒），超过即 fail-closed，防止看门狗失灵后任务悬挂 */
         const val TASK_DEADLINE_MS = 30L * 60 * 1000 // 30 分钟
@@ -122,10 +122,17 @@ class FileReplaceWorkerV2(
                 return@withContext failed("非法目标包名")
             }
 
-            // V24 可靠性：达到重试上限即 fail-closed，不再重试，避免无限退避循环
-            if (runAttemptCount > MAX_RETRY_ATTEMPTS) {
-                Log.e(TAG, "❌ 已达最大重试次数 ($MAX_RETRY_ATTEMPTS)，fail-closed 终止")
-                return@withContext failed("替换任务多次重试仍失败（已达上限 $MAX_RETRY_ATTEMPTS）")
+            // V24 可靠性：达到重试上限即 fail-closed，不再重试，避免无限退避循环。
+            // runAttemptCount 从 0 开始（首次执行），达 MAX_RETRY_ATTEMPTS 即第 MAX+1 次执行，判失败。
+            if (runAttemptCount >= MAX_RETRY_ATTEMPTS) {
+                Log.e(TAG, "❌ 已达最大执行次数 ($MAX_RETRY_ATTEMPTS)，fail-closed 终止")
+                // 终态失败时把错误信息写入 outputData，供 V19 审计读取
+                return@withContext Result.failure(
+                    workDataOf(
+                        KEY_ERROR_MESSAGE to "替换任务多次重试仍失败（已达上限 $MAX_RETRY_ATTEMPTS）",
+                        KEY_FAILED_FILES to 1,
+                    ),
+                )
             }
 
             val taskId = id.toString()
@@ -273,7 +280,7 @@ class FileReplaceWorkerV2(
                     }
                     is OrchestratorResult.Failure -> {
                         Log.e(TAG, "❌ V2 替换失败: ${result.message}", result.cause)
-                        failed(result.message)
+                        retryable(result.message, processedFiles, processedFiles)
                     }
                 }
                 workerResult
@@ -283,7 +290,7 @@ class FileReplaceWorkerV2(
                 throw e
             } catch (e: Exception) {
                 Log.e(TAG, "❌ V2 执行异常", e)
-                failed("执行异常: ${e.message ?: "未知错误"}")
+                retryable("执行异常: ${e.message ?: "未知错误"}", processedFiles, processedFiles)
             } finally {
                 // 历史记录写入由 :data 层 ConfigRepositoryImpl.startReplace 完成后处理，
                 // 不在 :core 层 Worker 中直接调用 :data 模块（依赖方向为 :data → :core）。
@@ -299,14 +306,44 @@ class FileReplaceWorkerV2(
             }
         }
 
+    /**
+     * 永久失败：返回 [Result.failure]，不触发退避重试。
+     * 用于不可重试的失败（非法包名、源目录不存在、重试上限）——这些重试也必然失败。
+     */
     private fun failed(message: String): Result {
         taskController.fail(message)
         return Result.failure(workDataOf(KEY_ERROR_MESSAGE to message))
     }
 
     /**
+     * V24 可重试失败：返回 [Result.retry]，触发 WorkManager 指数退避重试（最多 [MAX_RETRY_ATTEMPTS] 次）。
+     * 用于瞬时失败（Shizuku 服务短暂断开、可重试的 IO 异常）——重试可能自愈。
+     * [runAttemptCount] 达上限时由 doWork 入口的 fail-closed 分支拦截，不会无限重试。
+     * 同时把当前已处理/失败计数写入 outputData，供 V19 审计读取真实失败文件数。
+     */
+    private fun retryable(message: String, processed: Int = 0, total: Int = 0): Result {
+        Log.w(TAG, "⏳ 可重试失败 (runAttempt=$runAttemptCount): $message")
+        taskController.fail(message)
+        // 把当前已处理/失败计数写入 outputData，供 V19 审计读取真实失败文件数。
+        // 注意：Result.retry() 不携带 outputData（WorkManager 限制），重试期间通过 setProgressAsync 上报；
+        // 终态失败时由 failed() 路径携带 KEY_ERROR_MESSAGE。此处的 data 仅用于日志诊断。
+        val failedFiles = if (total > 0) (total - processed).coerceAtLeast(1) else 1
+        setProgressAsync(
+            workDataOf(
+                KEY_ERROR_MESSAGE to message,
+                KEY_PROCESSED to processed,
+                KEY_TOTAL to total,
+                KEY_FAILED_FILES to failedFiles,
+            ),
+        )
+        return Result.retry()
+    }
+
+    /**
      * V24 可靠性：构造前台服务通知（替换期间保活，防系统回收）
      * 通道与 MainActivity.createNotificationChannel 共用 file_replace_channel。
+     * 用 SPECIAL_USE 类型（与 Manifest 的 PROPERTY_SPECIAL_USE_FGS_SUBTYPE 配套），
+     * 语义为"文件替换服务"，避免 dataSync 类型对本地文件操作的审核风险。
      */
     private fun buildForegroundInfo(targetPackage: String): ForegroundInfo {
         val notification = androidx.core.app.NotificationCompat.Builder(
@@ -315,12 +352,19 @@ class FileReplaceWorkerV2(
         )
             .setContentTitle("正在替换文件")
             .setContentText("目标应用：$targetPackage")
-            .setSmallIcon(android.R.drawable.stat_sys_download)
+            .setSmallIcon(android.R.drawable.stat_notify_sync)
             .setOngoing(true)
             .setSilent(true)
             .build()
-        // Android 14+ 需声明 foregroundServiceType；此处用 dataSync 兼容长时 IO
-        return if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+        // Android 14+ (API 34+) 用 specialUse 配套 Manifest 的 PROPERTY_SPECIAL_USE_FGS_SUBTYPE；
+        // 低版本用 dataSync 兼容长时 IO（无审核风险）。
+        return if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            ForegroundInfo(
+                com.example.tfgwj.utils.AppConstants.NOTIFICATION_ID,
+                notification,
+                android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE,
+            )
+        } else if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
             ForegroundInfo(
                 com.example.tfgwj.utils.AppConstants.NOTIFICATION_ID,
                 notification,

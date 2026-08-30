@@ -1,5 +1,15 @@
 # Changelog
 
+## 24.0.1 - 2026-08-30
+
+### 修复（独立 Critic 审查 V19+V24 后闭环）
+- **Blocking B1**：V24 退避重试真实生效——区分永久失败（`failed()`→`Result.failure`，如非法包名/源目录缺失）与瞬时失败（`retryable()`→`Result.retry`，如 Orchestrator 失败/执行异常），指数退避配置不再失效
+- **Blocking B2**：V19 审计观察改用 `getWorkInfosForUniqueWorkFlow(UNIQUE_WORK_NAME)`，与 KEEP 语义对齐——被丢弃的 workRequest.id 不再永久挂起 audit 协程
+- **Required R1**：前台服务类型统一——Android 14+ 用 `FOREGROUND_SERVICE_TYPE_SPECIAL_USE`（配套 Manifest `PROPERTY_SPECIAL_USE_FGS_SUBTYPE`），低版本用 dataSync；图标改用 `stat_notify_sync`（语义更贴合"替换/同步"）
+- **Required R2**：`buildHistoryItem` 提为 `object HistoryMapping`，测试直接调真实函数（`HistoryMappingTest` 3 用例），杜绝 harness 副本伪验证
+- **Required R3**：重试上限边界修正 `runAttemptCount >= MAX_RETRY_ATTEMPTS`，注释与代码一致
+- **Required R4**：失败文件计数真实落盘——`retryable()` 经 `setProgressAsync` 写 `KEY_FAILED_FILES`；fail-closed 路径 `Result.failure` 携带 `KEY_FAILED_FILES`；`HistoryMapping` 读取并写入 `failedCount`（缺失回退 1）
+
 ## 24.0.0 - 2026-08-30
 
 ### 架构（V24 任务可靠性）

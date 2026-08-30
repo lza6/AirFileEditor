@@ -91,7 +91,12 @@ class ConfigRepositoryImpl(
     }
 
     /**
-     * V19 审计闭环：启动独立协程监听 [workRequest] 终态并把结果写入替换历史。
+     * V19 审计闭环：启动独立协程监听**唯一工作名**的终态并把结果写入替换历史。
+     *
+     * 与 KEEP 语义对齐：`enqueueUniqueWork(KEEP)` 在旧任务 RUNNING 时丢弃新请求，
+     * 被丢弃的 workRequest.id 在 WorkManager 数据库无条目 → `getWorkInfoByIdFlow` 永不 finish。
+     * 因此改观察 `getWorkInfosForUniqueWorkFlow(UNIQUE_WORK_NAME)`，它始终返回实际运行的任务。
+     *
      * 使用独立的 [auditScope]（SupervisorJob + Dispatchers.IO），不阻塞 startReplace 返回；
      * 进程被杀/协程取消时静默放弃——历史不完整由下一次替换补齐，不影响替换本身。
      */
@@ -101,9 +106,10 @@ class ConfigRepositoryImpl(
             val historyManager = com.example.tfgwj.data.ReplaceHistoryManager.getInstance(context)
             val now = System.currentTimeMillis()
 
-            // 终态：SUCCEEDED / FAILED / CANCELLED
+            // 观察唯一工作名下的任务流，取第一个进入终态的任务（KEEP 下是实际运行的那个）
             val info: WorkInfo = try {
-                workManager.getWorkInfoByIdFlow(workRequest.id)
+                workManager.getWorkInfosForUniqueWorkFlow(FileReplaceWorkerV2.UNIQUE_WORK_NAME)
+                    .first { workInfos -> workInfos.any { it.state.isFinished } }
                     .first { it.state.isFinished }
             } catch (e: Exception) {
                 // 观察协程被取消或 WorkManager 不可用 → 跳过本次历史写入（不影响替换本身）
@@ -111,24 +117,25 @@ class ConfigRepositoryImpl(
             }
 
             val succeeded = info.state == WorkInfo.State.SUCCEEDED
-            // Worker 成功时将 processed/total/verified/mode/backup 写进 outputData
             val processedCount = info.outputData.getInt(FileReplaceWorkerV2.KEY_PROCESSED, 0)
             val totalFiles = info.outputData.getInt(FileReplaceWorkerV2.KEY_TOTAL, 0)
             // 成功数优先取 verified（Worker 仅在验证通过后才 Success），缺失则回退 processed
             val verifiedCount = info.outputData.getInt(FileReplaceWorkerV2.KEY_VERIFIED_FILES, -1)
             val successCount = if (verifiedCount >= 0) verifiedCount else processedCount
+            val failedFiles = info.outputData.getInt(FileReplaceWorkerV2.KEY_FAILED_FILES, -1)
             val backupPath = info.outputData.getString(FileReplaceWorkerV2.KEY_BACKUP_PATH)
             val errorMessage = info.outputData.getString(FileReplaceWorkerV2.KEY_ERROR_MESSAGE)
 
             runCatching {
                 historyManager.addHistory(
-                    buildHistoryItem(
+                    HistoryMapping.buildHistoryItem(
                         sourcePath = sourcePath,
                         targetPackage = targetPackage,
                         now = now,
                         succeeded = succeeded,
-                        processedCount = successCount,
+                        successCount = successCount,
                         totalFiles = totalFiles,
+                        failedFiles = failedFiles,
                         backupPath = backupPath,
                         errorMessage = errorMessage,
                     ),
@@ -137,33 +144,6 @@ class ConfigRepositoryImpl(
                 com.example.tfgwj.utils.AppLogger.w("ConfigRepositoryImpl", "写入替换历史失败: ${failure.message}")
             }
         }
-    }
-
-    /**
-     * V19 审计记录映射（纯函数，可 JVM 单测）：
-     * 把 Worker 终态输出映射为替换历史条目。成功写入 processed 计数、失败标记 1 个失败并附错误信息。
-     */
-    internal fun buildHistoryItem(
-        sourcePath: String,
-        targetPackage: String,
-        now: Long,
-        succeeded: Boolean,
-        processedCount: Int,
-        totalFiles: Int,
-        backupPath: String?,
-        errorMessage: String?,
-    ): com.example.tfgwj.data.ReplaceHistoryItem {
-        return com.example.tfgwj.data.ReplaceHistoryItem(
-            timestamp = now,
-            packageName = targetPackage,
-            sourcePath = sourcePath,
-            targetPath = PathConstants.buildTargetDataPath(targetPackage),
-            totalFiles = totalFiles,
-            successCount = processedCount,
-            failedCount = if (succeeded) 0 else 1,
-            errors = if (succeeded) emptyList() else listOfNotNull(errorMessage ?: "任务未成功完成", "WorkState=非成功"),
-            backupPath = backupPath,
-        )
     }
 
     override suspend fun cancelReplace(): Result<Unit> = withContext(Dispatchers.IO) {
