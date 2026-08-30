@@ -114,6 +114,9 @@ class ConfigRepositoryImpl(
             // Worker 成功时将 processed/total/verified/mode/backup 写进 outputData
             val processedCount = info.outputData.getInt(FileReplaceWorkerV2.KEY_PROCESSED, 0)
             val totalFiles = info.outputData.getInt(FileReplaceWorkerV2.KEY_TOTAL, 0)
+            // 成功数优先取 verified（Worker 仅在验证通过后才 Success），缺失则回退 processed
+            val verifiedCount = info.outputData.getInt(FileReplaceWorkerV2.KEY_VERIFIED_FILES, -1)
+            val successCount = if (verifiedCount >= 0) verifiedCount else processedCount
             val backupPath = info.outputData.getString(FileReplaceWorkerV2.KEY_BACKUP_PATH)
             val errorMessage = info.outputData.getString(FileReplaceWorkerV2.KEY_ERROR_MESSAGE)
 
@@ -124,7 +127,7 @@ class ConfigRepositoryImpl(
                         targetPackage = targetPackage,
                         now = now,
                         succeeded = succeeded,
-                        processedCount = processedCount,
+                        processedCount = successCount,
                         totalFiles = totalFiles,
                         backupPath = backupPath,
                         errorMessage = errorMessage,
